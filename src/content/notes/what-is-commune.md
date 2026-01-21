@@ -1,6 +1,7 @@
 ---
 title: "Commune"
 created: 2025-10-16
+updated: 2026-01-21
 visibility: public
 status: live
 tags: [commune, platform, knowledge-sharing, working-in-public]
