@@ -1,8 +1,8 @@
 ---
-// Footer component with "Powered by Commune" link
+import { config } from '../config';
 ---
 <footer class="site-footer">
-  <p>Powered by <a href="/notes/what-is-commune/">Commune</a></p>
+  <p><a href={config.footer.url}>{config.footer.text}</a></p>
 </footer>
 
 <style>

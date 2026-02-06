@@ -6,6 +6,7 @@ import SearchModal from '../../components/SearchModal.astro';
 import Footer from '../../components/Footer.astro';
 import PlausibleScript from '../../components/PlausibleScript.astro';
 import StarredLinksScript from '../../components/StarredLinksScript.astro';
+import { config } from '../../config';
 import '../../styles/design-system.css';
 import '../../styles/notes.css';
 
@@ -31,6 +32,9 @@ const summaryUrl = `/notes/${data.summaryNote}/`;
 
 // Format word count with comma
 const formattedWordCount = data.wordCount.toLocaleString();
+
+// Derive hostname for client-side external link detection
+const siteHostname = new URL(config.siteUrl).hostname;
 ---
 <html lang="en">
 <head>
@@ -45,7 +49,7 @@ const formattedWordCount = data.wordCount.toLocaleString();
   <meta property="og:type" content="article" />
   <meta property="og:url" content={Astro.url} />
   <meta property="og:site_name" content="Commune" />
-  <meta property="og:image" content="https://devonmeadows.com/og-image.jpg" />
+  <meta property="og:image" content={config.siteUrl + "/og-image.jpg"} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   {data.created && <meta property="article:published_time" content={`${data.created}T00:00:00-07:00`} />}
@@ -55,11 +59,12 @@ const formattedWordCount = data.wordCount.toLocaleString();
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content={title} />
   <meta name="twitter:description" content={data.summary || `Deep research: ${title}`} />
-  <meta name="twitter:image" content="https://devonmeadows.com/og-image.jpg" />
+  <meta name="twitter:image" content={config.siteUrl + "/og-image.jpg"} />
 
   <meta name="author" content={data.author} />
   <link rel="icon" type="image/png" href="/favicon-32x32.png" />
-  <PlausibleScript domain="devonmeadows.com" />
+  <meta name="site-hostname" content={siteHostname} />
+  {config.plausible?.domain && <PlausibleScript domain={config.plausible.domain} src={config.plausible.src} />}
 
   <!-- JSON-LD Structured Data: Article + BreadcrumbList -->
   <script type="application/ld+json" set:html={JSON.stringify({
@@ -69,18 +74,18 @@ const formattedWordCount = data.wordCount.toLocaleString();
         "@type": "Article",
         "headline": title,
         "description": data.summary || title,
-        "image": "https://devonmeadows.com/og-image.jpg",
+        "image": config.siteUrl + "/og-image.jpg",
         "author": {
           "@type": "Person",
           "name": data.author,
-          "url": "https://devonmeadows.com/"
+          "url": config.siteUrl + "/"
         },
         "datePublished": `${data.created}T00:00:00-07:00`,
         "dateModified": `${data.updated || data.created}T00:00:00-07:00`,
         "wordCount": data.wordCount,
         "url": Astro.url.href,
         "isPartOf": {
-          "@id": "https://devonmeadows.com/#website"
+          "@id": config.siteUrl + "/#website"
         }
       },
       {
@@ -90,13 +95,13 @@ const formattedWordCount = data.wordCount.toLocaleString();
             "@type": "ListItem",
             "position": 1,
             "name": "Home",
-            "item": "https://devonmeadows.com/"
+            "item": config.siteUrl + "/"
           },
           {
             "@type": "ListItem",
             "position": 2,
             "name": "Summary",
-            "item": `https://devonmeadows.com${summaryUrl}`
+            "item": config.siteUrl + summaryUrl
           },
           {
             "@type": "ListItem",
@@ -153,7 +158,7 @@ const formattedWordCount = data.wordCount.toLocaleString();
       <div slot="before-footer" class="research-footer-content">
         <a href={summaryUrl} class="footer-back-link">← Back to Summary</a>
         <p class="footer-context">
-          Part of <a href="/">Devon Meadows' working notes</a> · Powered by <a href="https://github.com/dmthepm/commune" target="_blank" rel="noopener">Commune</a>
+          Part of <a href="/">{config.displayName}'s working notes</a> · Powered by <a href="https://github.com/dmthepm/commune" target="_blank" rel="noopener">Commune</a>
         </p>
       </div>
     </Footer>
@@ -347,12 +352,13 @@ const formattedWordCount = data.wordCount.toLocaleString();
         document.addEventListener('mouseleave', handlePreviewLeave, true);
       }
 
+      const ownHostname = document.querySelector('meta[name="site-hostname"]')?.getAttribute('content') || '';
       const links = researchContent.querySelectorAll('a');
       links.forEach(link => {
         const href = link.getAttribute('href');
         if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
           // Check if it's not an internal link
-          if (!href.includes('devonmeadows.com')) {
+          if (!href.includes(ownHostname)) {
             link.setAttribute('target', '_blank');
             link.setAttribute('rel', 'noopener noreferrer');
           }

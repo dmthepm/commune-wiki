@@ -7,7 +7,7 @@ export interface Props {
   src?: string;
 }
 
-const { domain, src = "https://analytics.devonmeadows.com/js/script.js" } = Astro.props;
+const { domain, src = "https://plausible.io/js/script.js" } = Astro.props;
 ---
 
 <script defer data-domain={domain} src={src}></script>

@@ -26,6 +26,10 @@ export const collections = {
 			author: z.string().default('Your Name'),
 			// Short summary for previews
 			summary: z.string().optional(),
+			// Matching fields (used by home note, optional for all other notes)
+			right_now: z.string().optional(),
+			looking_for: z.string().optional(),
+			ask_me_about: z.array(z.string()).optional(),
 		}),
 	}),
 	// Deep research reports (long-form, separate from atomic notes)

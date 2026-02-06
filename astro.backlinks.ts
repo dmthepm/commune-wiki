@@ -11,6 +11,7 @@
 
 import type { AstroIntegration } from 'astro';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { globby } from 'globby';
 import matter from 'gray-matter';
 import path from 'node:path';
@@ -265,7 +266,7 @@ export default function backlinksIntegration(): AstroIntegration {
 					}
 
 					// Write to dist directory
-					const distPath = path.join(dir.pathname, 'backlinks.json');
+					const distPath = path.join(fileURLToPath(dir), 'backlinks.json');
 					await writeFile(distPath, JSON.stringify(graph, null, 2));
 					
 					// Also write to /public for dev server parity

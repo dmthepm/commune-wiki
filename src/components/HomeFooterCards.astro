@@ -16,7 +16,7 @@ interface Props {
 const { slug, backlinks = [] } = Astro.props;
 
 // Only show on home note
-const isHomePage = slug === '/notes/my-working-notes/';
+const isHomePage = slug === '/notes/index/';
 if (!isHomePage) return null;
 ---
 

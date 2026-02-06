@@ -1,5 +1,6 @@
 ---
 import { getEntry, getCollection } from 'astro:content';
+import { config } from '../config';
 import Header from '../components/Header.astro';
 import SearchModal from '../components/SearchModal.astro';
 import Backlinks from '../components/Backlinks.astro';
@@ -11,7 +12,7 @@ import PlausibleScript from '../components/PlausibleScript.astro';
 import '../styles/design-system.css';
 import '../styles/notes.css';
 
-const entry = await getEntry('notes', 'my-working-notes');
+const entry = await getEntry('notes', 'index');
 if (!entry) throw new Error('Home note not found');
 const { Content } = await entry.render();
 const { slug, data } = entry;
@@ -53,9 +54,9 @@ function getRelativeDate(dateString: string): string {
   <meta property="og:title" content={title} />
   <meta property="og:description" content={data.summary || title} />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://devonmeadows.com/" />
-  <meta property="og:site_name" content="Commune" />
-  <meta property="og:image" content="https://devonmeadows.com/og-image.jpg" />
+  <meta property="og:url" content={config.siteUrl + "/"} />
+  <meta property="og:site_name" content={`${config.displayName}'s Wiki`} />
+  <meta property="og:image" content={config.siteUrl + "/og-image.jpg"} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
 
@@ -63,13 +64,15 @@ function getRelativeDate(dateString: string): string {
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content={title} />
   <meta name="twitter:description" content={data.summary || title} />
-  <meta name="twitter:image" content="https://devonmeadows.com/og-image.jpg" />
+  <meta name="twitter:image" content={config.siteUrl + "/og-image.jpg"} />
 
   <!-- Author -->
-  <meta name="author" content="Devon Meadows" />
+  <meta name="author" content={config.displayName} />
 
   <link rel="icon" type="image/png" href="/favicon-32x32.png" />
-  <PlausibleScript domain="devonmeadows.com" />
+  {config.plausible?.domain && (
+    <PlausibleScript domain={config.plausible.domain} src={config.plausible.src} />
+  )}
 
   <!-- JSON-LD Structured Data: Article + WebSite + Person -->
   <script type="application/ld+json" set:html={JSON.stringify({
@@ -79,35 +82,35 @@ function getRelativeDate(dateString: string): string {
         "@type": "Article",
         "headline": title,
         "description": data.summary || title,
-        "image": "https://devonmeadows.com/og-image.jpg",
+        "image": config.siteUrl + "/og-image.jpg",
         "author": {
           "@type": "Person",
-          "name": data.author || 'Devon Meadows',
-          "url": "https://devonmeadows.com/"
+          "name": config.displayName,
+          "url": config.siteUrl + "/"
         },
         "datePublished": `${data.created || data.updated}T00:00:00-07:00`,
         "dateModified": `${data.updated || data.created}T00:00:00-07:00`,
-        "url": "https://devonmeadows.com/",
+        "url": config.siteUrl + "/",
         "isPartOf": {
-          "@id": "https://devonmeadows.com/#website"
+          "@id": config.siteUrl + "/#website"
         }
       },
       {
         "@type": "WebSite",
-        "@id": "https://devonmeadows.com/#website",
-        "url": "https://devonmeadows.com/",
-        "name": "Commune",
-        "description": data.summary || "Devon Meadows' working brain in public",
+        "@id": config.siteUrl + "/#website",
+        "url": config.siteUrl + "/",
+        "name": `${config.displayName}'s Wiki`,
+        "description": data.summary || config.tagline,
         "author": {
-          "@id": "https://devonmeadows.com/#person"
+          "@id": config.siteUrl + "/#person"
         }
       },
       {
         "@type": "Person",
-        "@id": "https://devonmeadows.com/#person",
-        "name": "Devon Meadows",
-        "url": "https://devonmeadows.com/",
-        "description": "Builder of Commune. Dad. Thinker. Tinkerer."
+        "@id": config.siteUrl + "/#person",
+        "name": config.displayName,
+        "url": config.siteUrl + "/",
+        "description": config.tagline
       }
     ]
   })} />

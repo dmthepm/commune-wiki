@@ -1,11 +1,12 @@
 ---
+import { config } from '../config';
 ---
 <header class="commune-header">
   <div class="wrap">
     <a href="/" class="brand-section">
-      <img src="/avatar.jpg" alt="Devon" class="avatar" />
-      <span class="brand brand-full">Devon Meadows</span>
-      <span class="brand brand-short">Devon</span>
+      <img src={config.avatar} alt={config.shortName} class="avatar" />
+      <span class="brand brand-full">{config.displayName}</span>
+      <span class="brand brand-short">{config.shortName}</span>
     </a>
     <div class="controls">
       <button id="theme-toggle" class="theme-btn" aria-label="Toggle theme">
