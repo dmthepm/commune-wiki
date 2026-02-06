@@ -45,7 +45,7 @@ const formattedDate = dateObj.toLocaleDateString('en-US', {
   <meta property="og:description" content={data.summary} />
   <meta property="og:type" content="article" />
   <meta property="og:url" content={Astro.url} />
-  <meta property="og:site_name" content="Commune" />
+  <meta property="og:site_name" content={config.displayName + "'s Wiki"} />
   {data.date && <meta property="article:published_time" content={`${data.date}T00:00:00-07:00`} />}
 
   <meta name="author" content={data.author} />
