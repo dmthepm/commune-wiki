@@ -9,27 +9,25 @@ aliases: ["home", "welcome"]
 summary: "A public wiki of ideas in progress."
 
 # Matching fields (structured for future people-matching)
-right_now: "Setting up my wiki and exploring ideas in public"
-looking_for: "People interested in building and learning in public"
-ask_me_about: ["wikis", "note-taking", "learning in public"]
+right_now: "Setting up my wiki"
+looking_for: "Interesting people and ideas"
+ask_me_about: ["your-topic-here"]
 ---
 
 ## Right Now
 
-Setting up my wiki and exploring ideas in public. This is where I think out loud — a working brain you can browse.
+Setting up my wiki. This is where I think out loud — a working brain you can browse.
 
 ## Looking For
 
-People interested in building and learning in public. If you're working on something similar, I'd love to connect.
+Interesting people and ideas. If you're working on something similar, I'd love to connect.
 
 ## Ask Me About
 
-- **Wikis** — How to build a public wiki that compounds knowledge over time
-- **Note-taking** — [[Atomic Notes]], [[Evergreen Notes]], and the [[Zettelkasten Method]]
-- **Learning in public** — Why [[Learning in public accelerates growth|sharing your thinking]] makes it sharper
+- **Your topics here** — Update this section with `/wiki home`
 
 ## About
 
-This is a public wiki built with [[What is Commune|Commune]] — a platform for sharing your thinking without algorithmic feeds. Just your ideas, connected by [[Associative linking over hierarchies|explicit links]].
+A public wiki of ideas in progress. Each note follows the atomic principle: one idea per note, connected by WikiLinks rather than folders.
 
-Every note here follows the [[Atomic Notes]] principle: one idea per note. Notes connect to each other through WikiLinks, not folders. The result is a network of thoughts that grows organically.
+Use `/wiki add` to create your first note, then `/wiki publish` to deploy.
