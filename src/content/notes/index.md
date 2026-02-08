@@ -28,10 +28,6 @@ People interested in building and learning in public. If you're working on somet
 - **Note-taking** — [[Atomic Notes]], [[Evergreen Notes]], and the [[Zettelkasten Method]]
 - **Learning in public** — Why [[Learning in public accelerates growth|sharing your thinking]] makes it sharper
 
-## Recent Updates
-
-*New notes will appear here as you add them.*
-
 ## About
 
 This is a public wiki built with [[What is Commune|Commune]] — a platform for sharing your thinking without algorithmic feeds. Just your ideas, connected by [[Associative linking over hierarchies|explicit links]].
