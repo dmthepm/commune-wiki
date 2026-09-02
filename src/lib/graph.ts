@@ -330,7 +330,24 @@ function classifyMarkdownTarget(raw: string): ExtractedLink | null {
 		return { kind: 'url', target: pathname.endsWith('/') ? pathname : `${pathname}/` };
 	}
 
-	return null;
+	// A relative link to a markdown file — what Obsidian writes when a note is
+	// dragged into another. Only the basename carries meaning here: the target
+	// resolves by title, exactly as the wikilink spelling of the same edge does.
+	// Which directory it came from is a resolution question, tracked on #18.
+	const file = decodePath(stripSubpath(destination));
+	if (!/\.mdx?$/i.test(file)) return null;
+
+	const title = file.split('/').pop()!.replace(/\.mdx?$/i, '');
+	return title ? { kind: 'name', target: title } : null;
+}
+
+/** Percent-decode a link destination, leaving a malformed one alone. */
+function decodePath(destination: string): string {
+	try {
+		return decodeURIComponent(destination);
+	} catch {
+		return destination;
+	}
 }
 
 /** Drop an Obsidian subpath: everything from the first `#` heading or `^` block id.

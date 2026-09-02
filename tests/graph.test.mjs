@@ -158,3 +158,41 @@ test('a link to a standalone page resolves', async () => {
 	assert.equal(target.collection, 'pages');
 	assert.deepEqual(target, await resolveOnly('[[About this wiki]]'));
 });
+
+// BUG 4 — Obsidian writes a relative file link when a note is dragged in.
+// Percent-encoded or not, it is an internal link and an edge.
+
+// A raw space in an unbracketed destination is not a link in CommonMark, so it
+// is not one here either — the graph must agree with what remark renders.
+// Obsidian percent-encodes, and that form is the one that matters.
+test('a raw space in a relative destination is not a link', () => {
+	assert.deepEqual(extractLinks('[x](Evergreen Notes.md)'), []);
+});
+
+test('percent-encoding in a relative file link is decoded', () => {
+	assert.deepEqual(extractLinks('[x](Evergreen%20Notes.md)'), [
+		{ kind: 'name', target: 'Evergreen Notes' },
+	]);
+});
+
+test('a relative file link keeps only its basename', () => {
+	assert.deepEqual(extractLinks('[x](../notes/Evergreen%20Notes.md)'), [
+		{ kind: 'name', target: 'Evergreen Notes' },
+	]);
+});
+
+test('a subpath is stripped from a relative file link', () => {
+	assert.deepEqual(extractLinks('[x](Evergreen%20Notes.md#Why)'), [
+		{ kind: 'name', target: 'Evergreen Notes' },
+	]);
+});
+
+test('a relative link to a non-markdown file is not an edge', () => {
+	assert.deepEqual(extractLinks('[x](notes.csv) [y](#why)'), []);
+});
+
+test('a relative file link resolves to the same target as its wikilink', async () => {
+	const viaWikilink = await resolveOnly('[[Evergreen Notes]]');
+	assert.ok(viaWikilink, 'Evergreen Notes should exist in the content tree');
+	assert.deepEqual(await resolveOnly('[x](Evergreen%20Notes.md)'), viaWikilink);
+});
