@@ -2,7 +2,7 @@
 
 **Open-source Astro-based wiki** with Andy Matuschak-style sliding panes, WikiLinks, backlinks, and semantic search.
 
-**License**: AGPL-3.0  
+**License**: MIT  
 **Status**: Active Development  
 **Live Example**: [devonmeadows.com](https://devonmeadows.com)
 
@@ -33,9 +33,9 @@
 **vs. Other Tools**:
 | Tool | Approach | Commune Wiki |
 |------|----------|--------------|
-| Obsidian | Desktop app, proprietary sync | Web-first, self-hosted, AGPL |
+| Obsidian | Desktop app, proprietary sync | Web-first, self-hosted, MIT |
 | Notion | Cloud SaaS, vendor lock-in | Git-backed, own your data |
-| Roam | SaaS, $15/mo | Free, open source, AGPL |
+| Roam | SaaS, $15/mo | Free, open source, MIT |
 | Logseq | Local-first, complex setup | Simple Astro build, deploy anywhere |
 
 ---
@@ -346,7 +346,7 @@ pnpm build 2>&1 | grep "Broken link"
 
 ## 🤝 Contributing
 
-This is an open-source project under AGPL-3.0. Contributions welcome!
+This is an open-source project under the MIT License. Contributions welcome!
 
 **How to contribute**:
 1. Fork the repository
@@ -390,16 +390,15 @@ if (notesCache && notesCache.size > 0) {  // MUST check .size!
 
 ## 📄 License
 
-AGPL-3.0 - See [LICENSE](LICENSE) file.
+MIT - See [LICENSE](LICENSE) file.
 
 **What this means**:
-- ✅ Free to use, modify, distribute
-- ✅ Commercial use allowed
-- ⚠️ If you modify and distribute, you must open-source changes
-- ⚠️ If you run as a web service, you must provide source code
+- Free to use, modify, distribute, and sell
+- Commercial use allowed, with no obligation to open-source your changes
+- Keep the copyright notice; that's the whole obligation
 
 **Business model**:
-- OSS core (static site generator) - AGPL-3.0
+- OSS core (static site generator) - MIT
 - Future cloud hosting service - Paid (like Ghost, Plausible)
 
 ---
