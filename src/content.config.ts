@@ -1,9 +1,10 @@
 import { defineCollection, z } from 'astro:content';
+import { glob } from 'astro/loaders';
 
 export const collections = {
 	// Andy-style atomic notes collection (notes-only site)
 	notes: defineCollection({
-		type: 'content',
+		loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/notes' }),
 		schema: z.object({
 			title: z.string(),
 			// Privacy by default
@@ -30,7 +31,7 @@ export const collections = {
 	}),
 	// Deep research reports (long-form, separate from atomic notes)
 	research: defineCollection({
-		type: 'content',
+		loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/research' }),
 		schema: z.object({
 			title: z.string(),
 			author: z.string().default('Your Name'),
@@ -56,7 +57,7 @@ export const collections = {
 	// Standalone editorial pages that live outside /notes/ and /research/.
 	// Registering them here makes their route metadata available to search and WikiLinks.
 	pages: defineCollection({
-		type: 'content',
+		loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/pages' }),
 		schema: z.object({
 			title: z.string(),
 			// Canonical route this page renders at, e.g. "/about/". Must be absolute
@@ -75,7 +76,7 @@ export const collections = {
 	}),
 	// Daily/weekly changelog updates (meta-content about wiki changes)
 	updates: defineCollection({
-		type: 'content',
+		loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/updates' }),
 		schema: z.object({
 			title: z.string(),
 			// ISO date for the update (yyyy-mm-dd)

@@ -61,7 +61,7 @@ function getRelativeDate(dateString: string): string {
             <time class="update-date">{relativeDate}</time>
             <div class="update-content">
               <h2 class="update-title">
-                <a href={`/updates/${update.slug}`}>{update.data.title}</a>
+                <a href={`/updates/${update.id}`}>{update.data.title}</a>
               </h2>
               <p class="update-summary">{update.data.summary}</p>
             </div>

@@ -39,8 +39,8 @@ const seed = list.filter((n:any) => n.data.status === 'seed' || !n.data.status);
         <ul class="grid">
           {evergreen.map((n:any) => (
             <li class="card">
-              <a href={`/notes/${n.slug}/`}>
-                <h3>{n.data.title ?? n.slug}</h3>
+              <a href={`/notes/${n.id}/`}>
+                <h3>{n.data.title ?? n.id}</h3>
                 {n.data.summary && <p class="summary">{n.data.summary}</p>}
                 {n.data.tags && n.data.tags.length > 0 && (
                   <div class="tags">{n.data.tags.slice(0,3).join(' • ')}</div>
@@ -59,8 +59,8 @@ const seed = list.filter((n:any) => n.data.status === 'seed' || !n.data.status);
         <ul class="grid">
           {growing.map((n:any) => (
             <li class="card">
-              <a href={`/notes/${n.slug}/`}>
-                <h3>{n.data.title ?? n.slug}</h3>
+              <a href={`/notes/${n.id}/`}>
+                <h3>{n.data.title ?? n.id}</h3>
                 {n.data.summary && <p class="summary">{n.data.summary}</p>}
                 {n.data.tags && n.data.tags.length > 0 && (
                   <div class="tags">{n.data.tags.slice(0,3).join(' • ')}</div>
@@ -79,8 +79,8 @@ const seed = list.filter((n:any) => n.data.status === 'seed' || !n.data.status);
         <ul class="grid">
           {seed.map((n:any) => (
             <li class="card">
-              <a href={`/notes/${n.slug}/`}>
-                <h3>{n.data.title ?? n.slug}</h3>
+              <a href={`/notes/${n.id}/`}>
+                <h3>{n.data.title ?? n.id}</h3>
                 {n.data.summary && <p class="summary">{n.data.summary}</p>}
                 {n.data.tags && n.data.tags.length > 0 && (
                   <div class="tags">{n.data.tags.slice(0,3).join(' • ')}</div>

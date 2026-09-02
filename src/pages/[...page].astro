@@ -10,7 +10,7 @@
  * More specific routes win over a rest parameter, so /notes/*, /research/* and
  * /updates/* are unaffected.
  */
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
 import Header from '../components/Header.astro';
 import SearchModal from '../components/SearchModal.astro';
@@ -35,7 +35,7 @@ interface Props {
 }
 
 const { entry } = Astro.props;
-const { Content } = await entry.render();
+const { Content } = await render(entry);
 const { data } = entry;
 ---
 <html lang="en">

@@ -1,5 +1,5 @@
 ---
-import { getCollection } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import type { CollectionEntry } from 'astro:content';
 import Header from '../../components/Header.astro';
 import SearchModal from '../../components/SearchModal.astro';
@@ -16,7 +16,7 @@ import '../../styles/notes.css';
 export async function getStaticPaths() {
 	const notes = await getCollection('notes', ({ data }) => data.visibility === 'public');
 	return notes.map((note) => ({
-		params: { slug: note.slug },
+		params: { slug: note.id },
 		props: { entry: note },
 	}));
 }
@@ -26,8 +26,8 @@ interface Props {
 }
 
 const { entry } = Astro.props;
-const { Content } = await entry.render();
-const { slug, data } = entry;
+const { Content } = await render(entry);
+const { id: slug, data } = entry;
 const title = data.title ?? slug;
 
 // Load backlinks for footer cards

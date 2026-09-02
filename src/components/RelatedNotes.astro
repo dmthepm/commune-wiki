@@ -20,11 +20,11 @@ const allNotes = await getCollection('notes', ({ data }) => data.visibility === 
 
 // Find notes with overlapping tags (excluding current note)
 const related = allNotes
-	.filter((note) => note.slug !== slug)
+	.filter((note) => note.id !== slug)
 	.map((note) => {
 		const overlap = note.data.tags.filter((tag) => tags.includes(tag));
 		return {
-			slug: note.slug,
+			slug: note.id,
 			title: note.data.title,
 			tags: note.data.tags,
 			overlapCount: overlap.length,
