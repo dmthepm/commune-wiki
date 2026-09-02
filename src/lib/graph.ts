@@ -442,3 +442,315 @@ function dedupe(links: ExtractedLink[]): ExtractedLink[] {
 		return true;
 	});
 }
+
+// =============================================================================
+// Graph construction
+// =============================================================================
+
+/**
+ * Star calculation strategy.
+ *
+ * Lives in the core rather than the Astro integration because `isStarred` is a
+ * field of the public artifact, and the CLI has to be able to produce the same
+ * artifact without loading Astro.
+ */
+export const STAR_CONFIG = {
+	// Strategy: 'top-percent' | 'top-absolute' | 'threshold'
+	strategy: 'top-percent' as const,
+
+	// For 'top-percent': What percentage gets stars?
+	topPercent: 5, // Top 5%
+
+	// For 'top-absolute': How many notes get stars?
+	topAbsolute: 3, // Top 3 notes
+
+	// For 'threshold': Minimum backlinks to get a star
+	threshold: 10, // 10+ backlinks
+
+	// Minimum notes required before stars are enabled
+	minNotesForStars: 20,
+
+	// What metric to rank by?
+	// 'backlinks' | 'revisions' | 'cross-theme' | 'weighted'
+	rankBy: 'backlinks' as const,
+
+	// For weighted ranking (future):
+	weights: {
+		backlinks: 0.5,
+		revisions: 0.3,
+		crossTheme: 0.2,
+	},
+};
+
+/**
+ * One node of the public graph, and one entry of `backlinks.json`.
+ *
+ * The property order here is a serialization contract: `backlinks.json` is
+ * committed, and a reordered object is a diff on every build.
+ */
+export interface NoteMetadata {
+	/** Canonical URL path. The graph is keyed by URL, so this is the identity. */
+	slug: string;
+	title: string;
+	collection: CollectionName;
+	aliases: string[];
+	outbound: string[]; // urlPaths this note links to
+	inbound: string[]; // urlPaths that link to this note
+	tags: string[];
+	status: string;
+	summary?: string;
+	updated?: string;
+	isStarred?: boolean; // ⭐ indicator
+}
+
+/** Which rules the graph and `check` can report. */
+export type DiagnosticRule =
+	| 'broken-link'
+	| 'ambiguous-target'
+	| 'duplicate-name'
+	| 'noncanonical-title';
+
+/**
+ * One finding, as data.
+ *
+ * The Astro integration used to print broken links inline, which meant the only
+ * way to get at them was to scrape build logs. Findings are values now, so the
+ * integration, `check` and the search-index gate can each render the same set
+ * their own way.
+ */
+export interface Diagnostic {
+	rule: DiagnosticRule;
+	severity: 'error' | 'warning';
+	/** Source file, relative to the project root. */
+	file: string;
+	/** Not tracked yet: `extractLinks` records no offsets. Added when #24 needs them. */
+	line?: number;
+	message: string;
+	/** The link text or name involved. */
+	target?: string;
+	/** Canonical URL of the entry the finding is in. Carried so build output can name the route. */
+	urlPath?: string;
+	/** How the offending link was spelled, which decides `[[name]]` vs `(url)` rendering. */
+	kind?: LinkKind;
+	/** urlPaths in contention, for `ambiguous-target` and `duplicate-name`. */
+	candidates?: string[];
+	/** The spelling a `noncanonical-title` finding should have used. */
+	canonical?: string;
+}
+
+/** The resolved content graph. */
+export interface Graph {
+	/** Keyed by urlPath; insertion order is entry order. */
+	nodes: Record<string, NoteMetadata>;
+	diagnostics: Diagnostic[];
+	totalBacklinks: number;
+}
+
+/**
+ * Calculate which notes get stars based on STAR_CONFIG.
+ * Returns a Set of slugs that should be starred.
+ */
+export function calculateStars(notes: Map<string, NoteMetadata>): Set<string> {
+	const starredSlugs = new Set<string>();
+
+	// Standalone pages belong in search and WikiLinks, not note rankings.
+	const notesArray = Array.from(notes.values()).filter((note) => note.collection !== 'pages');
+
+	// Skip if too few notes
+	if (notesArray.length < STAR_CONFIG.minNotesForStars) {
+		return starredSlugs;
+	}
+
+	// Calculate score based on rankBy strategy
+	const scored = notesArray.map((note) => {
+		let score = 0;
+
+		switch (STAR_CONFIG.rankBy) {
+			case 'backlinks':
+				score = note.inbound.length;
+				break;
+
+			case 'revisions':
+				// Future: could track revision count in frontmatter or git history
+				score = 0;
+				break;
+
+			case 'cross-theme':
+				// Future: count unique tags across linked notes
+				score = 0;
+				break;
+
+			case 'weighted':
+				// Future: combine multiple metrics
+				score = note.inbound.length * STAR_CONFIG.weights.backlinks;
+				break;
+		}
+
+		return { slug: note.slug, score };
+	});
+
+	// Sort by score descending
+	scored.sort((a, b) => b.score - a.score);
+
+	// Determine which notes get stars based on strategy
+	let cutoffIndex = 0;
+
+	switch (STAR_CONFIG.strategy) {
+		case 'top-percent':
+			cutoffIndex = Math.ceil(notesArray.length * (STAR_CONFIG.topPercent / 100));
+			break;
+
+		case 'top-absolute':
+			cutoffIndex = Math.min(STAR_CONFIG.topAbsolute, notesArray.length);
+			break;
+
+		case 'threshold':
+			// All notes above threshold get stars
+			for (const { slug, score } of scored) {
+				if (score >= STAR_CONFIG.threshold) {
+					starredSlugs.add(slug);
+				}
+			}
+			return starredSlugs;
+	}
+
+	// Add top N notes to starred set
+	for (let i = 0; i < cutoffIndex; i++) {
+		starredSlugs.add(scored[i].slug);
+	}
+
+	// Handle ties at boundary
+	if (cutoffIndex > 0 && cutoffIndex < scored.length) {
+		const boundaryScore = scored[cutoffIndex - 1].score;
+		// Include all notes tied with the boundary score
+		for (let i = cutoffIndex; i < scored.length; i++) {
+			if (scored[i].score === boundaryScore) {
+				starredSlugs.add(scored[i].slug);
+			} else {
+				break;
+			}
+		}
+	}
+
+	return starredSlugs;
+}
+
+/**
+ * Build the resolved graph from loaded entries.
+ *
+ * Pure: no filesystem, no logging, no Astro. Everything a caller might want to
+ * print comes back in `diagnostics`, so the same construction serves the build
+ * (which warns), `check` (which reports) and `related` (which does neither).
+ */
+export function buildGraph(entries: ContentEntry[]): Graph {
+	const byName = buildLinkLookup(entries);
+	const byUrl = buildUrlLookup(entries);
+
+	const notes = new Map<string, NoteMetadata>();
+	// Raw extracted edges, kept beside the graph: `outbound` on NoteMetadata is
+	// the public artifact and holds resolved urlPaths only.
+	const extracted = new Map<string, ExtractedLink[]>();
+	const files = new Map<string, string>();
+
+	for (const entry of entries) {
+		extracted.set(entry.urlPath, extractLinks(entry.body, entry.frontmatter));
+		files.set(entry.urlPath, entry.file);
+		notes.set(entry.urlPath, {
+			slug: entry.urlPath,
+			title: entry.title,
+			collection: entry.collection,
+			aliases: entry.aliases,
+			outbound: [], // populated below, once links resolve
+			inbound: [], // populated below
+			tags: entry.tags,
+			status: entry.status,
+			...(entry.summary ? { summary: entry.summary } : {}),
+			...(entry.updated ? { updated: entry.updated } : {}),
+		});
+	}
+
+	const diagnostics: Diagnostic[] = [];
+
+	// Resolve WikiLinks and compute inbound links
+	for (const [fromUrl, note] of notes.entries()) {
+		const resolvedOutbound: string[] = [];
+
+		for (const link of extracted.get(fromUrl)!) {
+			const resolved = resolveLink(link, byName, byUrl)?.urlPath;
+
+			if (resolved && notes.has(resolved)) {
+				resolvedOutbound.push(resolved);
+				const target = notes.get(resolved)!;
+				if (!target.inbound.includes(fromUrl)) {
+					target.inbound.push(fromUrl);
+				}
+			} else {
+				// Link to a note that doesn't exist yet — fine, but worth saying
+				diagnostics.push({
+					rule: 'broken-link',
+					severity: 'warning',
+					file: files.get(fromUrl)!,
+					urlPath: fromUrl,
+					kind: link.kind,
+					target: link.target,
+					message: `${spellLink(link)} does not resolve`,
+				});
+			}
+		}
+
+		note.outbound = resolvedOutbound;
+	}
+
+	// Calculate which notes get stars
+	const starredSlugs = calculateStars(notes);
+	for (const slug of starredSlugs) {
+		const note = notes.get(slug);
+		if (note) {
+			note.isStarred = true;
+		}
+	}
+
+	const nodes: Record<string, NoteMetadata> = {};
+	for (const [slug, note] of notes.entries()) {
+		nodes[slug] = note;
+	}
+
+	const totalBacklinks = Array.from(notes.values()).reduce(
+		(sum, note) => sum + note.inbound.length,
+		0
+	);
+
+	return { nodes, diagnostics, totalBacklinks };
+}
+
+/** How a link was written, in the spelling its kind uses. */
+function spellLink(link: Pick<ExtractedLink, 'kind' | 'target'>): string {
+	return link.kind === 'url' ? `(${link.target})` : `[[${link.target}]]`;
+}
+
+/**
+ * Render a diagnostic as the build has always rendered it.
+ *
+ * `public/backlinks.json` is not the only committed contract — build output is
+ * read by humans and diffed by reviewers, so the warning line is kept exactly
+ * as it was when the integration formatted it itself.
+ */
+export function formatDiagnostic(diagnostic: Diagnostic): string {
+	if (diagnostic.rule === 'broken-link') {
+		return `⚠️  Broken link in ${diagnostic.urlPath}: ${spellLink({
+			kind: diagnostic.kind ?? 'name',
+			target: diagnostic.target ?? '',
+		})}`;
+	}
+	return `⚠️  ${diagnostic.rule} in ${diagnostic.file}: ${diagnostic.message}`;
+}
+
+/**
+ * The public artifact, exactly as `public/backlinks.json` stores it.
+ *
+ * Separate from `Graph` because the file is a runtime contract with four
+ * client-side readers: the graph can grow fields, the file cannot.
+ */
+export function toBacklinksJson(graph: Graph): Record<string, NoteMetadata> {
+	return graph.nodes;
+}
