@@ -53,6 +53,26 @@ export const collections = {
 			summary: z.string().optional(),
 		}),
 	}),
+	// Standalone editorial pages that live outside /notes/ and /research/.
+	// Registering them here makes their route metadata available to search and WikiLinks.
+	pages: defineCollection({
+		type: 'content',
+		schema: z.object({
+			title: z.string(),
+			// Canonical route this page renders at, e.g. "/about/". Must be absolute
+			// with a trailing slash so it matches the graph's canonical URL form.
+			url: z.string().regex(/^\/.+\/$/),
+			summary: z.string(),
+			aliases: z.array(z.string()).default([]),
+			tags: z.array(z.string()).default([]),
+			created: z.union([z.string(), z.date()]).transform(val =>
+				val instanceof Date ? val.toISOString().split('T')[0] : val
+			).optional(),
+			updated: z.union([z.string(), z.date()]).transform(val =>
+				val instanceof Date ? val.toISOString().split('T')[0] : val
+			).optional(),
+		}),
+	}),
 	// Daily/weekly changelog updates (meta-content about wiki changes)
 	updates: defineCollection({
 		type: 'content',
