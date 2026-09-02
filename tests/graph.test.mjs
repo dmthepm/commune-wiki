@@ -196,3 +196,52 @@ test('a relative file link resolves to the same target as its wikilink', async (
 	assert.ok(viaWikilink, 'Evergreen Notes should exist in the content tree');
 	assert.deepEqual(await resolveOnly('[x](Evergreen%20Notes.md)'), viaWikilink);
 });
+
+// BUG 5 — `loadContentEntries()` hands `extractLinks()` the body only, so a
+// wikilink in a frontmatter value was invisible. Obsidian records those as
+// `frontmatterLinks` and counts them as edges.
+
+test('a wikilink in a frontmatter value is an edge', () => {
+	assert.deepEqual(extractLinks('', { related: '[[Evergreen Notes]]' }), [
+		{ kind: 'name', target: 'Evergreen Notes' },
+	]);
+});
+
+test('frontmatter list and nested values are scanned', () => {
+	assert.deepEqual(
+		extractLinks('', { see: ['[[Atomic Notes]]', '[[Commune]]'], meta: { of: '[[Build in Public]]' } }),
+		[
+			{ kind: 'name', target: 'Atomic Notes' },
+			{ kind: 'name', target: 'Commune' },
+			{ kind: 'name', target: 'Build in Public' },
+		]
+	);
+});
+
+test('aliases and tags are not links', () => {
+	assert.deepEqual(
+		extractLinks('', { aliases: ['[[Evergreen Notes]]'], tags: ['[[Commune]]'] }),
+		[]
+	);
+});
+
+test('frontmatter edges deduplicate against body edges', () => {
+	assert.deepEqual(extractLinks('[[Evergreen Notes]]', { related: '[[Evergreen Notes]]' }), [
+		{ kind: 'name', target: 'Evergreen Notes' },
+	]);
+});
+
+test('a frontmatter subpath is stripped like any other', () => {
+	assert.deepEqual(extractLinks('', { related: '[[Evergreen Notes#Why]]' }), [
+		{ kind: 'name', target: 'Evergreen Notes' },
+	]);
+});
+
+test('loaded entries carry their frontmatter, so the caller can pass it', async () => {
+	const entries = await loadContentEntries();
+	assert.ok(entries.length > 0);
+	for (const entry of entries) {
+		assert.equal(typeof entry.frontmatter, 'object');
+		assert.equal(entry.frontmatter.title, entry.title);
+	}
+});

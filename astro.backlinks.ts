@@ -180,7 +180,7 @@ async function buildBacklinksGraph(logger: Pick<Console, 'info' | 'warn'>) {
 	const extracted = new Map<string, ExtractedLink[]>();
 
 	for (const entry of entries) {
-		extracted.set(entry.urlPath, extractLinks(entry.body));
+		extracted.set(entry.urlPath, extractLinks(entry.body, entry.frontmatter));
 		notes.set(entry.urlPath, {
 			slug: entry.urlPath,
 			title: entry.title,

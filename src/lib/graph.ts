@@ -49,6 +49,8 @@ export interface ContentEntry {
 	updated?: string;
 	/** Markdown body with frontmatter stripped. */
 	body: string;
+	/** Parsed frontmatter. Kept because links can live in it. */
+	frontmatter: Record<string, unknown>;
 	/** Source file path, relative to the project root. */
 	file: string;
 }
@@ -152,6 +154,7 @@ export async function loadContentEntries(): Promise<ContentEntry[]> {
 				...(summary ? { summary } : {}),
 				...(updated ? { updated } : {}),
 				body: content,
+				frontmatter: data,
 				file,
 			});
 		}
@@ -276,17 +279,27 @@ export interface ExtractedLink {
 	target: string;
 }
 
+/** Frontmatter keys whose values are vocabulary, not links. */
+const NON_LINK_KEYS = new Set(['aliases', 'tags']);
+
 /**
- * Extract every outbound link target from a markdown body.
+ * Extract every outbound link target from a markdown body and its frontmatter.
  *
  * Returns the edges Obsidian's `resolvedLinks` would record: wikilinks, embeds,
- * and internal markdown links. Code is excluded.
+ * internal markdown links, and `frontmatterLinks`. Code is excluded.
+ *
+ * Frontmatter is passed separately because it is already parsed by the time it
+ * reaches here — `loadContentEntries()` splits it off with gray-matter, so the
+ * body alone can never contain it.
  */
-export function extractLinks(content: string): ExtractedLink[] {
+export function extractLinks(
+	content: string,
+	frontmatter: Record<string, unknown> = {}
+): ExtractedLink[] {
 	const links: ExtractedLink[] = [];
 	const prose = stripCode(content);
 
-	for (const match of prose.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)) {
+	for (const match of prose.matchAll(WIKILINK)) {
 		const target = stripSubpath(match[1]);
 		if (target) links.push({ kind: 'name', target });
 	}
@@ -296,8 +309,45 @@ export function extractLinks(content: string): ExtractedLink[] {
 		if (link) links.push(link);
 	}
 
+	links.push(...extractFrontmatterLinks(frontmatter));
+
 	return dedupe(links);
 }
+
+/**
+ * Wikilinks reachable from frontmatter values, at any nesting depth.
+ *
+ * Only wikilinks: a frontmatter value is not markdown, and Obsidian's
+ * `frontmatterLinks` records the wikilink form. `aliases` and `tags` are names
+ * this entry answers to, not links out of it.
+ */
+function extractFrontmatterLinks(frontmatter: Record<string, unknown>): ExtractedLink[] {
+	const links: ExtractedLink[] = [];
+
+	const walk = (value: unknown): void => {
+		if (typeof value === 'string') {
+			for (const match of value.matchAll(WIKILINK)) {
+				const target = stripSubpath(match[1]);
+				if (target) links.push({ kind: 'name', target });
+			}
+		} else if (Array.isArray(value)) {
+			value.forEach(walk);
+		} else if (value && typeof value === 'object') {
+			for (const [key, nested] of Object.entries(value)) {
+				if (!NON_LINK_KEYS.has(key)) walk(nested);
+			}
+		}
+	};
+
+	for (const [key, value] of Object.entries(frontmatter)) {
+		if (!NON_LINK_KEYS.has(key)) walk(value);
+	}
+
+	return links;
+}
+
+/** A wikilink or embed, capturing the target and discarding any display text. */
+const WIKILINK = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
 
 /**
  * A markdown link or image, capturing the destination.
