@@ -185,6 +185,44 @@ export function buildLinkLookup(entries: ContentEntry[]): Map<string, LinkTarget
 	return lookup;
 }
 
+/**
+ * Build the url resolution table: canonical `urlPath` → target.
+ *
+ * Separate from the title/alias lookup on purpose. A path and a title are
+ * different namespaces, and mixing them is what let `/notes/atomic-notes`
+ * resolve through an alias rather than through the route it actually names.
+ */
+export function buildUrlLookup(entries: ContentEntry[]): Map<string, LinkTarget> {
+	const lookup = new Map<string, LinkTarget>();
+
+	for (const entry of entries) {
+		lookup.set(entry.urlPath, {
+			slug: entry.slug,
+			collection: entry.collection,
+			urlPath: entry.urlPath,
+		});
+	}
+
+	return lookup;
+}
+
+/**
+ * Resolve one extracted edge, using the table its kind belongs to.
+ *
+ * Deliberately does nothing clever: no basename fallback, no source-relative
+ * disambiguation, no collision policy. Those are resolution questions, tracked
+ * on #18; this is extraction's other half and nothing more.
+ */
+export function resolveLink(
+	link: ExtractedLink,
+	byName: Map<string, LinkTarget>,
+	byUrl: Map<string, LinkTarget>
+): LinkTarget | undefined {
+	return link.kind === 'url'
+		? byUrl.get(link.target)
+		: byName.get(link.target.toLowerCase());
+}
+
 let lookupCache: Map<string, LinkTarget> | null = null;
 
 /**
@@ -253,15 +291,49 @@ export function extractLinks(content: string): ExtractedLink[] {
 		if (target) links.push({ kind: 'name', target });
 	}
 
-	for (const match of prose.matchAll(/\[([^\]]+)\]\(\/notes\/([^)]+)\/?/g)) {
-		links.push({ kind: 'name', target: match[2].trim() });
+	for (const match of prose.matchAll(MARKDOWN_LINK)) {
+		const link = classifyMarkdownTarget(match[1]);
+		if (link) links.push(link);
 	}
 
 	return dedupe(links);
 }
 
 /**
- * Drop an Obsidian subpath: everything from the first `#` heading or `^` block id.
+ * A markdown link or image, capturing the destination.
+ *
+ * The destination is either `<angle bracketed>` or unspaced, and may be
+ * followed by a title in quotes. Link text is `[^\]]*` rather than `[^\]]+`
+ * because an image embed can legitimately carry no alt text.
+ */
+const MARKDOWN_LINK = /!?\[[^\]]*\]\(\s*(<[^>]*>|[^()\s]+)(?:\s+"[^"]*")?\s*\)/g;
+
+/**
+ * Turn a markdown link destination into an edge, or nothing if it leaves the site.
+ *
+ * Absolute paths are url-shaped and are normalised to the canonical spelling
+ * the graph stores — query, fragment, and the presence or absence of a trailing
+ * slash are all spellings of one edge, and `/notes/atomic-notes` must not be
+ * handed to the title lookup, where it only ever resolved by the coincidence of
+ * a note listing its own slug as an alias.
+ */
+function classifyMarkdownTarget(raw: string): ExtractedLink | null {
+	const destination = raw.replace(/^<|>$/g, '').trim();
+
+	// Anything with a scheme, and protocol-relative `//host`, leaves the site.
+	if (!destination || /^[a-z][a-z0-9+.-]*:/i.test(destination)) return null;
+	if (destination.startsWith('//')) return null;
+
+	if (destination.startsWith('/')) {
+		const pathname = destination.split(/[?#]/)[0];
+		if (pathname === '/') return null;
+		return { kind: 'url', target: pathname.endsWith('/') ? pathname : `${pathname}/` };
+	}
+
+	return null;
+}
+
+/** Drop an Obsidian subpath: everything from the first `#` heading or `^` block id.
  *
  * `resolvedLinks` records `[[Note#Heading]]` as an edge to `Note`, so the
  * subpath must not survive into the target. What remains can be empty — a bare

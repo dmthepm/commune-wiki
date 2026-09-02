@@ -17,8 +17,10 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import {
 	buildLinkLookup,
+	buildUrlLookup,
 	extractLinks,
 	loadContentEntries,
+	resolveLink,
 	type CollectionName,
 	type ExtractedLink,
 } from './src/lib/graph.ts';
@@ -169,7 +171,8 @@ interface NoteMetadata {
 
 async function buildBacklinksGraph(logger: Pick<Console, 'info' | 'warn'>) {
 	const entries = await loadContentEntries();
-	const lookup = buildLinkLookup(entries);
+	const byName = buildLinkLookup(entries);
+	const byUrl = buildUrlLookup(entries);
 
 	const notes = new Map<string, NoteMetadata>();
 	// Raw extracted edges, kept beside the graph: `outbound` on NoteMetadata is
@@ -199,7 +202,7 @@ async function buildBacklinksGraph(logger: Pick<Console, 'info' | 'warn'>) {
 		const resolvedOutbound: string[] = [];
 
 		for (const link of extracted.get(fromUrl)!) {
-			const resolved = lookup.get(link.target.toLowerCase())?.urlPath;
+			const resolved = resolveLink(link, byName, byUrl)?.urlPath;
 
 			if (resolved && notes.has(resolved)) {
 				resolvedOutbound.push(resolved);
@@ -209,7 +212,11 @@ async function buildBacklinksGraph(logger: Pick<Console, 'info' | 'warn'>) {
 				}
 			} else {
 				// Link to a note that doesn't exist yet — fine, but worth saying
-				logger.warn(`⚠️  Broken link in ${fromUrl}: [[${link.target}]]`);
+				logger.warn(
+					`⚠️  Broken link in ${fromUrl}: ${
+						link.kind === 'url' ? `(${link.target})` : `[[${link.target}]]`
+					}`
+				);
 			}
 		}
 
