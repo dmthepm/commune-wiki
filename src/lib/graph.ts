@@ -14,6 +14,7 @@
  *   - canonical URLs, always with a trailing slash, matching Astro's
  *     directory build format
  *   - the title/alias lookup used to resolve `[[WikiLinks]]`
+ *   - which link forms count as an edge, and how each one resolves
  */
 
 import { globby } from 'globby';

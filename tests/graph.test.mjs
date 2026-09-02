@@ -245,3 +245,32 @@ test('loaded entries carry their frontmatter, so the caller can pass it', async 
 		assert.equal(entry.frontmatter.title, entry.title);
 	}
 });
+
+// A link written inside code is documentation about the syntax, not an edge.
+// `stripCode()` already handled this; these lock it against a regex change.
+
+test('a wikilink in a fenced block is not an edge', () => {
+	const markdown = [
+		'Write it like this:',
+		'',
+		'```markdown',
+		'[[Evergreen Notes]]',
+		'[x](/notes/atomic-notes/)',
+		'```',
+		'',
+		'Then [[Atomic Notes]] is the real one.',
+	].join('\n');
+
+	assert.deepEqual(extractLinks(markdown), [{ kind: 'name', target: 'Atomic Notes' }]);
+});
+
+test('a wikilink in a tilde-fenced block is not an edge', () => {
+	assert.deepEqual(extractLinks('~~~\n[[Evergreen Notes]]\n~~~\n'), []);
+});
+
+test('a link in inline code is not an edge', () => {
+	assert.deepEqual(
+		extractLinks('Use `[[Evergreen Notes]]` or `[x](/notes/atomic-notes/)` to link.'),
+		[]
+	);
+});
