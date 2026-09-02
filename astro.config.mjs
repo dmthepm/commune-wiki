@@ -1,4 +1,5 @@
 import { defineConfig } from 'astro/config';
+import { unified } from '@astrojs/markdown-remark';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 import sitemap from '@astrojs/sitemap';
@@ -8,8 +9,15 @@ import remarkWikiLinks from './remark-wikilinks.ts';
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://devonmeadows.com',
+	// Astro 7 renders markdown with Sätteri and no longer installs
+	// `@astrojs/markdown-remark`. `remark-wikilinks.ts` is the mechanism this
+	// whole project exists for, so the unified pipeline is reinstalled and kept
+	// rather than ported: a Sätteri port is a rewrite of the product's core, not
+	// a step in an engine upgrade, and it gets its own ticket.
 	markdown: {
-		remarkPlugins: [remarkWikiLinks],
+		processor: unified({
+			remarkPlugins: [remarkWikiLinks],
+		}),
 	},
 	// Tailwind runs as a plain PostCSS plugin rather than through
 	// `@astrojs/tailwind`, whose peer range stops at Astro 5. The integration

@@ -50,7 +50,6 @@
 }
 
 /* Dark mode via data-theme attribute or system preference */
-:root[data-theme="dark"],
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --c-bg: #0f0f0f;
