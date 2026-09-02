@@ -1,5 +1,8 @@
 ---
 title: "Commune"
+# Pins the URL across the rename to a title-named file. Without it the slug
+# would follow the filename and /notes/what-is-commune/ would 404.
+slug: what-is-commune
 created: 2025-10-16
 updated: 2026-01-21
 visibility: public

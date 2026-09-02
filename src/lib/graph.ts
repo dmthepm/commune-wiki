@@ -17,6 +17,7 @@
  */
 
 import { globby } from 'globby';
+import { slug as githubSlug } from 'github-slugger';
 import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -62,25 +63,38 @@ export interface LinkTarget {
 /**
  * Convert a content file path to its collection-relative slug and canonical URL.
  *
- * `pages` are the exception: they render through hand-written Astro routes, so
- * the page's own `url` frontmatter is authoritative and the slug-derived path is
- * only a fallback.
+ * Files are named for their titles, so that `[[Evergreen Notes]]` resolves in
+ * Obsidian (which matches on filename) and in Astro (which matches on title)
+ * without a piped alias. The URL is therefore *derived* from the filename, not
+ * equal to it, using the same `github-slugger` call Astro's own content layer
+ * uses — so the graph and Astro's `entry.slug` can never disagree.
+ *
+ * Two escape hatches, in priority order:
+ *   - `slug` frontmatter pins the URL when a rename would otherwise move it.
+ *     Astro treats this key as reserved and strips it before Zod validation, so
+ *     it must not appear in any collection schema.
+ *   - `pages` declare a whole `url`, since they render at arbitrary routes.
  */
 export function toUrlPath(
 	file: string,
 	collection: CollectionName,
-	configuredUrl?: unknown
+	data: Record<string, unknown> = {}
 ): { slug: string; urlPath: string } {
-	const slug = path
+	const relative = path
 		.relative(CONTENT_DIRS[collection], file)
 		.replace(/\\/g, '/')
 		.replace(/\.(md|mdx)$/, '')
 		.replace(/\/index$/, '');
 
+	// Astro slugifies each path segment separately, so nested content keeps its
+	// directory structure. Match that exactly.
+	const derived = relative.split('/').map(githubSlug).join('/');
+	const slug = typeof data.slug === 'string' && data.slug ? data.slug : derived;
+
 	if (collection === 'pages') {
 		return {
 			slug,
-			urlPath: typeof configuredUrl === 'string' ? configuredUrl : `/${slug}/`,
+			urlPath: typeof data.url === 'string' ? data.url : `/${slug}/`,
 		};
 	}
 
@@ -123,7 +137,7 @@ export async function loadContentEntries(): Promise<ContentEntry[]> {
 
 			if (!isPublic(collection, data)) continue;
 
-			const { slug, urlPath } = toUrlPath(file, collection, data.url);
+			const { slug, urlPath } = toUrlPath(file, collection, data);
 			const summary = typeof data.summary === 'string' ? data.summary : undefined;
 			const updated = normalizeDate(data.updated);
 

@@ -25,6 +25,7 @@
     "@astrojs/tailwind": "^5.1.0",
     "@tailwindcss/typography": "^0.5.10",
     "astro": "^4.15.0",
+    "github-slugger": "^2.0.0",
     "globby": "^14.0.0",
     "gray-matter": "^4.0.3",
     "sharp": "^0.33.0",

@@ -118,6 +118,39 @@
     "summary": "Share your work as you build it. Show the mess, the decisions, the failures. Don't wait for polish.",
     "updated": "2025-10-17"
   },
+  "/notes/what-is-commune/": {
+    "slug": "/notes/what-is-commune/",
+    "title": "Commune",
+    "collection": "notes",
+    "aliases": [
+      "commune",
+      "what is commune",
+      "about commune",
+      "commune platform"
+    ],
+    "outbound": [
+      "/notes/what-is-commune/",
+      "/notes/evergreen-notes/",
+      "/notes/my-working-notes/"
+    ],
+    "inbound": [
+      "/notes/andy-matuschaks-notes/",
+      "/notes/build-in-public/",
+      "/notes/what-is-commune/",
+      "/notes/learning-in-public-accelerates-growth/",
+      "/notes/my-working-notes/",
+      "/notes/zettelkasten-method/"
+    ],
+    "tags": [
+      "commune",
+      "platform",
+      "knowledge-sharing",
+      "working-in-public"
+    ],
+    "status": "live",
+    "summary": "A platform for sharing your thinking in public without algorithmic feeds. Voice capture flows into atomic notes, readers navigate via explicit links, and depth-gating protects attention.",
+    "updated": "2026-01-21"
+  },
   "/notes/evergreen-notes/": {
     "slug": "/notes/evergreen-notes/",
     "title": "Evergreen Notes",
@@ -137,10 +170,10 @@
       "/notes/associative-linking-over-hierarchies/",
       "/notes/atomic-notes/",
       "/notes/build-in-public/",
+      "/notes/what-is-commune/",
       "/notes/learning-in-public-accelerates-growth/",
       "/notes/my-working-notes/",
       "/notes/titles-are-takeaways-not-labels/",
-      "/notes/what-is-commune/",
       "/notes/zettelkasten-method/"
     ],
     "tags": [
@@ -231,39 +264,6 @@
     "status": "live",
     "summary": "A title should read like a conclusion. Labels slow readers and weaken Ask the Brain. A sharp title makes a short note land.",
     "updated": "2025-10-15"
-  },
-  "/notes/what-is-commune/": {
-    "slug": "/notes/what-is-commune/",
-    "title": "Commune",
-    "collection": "notes",
-    "aliases": [
-      "commune",
-      "what is commune",
-      "about commune",
-      "commune platform"
-    ],
-    "outbound": [
-      "/notes/what-is-commune/",
-      "/notes/evergreen-notes/",
-      "/notes/my-working-notes/"
-    ],
-    "inbound": [
-      "/notes/andy-matuschaks-notes/",
-      "/notes/build-in-public/",
-      "/notes/learning-in-public-accelerates-growth/",
-      "/notes/my-working-notes/",
-      "/notes/what-is-commune/",
-      "/notes/zettelkasten-method/"
-    ],
-    "tags": [
-      "commune",
-      "platform",
-      "knowledge-sharing",
-      "working-in-public"
-    ],
-    "status": "live",
-    "summary": "A platform for sharing your thinking in public without algorithmic feeds. Voice capture flows into atomic notes, readers navigate via explicit links, and depth-gating protects attention.",
-    "updated": "2026-01-21"
   },
   "/notes/zettelkasten-method/": {
     "slug": "/notes/zettelkasten-method/",

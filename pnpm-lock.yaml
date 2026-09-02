@@ -23,6 +23,9 @@ importers:
       astro:
         specifier: ^4.15.0
         version: 4.16.19(rollup@4.52.4)(typescript@5.9.3)
+      github-slugger:
+        specifier: ^2.0.0
+        version: 2.0.0
       globby:
         specifier: ^14.0.0
         version: 14.1.0
