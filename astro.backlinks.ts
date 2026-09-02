@@ -20,6 +20,7 @@ import {
 	extractLinks,
 	loadContentEntries,
 	type CollectionName,
+	type ExtractedLink,
 } from './src/lib/graph.ts';
 
 // =============================================================================
@@ -171,14 +172,18 @@ async function buildBacklinksGraph(logger: Pick<Console, 'info' | 'warn'>) {
 	const lookup = buildLinkLookup(entries);
 
 	const notes = new Map<string, NoteMetadata>();
+	// Raw extracted edges, kept beside the graph: `outbound` on NoteMetadata is
+	// the public artifact and holds resolved urlPaths only.
+	const extracted = new Map<string, ExtractedLink[]>();
 
 	for (const entry of entries) {
+		extracted.set(entry.urlPath, extractLinks(entry.body));
 		notes.set(entry.urlPath, {
 			slug: entry.urlPath,
 			title: entry.title,
 			collection: entry.collection,
 			aliases: entry.aliases,
-			outbound: extractLinks(entry.body),
+			outbound: [], // populated below, once links resolve
 			inbound: [], // populated below
 			tags: entry.tags,
 			status: entry.status,
@@ -193,11 +198,8 @@ async function buildBacklinksGraph(logger: Pick<Console, 'info' | 'warn'>) {
 	for (const [fromUrl, note] of notes.entries()) {
 		const resolvedOutbound: string[] = [];
 
-		for (const link of note.outbound) {
-			// Already a canonical URL, or resolvable by title/alias
-			const resolved = notes.has(link)
-				? link
-				: lookup.get(link.toLowerCase())?.urlPath;
+		for (const link of extracted.get(fromUrl)!) {
+			const resolved = lookup.get(link.target.toLowerCase())?.urlPath;
 
 			if (resolved && notes.has(resolved)) {
 				resolvedOutbound.push(resolved);
@@ -207,7 +209,7 @@ async function buildBacklinksGraph(logger: Pick<Console, 'info' | 'warn'>) {
 				}
 			} else {
 				// Link to a note that doesn't exist yet — fine, but worth saying
-				logger.warn(`⚠️  Broken link in ${fromUrl}: [[${link}]]`);
+				logger.warn(`⚠️  Broken link in ${fromUrl}: [[${link.target}]]`);
 			}
 		}
 

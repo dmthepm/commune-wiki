@@ -220,22 +220,52 @@ export function stripCode(content: string): string {
 }
 
 /**
+ * How a link target should be resolved.
+ *
+ * `name` is title-shaped: the raw text of a `[[WikiLink]]`, or the basename of
+ * a relative file link, resolved against the title/alias lookup.
+ * `url` is path-shaped: an absolute site path, resolved against `urlPath`.
+ *
+ * The two cannot be collapsed into one string. A bare `atomic-notes` is not a
+ * title and matching it against one only works by coincidence; `/notes/atomic-notes/`
+ * is not a title either and must never be looked up as one.
+ */
+export type LinkKind = 'name' | 'url';
+
+/** One outbound edge, with enough information to resolve it. */
+export interface ExtractedLink {
+	kind: LinkKind;
+	target: string;
+}
+
+/**
  * Extract every outbound link target from a markdown body.
  *
- * Returns raw WikiLink text (unresolved titles or aliases) plus the slugs of
- * plain markdown links into `/notes/`. Code is excluded.
+ * Returns the edges Obsidian's `resolvedLinks` would record: wikilinks, embeds,
+ * and internal markdown links. Code is excluded.
  */
-export function extractLinks(content: string): string[] {
-	const links: string[] = [];
+export function extractLinks(content: string): ExtractedLink[] {
+	const links: ExtractedLink[] = [];
 	const prose = stripCode(content);
 
 	for (const match of prose.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)) {
-		links.push(match[1].trim());
+		links.push({ kind: 'name', target: match[1].trim() });
 	}
 
 	for (const match of prose.matchAll(/\[([^\]]+)\]\(\/notes\/([^)]+)\/?/g)) {
-		links.push(match[2].trim());
+		links.push({ kind: 'name', target: match[2].trim() });
 	}
 
-	return [...new Set(links)];
+	return dedupe(links);
+}
+
+/** Drop repeated edges, keeping first-seen order. */
+function dedupe(links: ExtractedLink[]): ExtractedLink[] {
+	const seen = new Set<string>();
+	return links.filter((link) => {
+		const key = `${link.kind}:${link.target}`;
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
 }
