@@ -555,14 +555,8 @@ const formattedWordCount = data.wordCount.toLocaleString();
     opacity: 0.7;
   }
 
-  /* External link indicators */
-  .research-content a[target="_blank"]::after {
-    content: "↗";
-    display: inline-block;
-    margin-left: 0.25rem;
-    font-size: 0.8em;
-    opacity: 0.6;
-  }
+  /* External link indicators come from the global a[target="_blank"] rule in
+     design-system.css. A scoped copy here would double the marker. */
 
   /* Research content specific styles */
   .research-content {

@@ -13,7 +13,7 @@ Folders force you to decide where information "belongs." But knowledge doesn't n
 
 Links give you multiple pathways to the same information. Organization emerges instead of being forced. You discover connections instead of filing things away. Relevance depends on context, not fixed categories.
 
-[[Andy Matuschaks Notes]] and [[Evergreen Notes]] use dense linking instead of folder structures. Each note connects to any other note based on conceptual relationships, not arbitrary hierarchies.
+[[Andy Matuschak's Notes]] and [[Evergreen Notes]] use dense linking instead of folder structures. Each note connects to any other note based on conceptual relationships, not arbitrary hierarchies.
 
 You stop remembering where you filed something. You follow conceptual threads instead. "What was that idea about automation?" leads to "Oh right, it connects to this other concept about cognitive load."
 

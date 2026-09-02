@@ -1,19 +1,26 @@
 /**
  * Astro integration for building backlinks and graph data at build time.
- * 
+ *
  * This integration:
- * - Parses WikiLinks ([[Note Title]]) and markdown links in notes
- * - Resolves WikiLinks to actual note slugs via titles and aliases
- * - Computes bidirectional link graph (outbound + inbound)
+ * - Reads the content graph from `src/lib/graph.ts` (the single resolver)
+ * - Resolves WikiLinks to canonical URLs via titles and aliases
+ * - Computes the bidirectional link graph (outbound + inbound)
  * - Outputs /backlinks.json for client-side consumption
  * - Enables Andy-style backlinks, related notes, and graph views
+ *
+ * Which content exists, where it lives, and how a URL is spelled are decided by
+ * the graph core, not here. This file owns link resolution and star ranking.
  */
 
 import type { AstroIntegration } from 'astro';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { globby } from 'globby';
-import matter from 'gray-matter';
+import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import {
+	buildLinkLookup,
+	extractLinks,
+	loadContentEntries,
+	type CollectionName,
+} from './src/lib/graph.ts';
 
 // =============================================================================
 // STAR SYSTEM CONFIGURATION - Easy to modify!
@@ -60,13 +67,13 @@ const STAR_CONFIG = {
 function calculateStars(notes: Map<string, NoteMetadata>): Set<string> {
 	const starredSlugs = new Set<string>();
 
+	// Standalone pages belong in search and WikiLinks, not note rankings.
+	const notesArray = Array.from(notes.values()).filter(note => note.collection !== 'pages');
+
 	// Skip if too few notes
-	if (notes.size < STAR_CONFIG.minNotesForStars) {
+	if (notesArray.length < STAR_CONFIG.minNotesForStars) {
 		return starredSlugs;
 	}
-
-	// Get all notes as array and calculate ranking scores
-	const notesArray = Array.from(notes.values());
 
 	// Calculate score based on rankBy strategy
 	const scored = notesArray.map(note => {
@@ -104,11 +111,11 @@ function calculateStars(notes: Map<string, NoteMetadata>): Set<string> {
 
 	switch (STAR_CONFIG.strategy) {
 		case 'top-percent':
-			cutoffIndex = Math.ceil(notes.size * (STAR_CONFIG.topPercent / 100));
+			cutoffIndex = Math.ceil(notesArray.length * (STAR_CONFIG.topPercent / 100));
 			break;
 
 		case 'top-absolute':
-			cutoffIndex = Math.min(STAR_CONFIG.topAbsolute, notes.size);
+			cutoffIndex = Math.min(STAR_CONFIG.topAbsolute, notesArray.length);
 			break;
 
 		case 'threshold':
@@ -145,143 +152,137 @@ function calculateStars(notes: Map<string, NoteMetadata>): Set<string> {
 // =============================================================================
 
 interface NoteMetadata {
+	/** Canonical URL path. The graph is keyed by URL, so this is the identity. */
 	slug: string;
 	title: string;
-	collection: 'notes' | 'research'; // Track which collection this belongs to
+	collection: CollectionName;
 	aliases: string[];
-	outbound: string[]; // slugs this note links to
-	inbound: string[];  // slugs that link to this note
+	outbound: string[]; // urlPaths this note links to
+	inbound: string[];  // urlPaths that link to this note
 	tags: string[];
 	status: string;
+	summary?: string;
 	updated?: string;
 	isStarred?: boolean; // ⭐ indicator
+}
+
+async function buildBacklinksGraph(logger: Pick<Console, 'info' | 'warn'>) {
+	const entries = await loadContentEntries();
+	const lookup = buildLinkLookup(entries);
+
+	const notes = new Map<string, NoteMetadata>();
+
+	for (const entry of entries) {
+		notes.set(entry.urlPath, {
+			slug: entry.urlPath,
+			title: entry.title,
+			collection: entry.collection,
+			aliases: entry.aliases,
+			outbound: extractLinks(entry.body),
+			inbound: [], // populated below
+			tags: entry.tags,
+			status: entry.status,
+			...(entry.summary ? { summary: entry.summary } : {}),
+			...(entry.updated ? { updated: entry.updated } : {}),
+		});
+	}
+
+	logger.info(`📝 Found ${notes.size} public content entries`);
+
+	// Resolve WikiLinks and compute inbound links
+	for (const [fromUrl, note] of notes.entries()) {
+		const resolvedOutbound: string[] = [];
+
+		for (const link of note.outbound) {
+			// Already a canonical URL, or resolvable by title/alias
+			const resolved = notes.has(link)
+				? link
+				: lookup.get(link.toLowerCase())?.urlPath;
+
+			if (resolved && notes.has(resolved)) {
+				resolvedOutbound.push(resolved);
+				const target = notes.get(resolved)!;
+				if (!target.inbound.includes(fromUrl)) {
+					target.inbound.push(fromUrl);
+				}
+			} else {
+				// Link to a note that doesn't exist yet — fine, but worth saying
+				logger.warn(`⚠️  Broken link in ${fromUrl}: [[${link}]]`);
+			}
+		}
+
+		note.outbound = resolvedOutbound;
+	}
+
+	// Calculate which notes get stars
+	const starredSlugs = calculateStars(notes);
+	for (const slug of starredSlugs) {
+		const note = notes.get(slug);
+		if (note) {
+			note.isStarred = true;
+		}
+	}
+
+	if (starredSlugs.size > 0) {
+		logger.info(`⭐ ${starredSlugs.size} notes starred (top ${STAR_CONFIG.topPercent}%)`);
+	}
+
+	// Convert to plain object for JSON
+	const graph: Record<string, NoteMetadata> = {};
+	for (const [slug, note] of notes.entries()) {
+		graph[slug] = note;
+	}
+
+	const totalBacklinks = Array.from(notes.values()).reduce(
+		(sum, note) => sum + note.inbound.length,
+		0
+	);
+
+	return { graph, totalBacklinks, entriesCount: notes.size };
+}
+
+async function writeBacklinksFile(filePath: string, graph: Record<string, NoteMetadata>) {
+	await mkdir(path.dirname(filePath), { recursive: true });
+	await writeFile(filePath, JSON.stringify(graph, null, 2) + '\n');
 }
 
 export default function backlinksIntegration(): AstroIntegration {
 	return {
 		name: 'commune-backlinks',
 		hooks: {
+			// Write the public artifact before pages render. Note pages import
+			// backlinks.json at build time, so it has to be fresh on disk first —
+			// otherwise the build bakes in whatever the previous run left behind.
+			'astro:config:setup': async ({ logger }) => {
+				logger.info('🔗 Building public backlinks index...');
+
+				try {
+					const { graph, totalBacklinks, entriesCount } = await buildBacklinksGraph(logger);
+					await writeBacklinksFile(path.join('public', 'backlinks.json'), graph);
+					logger.info(`✅ Backlinks index written to public/backlinks.json`);
+					logger.info(`📊 ${totalBacklinks} total backlinks across ${entriesCount} entries`);
+				} catch (error) {
+					logger.error('❌ Failed to build public backlinks index:');
+					logger.error(String(error));
+					throw error;
+				}
+			},
 			'astro:build:done': async ({ dir, logger }) => {
 				logger.info('🔗 Building backlinks index...');
 
 				try {
-					const notes: Map<string, NoteMetadata> = new Map();
-					const titleToSlug: Map<string, string> = new Map();
-					const aliasToSlug: Map<string, string> = new Map();
-
-					// First pass: collect all notes and research, titles, and aliases
-					const noteFiles = await globby([
-						'src/content/notes/**/*.{md,mdx}',
-						'src/content/research/**/*.{md,mdx}'
-					]);
-
-					for (const file of noteFiles) {
-						const src = await readFile(file, 'utf8');
-						const { content, data } = matter(src);
-
-						// Determine collection from file path
-						const collection = file.includes('/notes/') ? 'notes' : 'research';
-
-						// Skip private/draft notes (research is always public)
-						if (collection === 'notes' && data.visibility !== 'public') continue;
-
-						const { slug, urlPath } = pathToSlug(file, collection);
-						const title = (data.title as string) || slug;
-						const aliases = (data.aliases as string[]) || [];
-						const tags = (data.tags as string[]) || [];
-						const status = (data.status as string) || 'seed';
-						const updated = data.updated as string | undefined;
-
-						// Extract outbound links from content
-						const outbound = extractLinks(content);
-
-						notes.set(urlPath, {
-							slug: urlPath,
-							title,
-							collection,
-							aliases,
-							outbound,
-							inbound: [], // will be populated in second pass
-							tags,
-							status,
-							updated,
-						});
-
-						// Build title -> slug map
-						titleToSlug.set(title.toLowerCase(), urlPath);
-
-						// Build alias -> slug map
-						for (const alias of aliases) {
-							aliasToSlug.set(alias.toLowerCase(), urlPath);
-						}
-					}
-
-					logger.info(`📝 Found ${notes.size} public notes`);
-
-					// Second pass: resolve WikiLinks and compute inbound links
-					for (const [fromSlug, note] of notes.entries()) {
-						const resolvedOutbound: string[] = [];
-
-						for (const link of note.outbound) {
-							// Try to resolve WikiLink to actual slug
-							const resolved = 
-								notes.has(link) ? link : // already a slug
-								titleToSlug.get(link.toLowerCase()) || 
-								aliasToSlug.get(link.toLowerCase());
-
-							if (resolved && notes.has(resolved)) {
-								resolvedOutbound.push(resolved);
-								// Add inbound link to target note
-								const targetNote = notes.get(resolved)!;
-								if (!targetNote.inbound.includes(fromSlug)) {
-									targetNote.inbound.push(fromSlug);
-								}
-							} else {
-								// Link to non-existent note (that's ok for now)
-								logger.warn(`⚠️  Broken link in ${fromSlug}: [[${link}]]`);
-							}
-						}
-
-						note.outbound = resolvedOutbound;
-					}
-
-					// Calculate which notes get stars
-					const starredSlugs = calculateStars(notes);
-					for (const slug of starredSlugs) {
-						const note = notes.get(slug);
-						if (note) {
-							note.isStarred = true;
-						}
-					}
-
-					if (starredSlugs.size > 0) {
-						logger.info(`⭐ ${starredSlugs.size} notes starred (top ${STAR_CONFIG.topPercent}%)`);
-					}
-
-					// Convert to plain object for JSON
-					const graph: Record<string, NoteMetadata> = {};
-					for (const [slug, note] of notes.entries()) {
-						graph[slug] = note;
-					}
+					const { graph, totalBacklinks, entriesCount } = await buildBacklinksGraph(logger);
 
 					// Write to dist directory
 					const distPath = path.join(dir.pathname, 'backlinks.json');
-					await writeFile(distPath, JSON.stringify(graph, null, 2));
-					
+					await writeBacklinksFile(distPath, graph);
+
 					// Also write to /public for dev server parity
 					// Use relative path from cwd to handle different build contexts
-					const publicPath = path.join('public', 'backlinks.json');
-					await mkdir(path.dirname(publicPath), { recursive: true });
-					await writeFile(publicPath, JSON.stringify(graph, null, 2));
+					await writeBacklinksFile(path.join('public', 'backlinks.json'), graph);
 
 					logger.info(`✅ Backlinks index written to /backlinks.json (dist + public)`);
-
-					// Log some stats
-					const totalBacklinks = Array.from(notes.values()).reduce(
-						(sum, note) => sum + note.inbound.length, 
-						0
-					);
-					logger.info(`📊 ${totalBacklinks} total backlinks across ${notes.size} notes`);
+					logger.info(`📊 ${totalBacklinks} total backlinks across ${entriesCount} entries`);
 
 				} catch (error) {
 					logger.error('❌ Failed to build backlinks index:');
@@ -292,47 +293,3 @@ export default function backlinksIntegration(): AstroIntegration {
 		},
 	};
 }
-
-/**
- * Convert file path to note slug (with collection prefix for URL)
- * Examples:
- *   src/content/notes/evergreen-notes.md → { slug: 'evergreen-notes', urlPath: '/notes/evergreen-notes/' }
- *   src/content/research/oss-business-models.md → { slug: 'oss-business-models', urlPath: '/research/oss-business-models' }
- */
-function pathToSlug(filePath: string, collection: 'notes' | 'research'): { slug: string; urlPath: string } {
-	const contentDir = collection === 'notes' ? 'src/content/notes' : 'src/content/research';
-	const slug = path
-		.relative(contentDir, filePath)
-		.replace(/\\/g, '/')
-		.replace(/\.(md|mdx)$/, '')
-		.replace(/\/index$/, '');
-
-	// Notes have trailing slash, research doesn't (to match Astro routes)
-	const urlPath = collection === 'notes'
-		? `/notes/${slug}/`
-		: `/research/${slug}`;
-
-	return { slug, urlPath };
-}
-
-/**
- * Extract WikiLinks [[Note Title]] and markdown links from content
- */
-function extractLinks(content: string): string[] {
-	const links: string[] = [];
-
-	// WikiLinks: [[Note Title]] or [[Note Title|Display Text]]
-	const wikiLinkMatches = content.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g);
-	for (const match of wikiLinkMatches) {
-		links.push(match[1].trim());
-	}
-
-	// Markdown links to /notes/: [text](/notes/slug/)
-	const mdLinkMatches = content.matchAll(/\[([^\]]+)\]\(\/notes\/([^)]+)\/?/g);
-	for (const match of mdLinkMatches) {
-		links.push(match[2].trim());
-	}
-
-	return [...new Set(links)]; // dedupe
-}
-

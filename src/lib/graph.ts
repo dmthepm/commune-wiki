@@ -191,19 +191,35 @@ export function resetGraphCache(): void {
 }
 
 /**
+ * Blank out fenced blocks and inline code, preserving offsets.
+ *
+ * A `[[WikiLink]]` written inside backticks is documentation *about* the
+ * syntax, not a link. The remark plugin gets this right for free because it
+ * only visits `text` nodes and never `inlineCode` — anything scanning raw
+ * markdown has to strip code itself or it reports phantom broken links.
+ */
+export function stripCode(content: string): string {
+	return content
+		.replace(/```[\s\S]*?```/g, (block) => block.replace(/[^\n]/g, ' '))
+		.replace(/~~~[\s\S]*?~~~/g, (block) => block.replace(/[^\n]/g, ' '))
+		.replace(/`[^`\n]*`/g, (span) => ' '.repeat(span.length));
+}
+
+/**
  * Extract every outbound link target from a markdown body.
  *
  * Returns raw WikiLink text (unresolved titles or aliases) plus the slugs of
- * plain markdown links into `/notes/`.
+ * plain markdown links into `/notes/`. Code is excluded.
  */
 export function extractLinks(content: string): string[] {
 	const links: string[] = [];
+	const prose = stripCode(content);
 
-	for (const match of content.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)) {
+	for (const match of prose.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)) {
 		links.push(match[1].trim());
 	}
 
-	for (const match of content.matchAll(/\[([^\]]+)\]\(\/notes\/([^)]+)\/?/g)) {
+	for (const match of prose.matchAll(/\[([^\]]+)\]\(\/notes\/([^)]+)\/?/g)) {
 		links.push(match[2].trim());
 	}
 

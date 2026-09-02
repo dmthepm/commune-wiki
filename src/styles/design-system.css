@@ -132,16 +132,27 @@ body.modal-open {
   overflow: hidden;
 }
 
-/* External link icon styling */
-.external-link-icon {
+/* Every link that opens a new tab carries the same external-link marker.
+   This is a design-system invariant: one rule, globally, so no page or
+   component has to remember to add its own. */
+
+/* The marker must never wrap onto its own line, orphaned from the label it
+   belongs to. `nowrap` has to come before the ::after rule that creates it. */
+a[target="_blank"] {
+  white-space: nowrap;
+}
+
+a[target="_blank"]::after {
+  content: "↗";
   display: inline-block;
   margin-left: 0.25rem;
-  font-size: 0.85em;
-  opacity: 0.7;
+  font-size: 0.8em;
+  line-height: 1;
+  opacity: 0.6;
   transition: opacity 0.15s ease;
 }
 
-a:hover .external-link-icon {
+a[target="_blank"]:hover::after {
   opacity: 1;
 }
 

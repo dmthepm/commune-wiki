@@ -26,7 +26,8 @@
       "digital-gardens"
     ],
     "status": "live",
-    "updated": "2025-10-17T00:00:00.000Z"
+    "summary": "Andy Matuschak's note-taking system pioneered the concept of evergreen notes with sliding pane interfaces and dense linking.",
+    "updated": "2025-10-17"
   },
   "/notes/associative-linking-over-hierarchies/": {
     "slug": "/notes/associative-linking-over-hierarchies/",
@@ -57,7 +58,8 @@
       "thinking"
     ],
     "status": "live",
-    "updated": "2025-10-15T00:00:00.000Z"
+    "summary": "Knowledge is naturally networked, not hierarchical. Associative links between concepts create more flexible and discoverable information structures.",
+    "updated": "2025-10-15"
   },
   "/notes/atomic-notes/": {
     "slug": "/notes/atomic-notes/",
@@ -83,7 +85,8 @@
       "thinking"
     ],
     "status": "live",
-    "updated": "2025-10-17T00:00:00.000Z"
+    "summary": "Each note should express exactly one idea. This is a key property of Evergreen Notes that makes them reusable and composable.",
+    "updated": "2025-10-17"
   },
   "/notes/build-in-public/": {
     "slug": "/notes/build-in-public/",
@@ -112,7 +115,8 @@
       "entrepreneurship"
     ],
     "status": "live",
-    "updated": "2025-10-17T00:00:00.000Z"
+    "summary": "Share your work as you build it. Show the mess, the decisions, the failures. Don't wait for polish.",
+    "updated": "2025-10-17"
   },
   "/notes/evergreen-notes/": {
     "slug": "/notes/evergreen-notes/",
@@ -145,7 +149,8 @@
       "knowledge-management"
     ],
     "status": "live",
-    "updated": "2025-10-17T00:00:00.000Z"
+    "summary": "Notes written to evolve and compound over time, not dumped into an archive. Foundation of personal knowledge management.",
+    "updated": "2025-10-17"
   },
   "/notes/learning-in-public-accelerates-growth/": {
     "slug": "/notes/learning-in-public-accelerates-growth/",
@@ -167,7 +172,8 @@
       "feedback",
       "growth"
     ],
-    "status": "live"
+    "status": "live",
+    "summary": "Making your learning visible creates feedback loops. People correct mistakes, suggest resources, open opportunities."
   },
   "/notes/my-working-notes/": {
     "slug": "/notes/my-working-notes/",
@@ -180,6 +186,7 @@
     "outbound": [
       "/notes/what-is-commune/",
       "/notes/evergreen-notes/",
+      "/about-this-wiki/",
       "/notes/atomic-notes/",
       "/notes/associative-linking-over-hierarchies/",
       "/notes/build-in-public/",
@@ -195,7 +202,8 @@
       "home",
       "welcome"
     ],
-    "status": "live"
+    "status": "live",
+    "summary": "Welcome to my working notes. A public wiki of ideas in progress."
   },
   "/notes/titles-are-takeaways-not-labels/": {
     "slug": "/notes/titles-are-takeaways-not-labels/",
@@ -221,7 +229,8 @@
       "claims"
     ],
     "status": "live",
-    "updated": "2025-10-15T00:00:00.000Z"
+    "summary": "A title should read like a conclusion. Labels slow readers and weaken Ask the Brain. A sharp title makes a short note land.",
+    "updated": "2025-10-15"
   },
   "/notes/what-is-commune/": {
     "slug": "/notes/what-is-commune/",
@@ -253,7 +262,8 @@
       "working-in-public"
     ],
     "status": "live",
-    "updated": "2026-01-21T00:00:00.000Z"
+    "summary": "A platform for sharing your thinking in public without algorithmic feeds. Voice capture flows into atomic notes, readers navigate via explicit links, and depth-gating protects attention.",
+    "updated": "2026-01-21"
   },
   "/notes/zettelkasten-method/": {
     "slug": "/notes/zettelkasten-method/",
@@ -275,6 +285,25 @@
       "knowledge-management",
       "methodology"
     ],
-    "status": "live"
+    "status": "live",
+    "summary": "Slip-box system for atomic notes with unique IDs and dense linking. Developed by Niklas Luhmann. Foundation for modern networked note-taking."
+  },
+  "/about-this-wiki/": {
+    "slug": "/about-this-wiki/",
+    "title": "About this wiki",
+    "collection": "pages",
+    "aliases": [
+      "About"
+    ],
+    "outbound": [],
+    "inbound": [
+      "/notes/my-working-notes/"
+    ],
+    "tags": [
+      "meta"
+    ],
+    "status": "seed",
+    "summary": "What the pages collection is for, and how a standalone page differs from a note.",
+    "updated": "2026-09-02"
   }
 }

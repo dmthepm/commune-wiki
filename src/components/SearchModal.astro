@@ -116,7 +116,12 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
       if (!r.ok) return [];
       const graph = await r.json();
       return Object.entries(graph).map(([url, node]) => ({
-        url, title: node.title || url, excerpt: (node.summary || '').slice(0, 160)
+        url,
+        title: node.title || url,
+        excerpt: (node.summary || '').slice(0, 160),
+        // Aliases and tags are searchable but never displayed — they let you
+        // find a note by a name it answers to rather than the one it wears.
+        terms: [...(node.aliases || []), ...(node.tags || [])].join(' '),
       }));
     } catch { return []; }
   }
@@ -126,7 +131,7 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
     if (!q) return [];
     const norm = q.toLowerCase();
     const scored = idx.map(d => {
-      const hay = `${d.title} ${d.excerpt}`.toLowerCase();
+      const hay = `${d.title} ${d.excerpt} ${d.terms}`.toLowerCase();
       const pos = hay.indexOf(norm);
       return pos === -1 ? null : { ...d, score: 1 / (1 + pos) };
     }).filter(Boolean).sort((a,b) => b.score - a.score);

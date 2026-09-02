@@ -10,11 +10,11 @@ summary: "Welcome to my working notes. A public wiki of ideas in progress."
 
 Welcome to my working notes.
 
-This is a public wiki built with [[Commune]] — a platform for sharing your thinking without algorithmic feeds. Just your ideas, connected by [[Evergreen Notes|explicit links]].
+This is a public wiki built with [[Commune]] — a platform for sharing your thinking without algorithmic feeds. Just your ideas, connected by explicit links between [[Evergreen Notes]]. See [[About this wiki]] for how the pieces fit together.
 
 ## How This Works
 
-Every note here follows the [[Atomic Notes]] principle: one idea per note. Notes connect to each other through [[Associative linking over hierarchies|WikiLinks]], not folders. The result is a network of thoughts that grows organically.
+Every note here follows the [[Atomic Notes]] principle: one idea per note. Notes connect to each other through WikiLinks, following [[Associative linking over hierarchies]] rather than folders. The result is a network of thoughts that grows organically.
 
 ## Start Exploring
 
