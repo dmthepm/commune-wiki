@@ -19,6 +19,7 @@ import { writeError } from './render.ts';
 import { resolveRoot } from './root.ts';
 import { queryCommand, type QueryFilters } from './query.ts';
 import { checkCommand } from './check.ts';
+import { relatedCommand } from './related.ts';
 import { COMMAND_USAGE, USAGE } from './usage.ts';
 
 /** Options understood everywhere, in any position. */
@@ -112,6 +113,26 @@ async function dispatch(args: string[]): Promise<number> {
 				deadends: values.deadends as boolean,
 			};
 			return queryCommand(await resolveRoot(values.root as string | undefined), filters, values.json as boolean);
+		}
+		case 'graph related': {
+			const { values, positionals } = parseStrict(rest, GLOBAL, true, usage);
+			if (values.help) {
+				process.stdout.write(`${usage}\n`);
+				return EXIT_OK;
+			}
+			if (positionals.length !== 1) {
+				throw usageError(
+					positionals.length
+						? `graph related takes one argument, got ${positionals.length}: ${positionals.join(' ')}. A path containing spaces has to be quoted.`
+						: 'graph related needs a path, a quoted string of text, or - for stdin',
+					usage
+				);
+			}
+			return relatedCommand(
+				await resolveRoot(values.root as string | undefined),
+				positionals[0],
+				values.json as boolean
+			);
 		}
 		case 'check': {
 			const { values } = parseStrict(rest, GLOBAL, false, usage);
