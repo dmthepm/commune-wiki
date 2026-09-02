@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { buildGraph, loadContentEntries, toBacklinksJson } from '../src/lib/graph.ts';
-import { VAULT } from './vault.test.mjs';
+import { VAULT } from './helpers.mjs';
 
 test('the core reproduces the committed backlinks.json byte for byte', async () => {
 	const graph = buildGraph(await loadContentEntries());

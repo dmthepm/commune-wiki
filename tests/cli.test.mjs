@@ -10,23 +10,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { VAULT } from './vault.test.mjs';
-
-const run = promisify(execFile);
-export const BIN = fileURLToPath(new URL('../bin/commune.mjs', import.meta.url));
-
-/** Run the bin, never throwing: the exit code is part of what is under test. */
-export async function commune(...args) {
-	try {
-		const { stdout, stderr } = await run(process.execPath, [BIN, ...args]);
-		return { code: 0, stdout, stderr };
-	} catch (error) {
-		return { code: error.code, stdout: error.stdout, stderr: error.stderr };
-	}
-}
+import { BIN, commune, run, VAULT } from './helpers.mjs';
 
 test('graph query returns the fixture vault as one JSON document', async () => {
 	const { code, stdout, stderr } = await commune('--root', VAULT, 'graph', 'query', '--json');
@@ -97,6 +82,47 @@ test('orphans are isolated, not merely unlinked-to', async () => {
 	// A dead end has inbound links; an orphan has none. Obsidian conflates them.
 	const deadends = await commune('--root', VAULT, 'graph', 'query', '--deadends', '--json');
 	assert.equal(JSON.parse(deadends.stdout).count, 7);
+});
+
+test('query and check answer "what did I get" in the same place', async () => {
+	const query = await commune('--root', VAULT, 'graph', 'query', '--json');
+	const check = await commune('--root', VAULT, 'check', '--json');
+
+	const q = JSON.parse(query.stdout);
+	const c = JSON.parse(check.stdout);
+
+	// `count` predates `summary` and is kept as its alias, so a consumer written
+	// against either spelling reads the same number.
+	assert.equal(q.count, q.summary.entries);
+	// An unfiltered query and a check see the same graph, so they must agree on
+	// its size. They are computed from opposite ends — outbound on one side,
+	// deduplicated inbound on the other — which is what makes this worth pinning.
+	assert.equal(q.summary.entries, c.summary.entries);
+	assert.equal(q.summary.edges, c.summary.edges);
+	assert.deepEqual(q.summary, { entries: 10, edges: 5, orphans: 5, deadends: 7 });
+});
+
+test('summary describes what was returned, not the whole corpus', async () => {
+	const { stdout } = await commune(
+		'--root', VAULT, 'graph', 'query', '--collection', 'notes', '--json'
+	);
+	const { count, summary } = JSON.parse(stdout);
+
+	assert.equal(count, 7);
+	// Four, not five: the research entry's edge into /notes/alpha/ is not an
+	// edge *out of the notes collection*. Degrees on each entry stay
+	// whole-graph — Alpha still reports both its inbound links — but the
+	// summary counts only what was returned.
+	assert.deepEqual(summary, { entries: 7, edges: 4, orphans: 3, deadends: 5 });
+});
+
+test('a filtered query reports itself consistently', async () => {
+	const { stdout } = await commune('--root', VAULT, 'graph', 'query', '--orphans', '--json');
+	const { count, summary } = JSON.parse(stdout);
+
+	// Every result is an orphan, so the filter and the count agree by construction.
+	assert.equal(summary.orphans, count);
+	assert.equal(summary.edges, 0);
 });
 
 test('text mode is line-per-entry with a summary last', async () => {

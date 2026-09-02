@@ -58,6 +58,24 @@ function toQueryEntry(entry: ContentEntry, graph: Graph): QueryEntry {
 }
 
 /**
+ * Isolated: nothing links here and this links nowhere.
+ *
+ * Not "nobody links to it" — a note that links out but is linked to by nothing
+ * is a dead end read from the other direction, and conflating the two is what
+ * makes Obsidian's orphan list useless on a vault where most notes link out.
+ * One definition, used by both the filter and the summary, so `--orphans` can
+ * never disagree with `summary.orphans`.
+ */
+function isOrphan(entry: QueryEntry): boolean {
+	return entry.inbound.length === 0 && entry.outbound.length === 0;
+}
+
+/** Links to nothing. Whether anything links *here* is a separate question. */
+function isDeadend(entry: QueryEntry): boolean {
+	return entry.outbound.length === 0;
+}
+
+/**
  * Repeated values of one flag widen the match; different flags narrow it.
  *
  * `--collection notes --collection pages --tag seed` means "a note or a page,
@@ -68,12 +86,30 @@ function matches(entry: QueryEntry, filters: QueryFilters): boolean {
 	if (filters.collections.length && !filters.collections.includes(entry.collection)) return false;
 	if (filters.tags.length && !entry.tags.some((tag) => filters.tags.includes(tag))) return false;
 	if (filters.status !== undefined && entry.status !== filters.status) return false;
-	// Isolated, not merely unlinked-to: a note nobody links to but which links
-	// out is a dead end in the other direction, and calling it an orphan is the
-	// bug that makes orphan lists useless in Obsidian.
-	if (filters.orphans && (entry.inbound.length > 0 || entry.outbound.length > 0)) return false;
-	if (filters.deadends && entry.outbound.length > 0) return false;
+	if (filters.orphans && !isOrphan(entry)) return false;
+	if (filters.deadends && !isDeadend(entry)) return false;
 	return true;
+}
+
+/**
+ * What came back, counted.
+ *
+ * Describes the *result set*, not the corpus, so it never contradicts `count`
+ * beside it. Degrees are still whole-graph — filtering changes which entries
+ * are returned, never how their links resolved — so an unfiltered query's
+ * `edges` is the same number `check` reports, counted from the outbound end
+ * rather than the inbound one.
+ *
+ * Free to compute: `outbound` and `inbound` are already materialized on every
+ * node by the time a query can be filtered at all.
+ */
+function summarize(results: QueryEntry[]) {
+	return {
+		entries: results.length,
+		edges: results.reduce((total, entry) => total + entry.outbound.length, 0),
+		orphans: results.filter(isOrphan).length,
+		deadends: results.filter(isDeadend).length,
+	};
 }
 
 export async function queryCommand(
@@ -85,8 +121,13 @@ export async function queryCommand(
 	const graph = buildGraph(entries);
 	const results = entries.map((entry) => toQueryEntry(entry, graph)).filter((entry) => matches(entry, filters));
 
+	const summary = summarize(results);
+
 	if (json) {
-		writeJson({ schema: SCHEMA, root, count: results.length, entries: results });
+		// `count` predates `summary` and stays as its alias: the field shipped in
+		// the contract #10 and #19 are written against, and removing it would be
+		// a schema bump for no gain.
+		writeJson({ schema: SCHEMA, root, count: summary.entries, summary, entries: results });
 		return EXIT_OK;
 	}
 
@@ -96,7 +137,7 @@ export async function queryCommand(
 				`${entry.urlPath}\t${entry.title}\t${entry.collection}\t${entry.status}\t` +
 				`→${entry.outbound.length} ←${entry.inbound.length}`
 		),
-		`${results.length} entries`,
+		`${summary.entries} entries, ${summary.edges} edges, ${summary.orphans} orphans, ${summary.deadends} dead ends`,
 	]);
 	return EXIT_OK;
 }

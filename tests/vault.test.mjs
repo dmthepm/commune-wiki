@@ -13,11 +13,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadContentEntries } from '../src/lib/graph.ts';
-
-export const VAULT = fileURLToPath(new URL('./fixtures/vault/', import.meta.url));
+import { VAULT } from './helpers.mjs';
 
 test('a root loads content from another project without changing the process cwd', async () => {
 	const before = process.cwd();

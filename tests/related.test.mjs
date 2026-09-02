@@ -10,12 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { VAULT } from './vault.test.mjs';
-import { BIN, commune } from './cli.test.mjs';
-
-const run = promisify(execFile);
+import { BIN, commune, run, VAULT } from './helpers.mjs';
 
 test('a file source returns its links, its mentions and its inbound entries', async () => {
 	const { code, stdout } = await commune(

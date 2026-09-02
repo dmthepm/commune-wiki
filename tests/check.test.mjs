@@ -10,8 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildGraph, checkEntries, loadContentEntries } from '../src/lib/graph.ts';
-import { VAULT } from './vault.test.mjs';
-import { commune } from './cli.test.mjs';
+import { commune, VAULT } from './helpers.mjs';
 
 async function findings(root) {
 	const entries = await loadContentEntries(root ? { root } : {});
