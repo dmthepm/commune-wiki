@@ -14,7 +14,7 @@
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { loadContentEntries, stripCode } from '../src/lib/graph.ts';
+import { findNoncanonicalTitles, loadContentEntries, stripCode } from '../src/lib/graph.ts';
 
 const FAIL = (message) => {
 	console.error(`FAIL: ${message}`);
@@ -41,32 +41,19 @@ if (missing.length) {
 // 2. WikiLinks must name their target exactly. A piped link or a near-miss
 //    title still renders, which is what makes this worth checking: it fails
 //    silently and quietly decouples the vault from the site.
-const canonicalTargets = new Map();
-for (const entry of entries) {
-	canonicalTargets.set(entry.title.toLowerCase(), entry.title);
-	for (const alias of entry.aliases) {
-		canonicalTargets.set(alias.toLowerCase(), entry.title);
-	}
-}
-
-const noncanonical = [];
-for (const entry of entries) {
-	for (const match of stripCode(entry.body).matchAll(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g)) {
-		const linked = match[1].trim();
-		const label = match[2]?.trim();
-		const canonical = canonicalTargets.get(linked.toLowerCase());
-		if (!canonical) continue; // unresolved links are a separate warning
-
-		if (label || linked !== canonical) {
-			noncanonical.push(
-				`${entry.file}: [[${linked}${label ? `|${label}` : ''}]] -> [[${canonical}]]`
-			);
-		}
-	}
-}
+//
+//    The rule itself lives in the graph core, where `commune check` reports it
+//    as a `noncanonical-title` finding. This script is the *gate*: same rule,
+//    same findings, but a build that violates it stops. Two copies of one rule
+//    is the bug #3 was opened to kill, so there is only ever one.
+const noncanonical = findNoncanonicalTitles(entries);
 
 if (noncanonical.length) {
-	FAIL(`WikiLinks must use exact page titles:\n${noncanonical.join('\n')}`);
+	FAIL(
+		`WikiLinks must use exact page titles:\n${noncanonical
+			.map((finding) => `${finding.file}: ${finding.message}`)
+			.join('\n')}`
+	);
 }
 
 // 3. A note that links to a standalone page must actually render that href.

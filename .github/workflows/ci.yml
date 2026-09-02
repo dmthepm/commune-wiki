@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # Reads .nvmrc, so CI and a local checkout cannot drift apart. The floor
+      # is 22.18: it is the first release that strips TypeScript types by
+      # default, and every entry point here imports src/lib/graph.ts directly.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm test
+
+      - run: pnpm build
+
+      # The bin has to work from a clean checkout, not just from a warm
+      # worktree. Output is discarded: this asserts exit 0, and exit 0 means
+      # "check finished", not "the content is clean".
+      - run: node bin/commune.mjs check --json > /dev/null
+
+      # The refactor's invariant, enforced on every PR rather than remembered:
+      # backlinks.json is committed and a build must not change it.
+      - run: git diff --exit-code public/backlinks.json

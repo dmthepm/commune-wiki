@@ -4,6 +4,12 @@
   "version": "1.0.0",
   "description": "Commune public wiki - build in public documentation",
   "license": "MIT",
+  "bin": {
+    "commune": "bin/commune.mjs"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dmthepm/commune-wiki.git"

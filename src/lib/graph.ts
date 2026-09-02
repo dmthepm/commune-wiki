@@ -121,21 +121,42 @@ function isPublic(collection: CollectionName, data: Record<string, unknown>): bo
 	return data.visibility === 'public';
 }
 
+/** Where to read content from. */
+export interface GraphOptions {
+	/**
+	 * The project root: the directory that *contains* `src/content`, not
+	 * `src/content` itself.
+	 *
+	 * Every path the graph exposes is derived from this directory — `file` is
+	 * relative to it, and `toUrlPath` strips `CONTENT_DIRS[collection]` off the
+	 * front of `file` to get a slug. Point it one level too deep and every slug
+	 * silently changes. Defaults to `process.cwd()`.
+	 */
+	root?: string;
+}
+
 /**
  * Read every public content entry, in a stable order.
  *
  * Deliberately uncached: the backlinks integration runs this on each build hook
  * and the dev server must see content edits without a restart.
+ *
+ * The root is a parameter rather than a `process.chdir`, so one process can
+ * read several vaults — which is what the CLI does when it is pointed at
+ * another wiki — without the cwd becoming shared mutable state.
  */
-export async function loadContentEntries(): Promise<ContentEntry[]> {
+export async function loadContentEntries(options: GraphOptions = {}): Promise<ContentEntry[]> {
+	const root = options.root ?? process.cwd();
 	const entries: ContentEntry[] = [];
 
 	for (const collection of COLLECTIONS) {
-		const files = await globby(`${CONTENT_DIRS[collection]}/**/*.{md,mdx}`);
+		// `cwd` keeps globby's results root-relative, which is exactly the
+		// spelling `ContentEntry.file` promises; only the read needs the join.
+		const files = await globby(`${CONTENT_DIRS[collection]}/**/*.{md,mdx}`, { cwd: root });
 		files.sort();
 
 		for (const file of files) {
-			const source = await readFile(file, 'utf8');
+			const source = await readFile(path.join(root, file), 'utf8');
 			const { content, data } = matter(source);
 
 			if (!isPublic(collection, data)) continue;
@@ -205,6 +226,33 @@ export function buildUrlLookup(entries: ContentEntry[]): Map<string, LinkTarget>
 			collection: entry.collection,
 			urlPath: entry.urlPath,
 		});
+	}
+
+	return lookup;
+}
+
+/**
+ * Build the filename resolution table: lowercased basename → target.
+ *
+ * Not a resolution table — nothing resolves through it. It exists so `check`
+ * can notice when a name means two different things depending on which table
+ * you ask: `[[Index]]` resolves by *title*, but `[index](./Index.md)` names a
+ * *file*, and in a vault where those disagree one of the two is silently wrong.
+ * Obsidian resolves by filename and Astro by title, so this is the seam where
+ * the two tools stop agreeing about what a link points at.
+ */
+export function buildBasenameLookup(entries: ContentEntry[]): Map<string, LinkTarget[]> {
+	const lookup = new Map<string, LinkTarget[]>();
+
+	for (const entry of entries) {
+		const basename = entry.file
+			.split('/')
+			.pop()!
+			.replace(/\.mdx?$/i, '')
+			.toLowerCase();
+		const targets = lookup.get(basename) ?? [];
+		targets.push({ slug: entry.slug, collection: entry.collection, urlPath: entry.urlPath });
+		lookup.set(basename, targets);
 	}
 
 	return lookup;
@@ -420,4 +468,477 @@ function dedupe(links: ExtractedLink[]): ExtractedLink[] {
 		seen.add(key);
 		return true;
 	});
+}
+
+// =============================================================================
+// Graph construction
+// =============================================================================
+
+/**
+ * Star calculation strategy.
+ *
+ * Lives in the core rather than the Astro integration because `isStarred` is a
+ * field of the public artifact, and the CLI has to be able to produce the same
+ * artifact without loading Astro.
+ */
+export const STAR_CONFIG = {
+	// Strategy: 'top-percent' | 'top-absolute' | 'threshold'
+	strategy: 'top-percent' as const,
+
+	// For 'top-percent': What percentage gets stars?
+	topPercent: 5, // Top 5%
+
+	// For 'top-absolute': How many notes get stars?
+	topAbsolute: 3, // Top 3 notes
+
+	// For 'threshold': Minimum backlinks to get a star
+	threshold: 10, // 10+ backlinks
+
+	// Minimum notes required before stars are enabled
+	minNotesForStars: 20,
+
+	// What metric to rank by?
+	// 'backlinks' | 'revisions' | 'cross-theme' | 'weighted'
+	rankBy: 'backlinks' as const,
+
+	// For weighted ranking (future):
+	weights: {
+		backlinks: 0.5,
+		revisions: 0.3,
+		crossTheme: 0.2,
+	},
+};
+
+/**
+ * One node of the public graph, and one entry of `backlinks.json`.
+ *
+ * The property order here is a serialization contract: `backlinks.json` is
+ * committed, and a reordered object is a diff on every build.
+ */
+export interface NoteMetadata {
+	/** Canonical URL path. The graph is keyed by URL, so this is the identity. */
+	slug: string;
+	title: string;
+	collection: CollectionName;
+	aliases: string[];
+	outbound: string[]; // urlPaths this note links to
+	inbound: string[]; // urlPaths that link to this note
+	tags: string[];
+	status: string;
+	summary?: string;
+	updated?: string;
+	isStarred?: boolean; // ⭐ indicator
+}
+
+/** Which rules the graph and `check` can report. */
+export type DiagnosticRule =
+	| 'broken-link'
+	| 'ambiguous-target'
+	| 'duplicate-name'
+	| 'noncanonical-title';
+
+/**
+ * One finding, as data.
+ *
+ * The Astro integration used to print broken links inline, which meant the only
+ * way to get at them was to scrape build logs. Findings are values now, so the
+ * integration, `check` and the search-index gate can each render the same set
+ * their own way.
+ */
+export interface Diagnostic {
+	rule: DiagnosticRule;
+	severity: 'error' | 'warning';
+	/** Source file, relative to the project root. */
+	file: string;
+	/** Not tracked yet: `extractLinks` records no offsets. Added when #24 needs them. */
+	line?: number;
+	message: string;
+	/** The link text or name involved. */
+	target?: string;
+	/** Canonical URL of the entry the finding is in. Carried so build output can name the route. */
+	urlPath?: string;
+	/** How the offending link was spelled, which decides `[[name]]` vs `(url)` rendering. */
+	kind?: LinkKind;
+	/** urlPaths in contention, for `ambiguous-target` and `duplicate-name`. */
+	candidates?: string[];
+	/** The spelling a `noncanonical-title` finding should have used. */
+	canonical?: string;
+}
+
+/** The resolved content graph. */
+export interface Graph {
+	/** Keyed by urlPath; insertion order is entry order. */
+	nodes: Record<string, NoteMetadata>;
+	diagnostics: Diagnostic[];
+	totalBacklinks: number;
+}
+
+/**
+ * Calculate which notes get stars based on STAR_CONFIG.
+ * Returns a Set of slugs that should be starred.
+ */
+export function calculateStars(notes: Map<string, NoteMetadata>): Set<string> {
+	const starredSlugs = new Set<string>();
+
+	// Standalone pages belong in search and WikiLinks, not note rankings.
+	const notesArray = Array.from(notes.values()).filter((note) => note.collection !== 'pages');
+
+	// Skip if too few notes
+	if (notesArray.length < STAR_CONFIG.minNotesForStars) {
+		return starredSlugs;
+	}
+
+	// Calculate score based on rankBy strategy
+	const scored = notesArray.map((note) => {
+		let score = 0;
+
+		switch (STAR_CONFIG.rankBy) {
+			case 'backlinks':
+				score = note.inbound.length;
+				break;
+
+			case 'revisions':
+				// Future: could track revision count in frontmatter or git history
+				score = 0;
+				break;
+
+			case 'cross-theme':
+				// Future: count unique tags across linked notes
+				score = 0;
+				break;
+
+			case 'weighted':
+				// Future: combine multiple metrics
+				score = note.inbound.length * STAR_CONFIG.weights.backlinks;
+				break;
+		}
+
+		return { slug: note.slug, score };
+	});
+
+	// Sort by score descending
+	scored.sort((a, b) => b.score - a.score);
+
+	// Determine which notes get stars based on strategy
+	let cutoffIndex = 0;
+
+	switch (STAR_CONFIG.strategy) {
+		case 'top-percent':
+			cutoffIndex = Math.ceil(notesArray.length * (STAR_CONFIG.topPercent / 100));
+			break;
+
+		case 'top-absolute':
+			cutoffIndex = Math.min(STAR_CONFIG.topAbsolute, notesArray.length);
+			break;
+
+		case 'threshold':
+			// All notes above threshold get stars
+			for (const { slug, score } of scored) {
+				if (score >= STAR_CONFIG.threshold) {
+					starredSlugs.add(slug);
+				}
+			}
+			return starredSlugs;
+	}
+
+	// Add top N notes to starred set
+	for (let i = 0; i < cutoffIndex; i++) {
+		starredSlugs.add(scored[i].slug);
+	}
+
+	// Handle ties at boundary
+	if (cutoffIndex > 0 && cutoffIndex < scored.length) {
+		const boundaryScore = scored[cutoffIndex - 1].score;
+		// Include all notes tied with the boundary score
+		for (let i = cutoffIndex; i < scored.length; i++) {
+			if (scored[i].score === boundaryScore) {
+				starredSlugs.add(scored[i].slug);
+			} else {
+				break;
+			}
+		}
+	}
+
+	return starredSlugs;
+}
+
+/**
+ * Build the resolved graph from loaded entries.
+ *
+ * Pure: no filesystem, no logging, no Astro. Everything a caller might want to
+ * print comes back in `diagnostics`, so the same construction serves the build
+ * (which warns), `check` (which reports) and `related` (which does neither).
+ */
+export function buildGraph(entries: ContentEntry[]): Graph {
+	const byName = buildLinkLookup(entries);
+	const byUrl = buildUrlLookup(entries);
+
+	const byBasename = buildBasenameLookup(entries);
+
+	const notes = new Map<string, NoteMetadata>();
+	// Raw extracted edges, kept beside the graph: `outbound` on NoteMetadata is
+	// the public artifact and holds resolved urlPaths only.
+	const extracted = new Map<string, ExtractedLink[]>();
+	const files = new Map<string, string>();
+
+	for (const entry of entries) {
+		extracted.set(entry.urlPath, extractLinks(entry.body, entry.frontmatter));
+		files.set(entry.urlPath, entry.file);
+		notes.set(entry.urlPath, {
+			slug: entry.urlPath,
+			title: entry.title,
+			collection: entry.collection,
+			aliases: entry.aliases,
+			outbound: [], // populated below, once links resolve
+			inbound: [], // populated below
+			tags: entry.tags,
+			status: entry.status,
+			...(entry.summary ? { summary: entry.summary } : {}),
+			...(entry.updated ? { updated: entry.updated } : {}),
+		});
+	}
+
+	const diagnostics: Diagnostic[] = [];
+
+	// Resolve WikiLinks and compute inbound links
+	for (const [fromUrl, note] of notes.entries()) {
+		const resolvedOutbound: string[] = [];
+
+		for (const link of extracted.get(fromUrl)!) {
+			const resolved = resolveLink(link, byName, byUrl)?.urlPath;
+
+			// A `name` link that means one entry by title and a different one by
+			// filename resolves — it just may not resolve to what the author saw
+			// in Obsidian. Reported, not repaired: picking a winner here would
+			// make the two tools disagree quietly instead of loudly.
+			if (link.kind === 'name') {
+				const byFile = byBasename.get(link.target.toLowerCase());
+				if (resolved && byFile?.length === 1 && byFile[0].urlPath !== resolved) {
+					diagnostics.push({
+						rule: 'ambiguous-target',
+						severity: 'error',
+						file: files.get(fromUrl)!,
+						urlPath: fromUrl,
+						kind: link.kind,
+						target: link.target,
+						candidates: [resolved, byFile[0].urlPath].sort(),
+						message: `${spellLink(link)} resolves by title to ${resolved} but names the file ${byFile[0].urlPath}`,
+					});
+				}
+			}
+
+			if (resolved && notes.has(resolved)) {
+				resolvedOutbound.push(resolved);
+				const target = notes.get(resolved)!;
+				if (!target.inbound.includes(fromUrl)) {
+					target.inbound.push(fromUrl);
+				}
+			} else {
+				// Link to a note that doesn't exist yet — fine, but worth saying
+				diagnostics.push({
+					rule: 'broken-link',
+					severity: 'warning',
+					file: files.get(fromUrl)!,
+					urlPath: fromUrl,
+					kind: link.kind,
+					target: link.target,
+					message: `${spellLink(link)} does not resolve`,
+				});
+			}
+		}
+
+		note.outbound = resolvedOutbound;
+	}
+
+	// Calculate which notes get stars
+	const starredSlugs = calculateStars(notes);
+	for (const slug of starredSlugs) {
+		const note = notes.get(slug);
+		if (note) {
+			note.isStarred = true;
+		}
+	}
+
+	const nodes: Record<string, NoteMetadata> = {};
+	for (const [slug, note] of notes.entries()) {
+		nodes[slug] = note;
+	}
+
+	const totalBacklinks = Array.from(notes.values()).reduce(
+		(sum, note) => sum + note.inbound.length,
+		0
+	);
+
+	return { nodes, diagnostics, totalBacklinks };
+}
+
+/** How a link was written, in the spelling its kind uses. */
+function spellLink(link: Pick<ExtractedLink, 'kind' | 'target'>): string {
+	return link.kind === 'url' ? `(${link.target})` : `[[${link.target}]]`;
+}
+
+/**
+ * Render a diagnostic as the build has always rendered it.
+ *
+ * `public/backlinks.json` is not the only committed contract — build output is
+ * read by humans and diffed by reviewers, so the warning line is kept exactly
+ * as it was when the integration formatted it itself.
+ */
+export function formatDiagnostic(diagnostic: Diagnostic): string {
+	if (diagnostic.rule === 'broken-link') {
+		return `⚠️  Broken link in ${diagnostic.urlPath}: ${spellLink({
+			kind: diagnostic.kind ?? 'name',
+			target: diagnostic.target ?? '',
+		})}`;
+	}
+	return `⚠️  ${diagnostic.rule} in ${diagnostic.file}: ${diagnostic.message}`;
+}
+
+/**
+ * The public artifact, exactly as `public/backlinks.json` stores it.
+ *
+ * Separate from `Graph` because the file is a runtime contract with four
+ * client-side readers: the graph can grow fields, the file cannot.
+ */
+export function toBacklinksJson(graph: Graph): Record<string, NoteMetadata> {
+	return graph.nodes;
+}
+
+/**
+ * Names claimed by more than one entry.
+ *
+ * Two triggers, because a name lives in two namespaces: a title or alias that
+ * two entries both answer to, and a filename that two entries share. Neither
+ * is an error the graph can resolve — `buildLinkLookup` keeps last-wins, which
+ * is what it has always done — but both mean a `[[WikiLink]]` reaches somewhere
+ * its author did not choose, and silently.
+ *
+ * Reported against the *first* claimant, because that is the entry the
+ * collision makes unreachable.
+ */
+export function findDuplicateNames(entries: ContentEntry[]): Diagnostic[] {
+	const byTitle = new Map<string, { entry: ContentEntry; name: string }[]>();
+	const byBasename = new Map<string, ContentEntry[]>();
+
+	for (const entry of entries) {
+		for (const name of [entry.title, ...entry.aliases]) {
+			const key = name.toLowerCase();
+			byTitle.set(key, [...(byTitle.get(key) ?? []), { entry, name }]);
+		}
+
+		const basename = entry.file.split('/').pop()!.replace(/\.mdx?$/i, '').toLowerCase();
+		byBasename.set(basename, [...(byBasename.get(basename) ?? []), entry]);
+	}
+
+	const diagnostics: Diagnostic[] = [];
+
+	for (const [, all] of byBasename) {
+		const claimants = distinct(all, (entry) => entry.urlPath);
+		if (claimants.length < 2) continue;
+		const [first] = claimants;
+		diagnostics.push({
+			rule: 'duplicate-name',
+			severity: 'error',
+			file: first.file,
+			target: first.file.split('/').pop()!.replace(/\.mdx?$/i, ''),
+			candidates: claimants.map((entry) => entry.urlPath).sort(),
+			message: `${claimants.length} entries share the filename ${first.file
+				.split('/')
+				.pop()}: ${claimants.map((entry) => entry.urlPath).join(', ')}`,
+		});
+	}
+
+	for (const [, all] of byTitle) {
+		// One entry may answer to a name twice — a note titled `Commune` that
+		// also lists `commune` as an alias is spelling the same claim twice, not
+		// competing with itself.
+		const claimants = distinct(all, ({ entry }) => entry.urlPath);
+		if (claimants.length < 2) continue;
+		const [first] = claimants;
+		diagnostics.push({
+			rule: 'duplicate-name',
+			severity: 'error',
+			file: first.entry.file,
+			target: first.name,
+			candidates: claimants.map(({ entry }) => entry.urlPath).sort(),
+			message: `${claimants.length} entries answer to "${first.name}": ${claimants
+				.map(({ entry }) => entry.urlPath)
+				.join(', ')} — the last one wins`,
+		});
+	}
+
+	return diagnostics;
+}
+
+/** Keep the first item per key, so an entry cannot collide with itself. */
+function distinct<T>(items: T[], key: (item: T) => string): T[] {
+	const seen = new Set<string>();
+	return items.filter((item) => {
+		const id = key(item);
+		if (seen.has(id)) return false;
+		seen.add(id);
+		return true;
+	});
+}
+
+/**
+ * WikiLinks that resolve but do not name their target exactly.
+ *
+ * The rule this implements used to live in `scripts/test-search-index.mjs`,
+ * with its own lookup table and its own regex — a second copy of a rule the
+ * graph core already had the ingredients for, which is the bug class #3 was
+ * opened to kill. One implementation now, two callers: `check` reports it and
+ * the build gate fails on it.
+ *
+ * Worth checking precisely because it is invisible: a piped link or a
+ * near-miss title still renders, and the vault quietly decouples from the site.
+ */
+export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
+	const canonical = new Map<string, string>();
+	for (const entry of entries) {
+		canonical.set(entry.title.toLowerCase(), entry.title);
+		for (const alias of entry.aliases) {
+			canonical.set(alias.toLowerCase(), entry.title);
+		}
+	}
+
+	const diagnostics: Diagnostic[] = [];
+
+	for (const entry of entries) {
+		for (const match of stripCode(entry.body).matchAll(LABELLED_WIKILINK)) {
+			const linked = match[1].trim();
+			const label = match[2]?.trim();
+			const exact = canonical.get(linked.toLowerCase());
+			if (!exact) continue; // unresolved links are `broken-link`'s business
+
+			if (label || linked !== exact) {
+				diagnostics.push({
+					rule: 'noncanonical-title',
+					severity: 'error',
+					file: entry.file,
+					urlPath: entry.urlPath,
+					kind: 'name',
+					target: exact,
+					canonical: exact,
+					message: `[[${linked}${label ? `|${label}` : ''}]] should be [[${exact}]]`,
+				});
+			}
+		}
+	}
+
+	return diagnostics;
+}
+
+/** A wikilink keeping its display text, which the canonical-title rule needs to see. */
+const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+
+/**
+ * Every finding `check` reports.
+ *
+ * The graph's own diagnostics come first and in entry order, so the list reads
+ * the same way the build log does, then the two whole-corpus rules that need
+ * every entry in hand before they can fire.
+ */
+export function checkEntries(entries: ContentEntry[], graph: Graph): Diagnostic[] {
+	return [...graph.diagnostics, ...findDuplicateNames(entries), ...findNoncanonicalTitles(entries)];
 }
