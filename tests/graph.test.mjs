@@ -135,3 +135,26 @@ test('a url edge is never resolved through the title lookup', async () => {
 	// as an alias. A url-shaped target must not reach that table.
 	assert.equal(await resolveOnly('[x](/atomic-notes/)'), undefined);
 });
+
+// BUG 3 — the old regex was hardcoded to `/notes/`, so research and page
+// routes were not edges at all. Any absolute path is a candidate edge; whether
+// it resolves is the lookup's business, not the regex's.
+
+test('a research link is an edge', () => {
+	assert.deepEqual(extractLinks('[x](/research/foo/)'), [
+		{ kind: 'url', target: '/research/foo/' },
+	]);
+});
+
+test('a page link is an edge', () => {
+	assert.deepEqual(extractLinks('[x](/about-this-wiki/)'), [
+		{ kind: 'url', target: '/about-this-wiki/' },
+	]);
+});
+
+test('a link to a standalone page resolves', async () => {
+	const target = await resolveOnly('[About this wiki](/about-this-wiki/)');
+	assert.ok(target, 'About this wiki should exist in the content tree');
+	assert.equal(target.collection, 'pages');
+	assert.deepEqual(target, await resolveOnly('[[About this wiki]]'));
+});
