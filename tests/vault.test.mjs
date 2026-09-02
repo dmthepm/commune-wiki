@@ -24,7 +24,7 @@ test('a root loads content from another project without changing the process cwd
 	const entries = await loadContentEntries({ root: VAULT });
 
 	assert.equal(process.cwd(), before);
-	assert.equal(entries.length, 9);
+	assert.equal(entries.length, 10);
 });
 
 test('file paths stay relative to the given root, in POSIX spelling', async () => {

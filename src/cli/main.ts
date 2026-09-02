@@ -18,6 +18,7 @@ import { CliError, EXIT_OK, EXIT_USAGE, isParseArgsError, usageError } from './e
 import { writeError } from './render.ts';
 import { resolveRoot } from './root.ts';
 import { queryCommand, type QueryFilters } from './query.ts';
+import { checkCommand } from './check.ts';
 import { COMMAND_USAGE, USAGE } from './usage.ts';
 
 /** Options understood everywhere, in any position. */
@@ -111,6 +112,17 @@ async function dispatch(args: string[]): Promise<number> {
 				deadends: values.deadends as boolean,
 			};
 			return queryCommand(await resolveRoot(values.root as string | undefined), filters, values.json as boolean);
+		}
+		case 'check': {
+			const { values } = parseStrict(rest, GLOBAL, false, usage);
+			if (values.help) {
+				process.stdout.write(`${usage}\n`);
+				return EXIT_OK;
+			}
+			return checkCommand(
+				await resolveRoot(values.root as string | undefined),
+				values.json as boolean
+			);
 		}
 		default:
 			throw usageError(`${name} is not implemented yet`, usage);

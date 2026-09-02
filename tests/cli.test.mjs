@@ -35,8 +35,8 @@ test('graph query returns the fixture vault as one JSON document', async () => {
 	assert.equal(stderr, '');
 	const payload = JSON.parse(stdout);
 	assert.equal(payload.schema, 1);
-	assert.equal(payload.count, 9);
-	assert.equal(payload.entries.length, 9);
+	assert.equal(payload.count, 10);
+	assert.equal(payload.entries.length, 10);
 	assert.match(payload.root, /tests\/fixtures\/vault$/);
 });
 
@@ -66,7 +66,7 @@ test('filters are any-of within a flag and all-of across flags', async () => {
 		'--root', VAULT, 'graph', 'query',
 		'--collection', 'research', '--collection', 'pages', '--json'
 	);
-	assert.equal(JSON.parse(both.stdout).count, 2);
+	assert.equal(JSON.parse(both.stdout).count, 3);
 
 	const crossed = await commune(
 		'--root', VAULT, 'graph', 'query',
@@ -85,12 +85,18 @@ test('orphans are isolated, not merely unlinked-to', async () => {
 	const orphans = await commune('--root', VAULT, 'graph', 'query', '--orphans', '--json');
 	assert.deepEqual(
 		JSON.parse(orphans.stdout).entries.map((entry) => entry.urlPath),
-		['/notes/duplicate-one/', '/notes/index/', '/notes/isolated/', '/vault-page/']
+		[
+			'/notes/duplicate-one/',
+			'/notes/index/',
+			'/notes/isolated/',
+			'/research/isolated/',
+			'/vault-page/',
+		]
 	);
 
 	// A dead end has inbound links; an orphan has none. Obsidian conflates them.
 	const deadends = await commune('--root', VAULT, 'graph', 'query', '--deadends', '--json');
-	assert.equal(JSON.parse(deadends.stdout).count, 6);
+	assert.equal(JSON.parse(deadends.stdout).count, 7);
 });
 
 test('text mode is line-per-entry with a summary last', async () => {
@@ -98,8 +104,8 @@ test('text mode is line-per-entry with a summary last', async () => {
 	const lines = stdout.trimEnd().split('\n');
 
 	assert.equal(code, 0);
-	assert.equal(lines.length, 10);
-	assert.match(lines.at(-1), /^9 entries/);
+	assert.equal(lines.length, 11);
+	assert.match(lines.at(-1), /^10 entries/);
 });
 
 test('an unknown flag is exit 2 with nothing on stdout', async () => {
@@ -140,5 +146,5 @@ test('no Astro module is loaded on the CLI path', async () => {
 		'--import', hook, BIN, '--root', VAULT, 'graph', 'query', '--json',
 	]);
 
-	assert.equal(JSON.parse(stdout).count, 9);
+	assert.equal(JSON.parse(stdout).count, 10);
 });

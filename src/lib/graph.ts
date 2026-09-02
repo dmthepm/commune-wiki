@@ -232,6 +232,33 @@ export function buildUrlLookup(entries: ContentEntry[]): Map<string, LinkTarget>
 }
 
 /**
+ * Build the filename resolution table: lowercased basename → target.
+ *
+ * Not a resolution table — nothing resolves through it. It exists so `check`
+ * can notice when a name means two different things depending on which table
+ * you ask: `[[Index]]` resolves by *title*, but `[index](./Index.md)` names a
+ * *file*, and in a vault where those disagree one of the two is silently wrong.
+ * Obsidian resolves by filename and Astro by title, so this is the seam where
+ * the two tools stop agreeing about what a link points at.
+ */
+export function buildBasenameLookup(entries: ContentEntry[]): Map<string, LinkTarget[]> {
+	const lookup = new Map<string, LinkTarget[]>();
+
+	for (const entry of entries) {
+		const basename = entry.file
+			.split('/')
+			.pop()!
+			.replace(/\.mdx?$/i, '')
+			.toLowerCase();
+		const targets = lookup.get(basename) ?? [];
+		targets.push({ slug: entry.slug, collection: entry.collection, urlPath: entry.urlPath });
+		lookup.set(basename, targets);
+	}
+
+	return lookup;
+}
+
+/**
  * Resolve one extracted edge, using the table its kind belongs to.
  *
  * Deliberately does nothing clever: no basename fallback, no source-relative
@@ -646,6 +673,8 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 	const byName = buildLinkLookup(entries);
 	const byUrl = buildUrlLookup(entries);
 
+	const byBasename = buildBasenameLookup(entries);
+
 	const notes = new Map<string, NoteMetadata>();
 	// Raw extracted edges, kept beside the graph: `outbound` on NoteMetadata is
 	// the public artifact and holds resolved urlPaths only.
@@ -677,6 +706,26 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 
 		for (const link of extracted.get(fromUrl)!) {
 			const resolved = resolveLink(link, byName, byUrl)?.urlPath;
+
+			// A `name` link that means one entry by title and a different one by
+			// filename resolves — it just may not resolve to what the author saw
+			// in Obsidian. Reported, not repaired: picking a winner here would
+			// make the two tools disagree quietly instead of loudly.
+			if (link.kind === 'name') {
+				const byFile = byBasename.get(link.target.toLowerCase());
+				if (resolved && byFile?.length === 1 && byFile[0].urlPath !== resolved) {
+					diagnostics.push({
+						rule: 'ambiguous-target',
+						severity: 'error',
+						file: files.get(fromUrl)!,
+						urlPath: fromUrl,
+						kind: link.kind,
+						target: link.target,
+						candidates: [resolved, byFile[0].urlPath].sort(),
+						message: `${spellLink(link)} resolves by title to ${resolved} but names the file ${byFile[0].urlPath}`,
+					});
+				}
+			}
 
 			if (resolved && notes.has(resolved)) {
 				resolvedOutbound.push(resolved);
@@ -753,4 +802,143 @@ export function formatDiagnostic(diagnostic: Diagnostic): string {
  */
 export function toBacklinksJson(graph: Graph): Record<string, NoteMetadata> {
 	return graph.nodes;
+}
+
+/**
+ * Names claimed by more than one entry.
+ *
+ * Two triggers, because a name lives in two namespaces: a title or alias that
+ * two entries both answer to, and a filename that two entries share. Neither
+ * is an error the graph can resolve — `buildLinkLookup` keeps last-wins, which
+ * is what it has always done — but both mean a `[[WikiLink]]` reaches somewhere
+ * its author did not choose, and silently.
+ *
+ * Reported against the *first* claimant, because that is the entry the
+ * collision makes unreachable.
+ */
+export function findDuplicateNames(entries: ContentEntry[]): Diagnostic[] {
+	const byTitle = new Map<string, { entry: ContentEntry; name: string }[]>();
+	const byBasename = new Map<string, ContentEntry[]>();
+
+	for (const entry of entries) {
+		for (const name of [entry.title, ...entry.aliases]) {
+			const key = name.toLowerCase();
+			byTitle.set(key, [...(byTitle.get(key) ?? []), { entry, name }]);
+		}
+
+		const basename = entry.file.split('/').pop()!.replace(/\.mdx?$/i, '').toLowerCase();
+		byBasename.set(basename, [...(byBasename.get(basename) ?? []), entry]);
+	}
+
+	const diagnostics: Diagnostic[] = [];
+
+	for (const [, all] of byBasename) {
+		const claimants = distinct(all, (entry) => entry.urlPath);
+		if (claimants.length < 2) continue;
+		const [first] = claimants;
+		diagnostics.push({
+			rule: 'duplicate-name',
+			severity: 'error',
+			file: first.file,
+			target: first.file.split('/').pop()!.replace(/\.mdx?$/i, ''),
+			candidates: claimants.map((entry) => entry.urlPath).sort(),
+			message: `${claimants.length} entries share the filename ${first.file
+				.split('/')
+				.pop()}: ${claimants.map((entry) => entry.urlPath).join(', ')}`,
+		});
+	}
+
+	for (const [, all] of byTitle) {
+		// One entry may answer to a name twice — a note titled `Commune` that
+		// also lists `commune` as an alias is spelling the same claim twice, not
+		// competing with itself.
+		const claimants = distinct(all, ({ entry }) => entry.urlPath);
+		if (claimants.length < 2) continue;
+		const [first] = claimants;
+		diagnostics.push({
+			rule: 'duplicate-name',
+			severity: 'error',
+			file: first.entry.file,
+			target: first.name,
+			candidates: claimants.map(({ entry }) => entry.urlPath).sort(),
+			message: `${claimants.length} entries answer to "${first.name}": ${claimants
+				.map(({ entry }) => entry.urlPath)
+				.join(', ')} — the last one wins`,
+		});
+	}
+
+	return diagnostics;
+}
+
+/** Keep the first item per key, so an entry cannot collide with itself. */
+function distinct<T>(items: T[], key: (item: T) => string): T[] {
+	const seen = new Set<string>();
+	return items.filter((item) => {
+		const id = key(item);
+		if (seen.has(id)) return false;
+		seen.add(id);
+		return true;
+	});
+}
+
+/**
+ * WikiLinks that resolve but do not name their target exactly.
+ *
+ * The rule this implements used to live in `scripts/test-search-index.mjs`,
+ * with its own lookup table and its own regex — a second copy of a rule the
+ * graph core already had the ingredients for, which is the bug class #3 was
+ * opened to kill. One implementation now, two callers: `check` reports it and
+ * the build gate fails on it.
+ *
+ * Worth checking precisely because it is invisible: a piped link or a
+ * near-miss title still renders, and the vault quietly decouples from the site.
+ */
+export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
+	const canonical = new Map<string, string>();
+	for (const entry of entries) {
+		canonical.set(entry.title.toLowerCase(), entry.title);
+		for (const alias of entry.aliases) {
+			canonical.set(alias.toLowerCase(), entry.title);
+		}
+	}
+
+	const diagnostics: Diagnostic[] = [];
+
+	for (const entry of entries) {
+		for (const match of stripCode(entry.body).matchAll(LABELLED_WIKILINK)) {
+			const linked = match[1].trim();
+			const label = match[2]?.trim();
+			const exact = canonical.get(linked.toLowerCase());
+			if (!exact) continue; // unresolved links are `broken-link`'s business
+
+			if (label || linked !== exact) {
+				diagnostics.push({
+					rule: 'noncanonical-title',
+					severity: 'error',
+					file: entry.file,
+					urlPath: entry.urlPath,
+					kind: 'name',
+					target: exact,
+					canonical: exact,
+					message: `[[${linked}${label ? `|${label}` : ''}]] should be [[${exact}]]`,
+				});
+			}
+		}
+	}
+
+	return diagnostics;
+}
+
+/** A wikilink keeping its display text, which the canonical-title rule needs to see. */
+const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+
+/**
+ * Every finding `check` reports.
+ *
+ * The graph's own diagnostics come first and in entry order, so the list reads
+ * the same way the build log does, then the two whole-corpus rules that need
+ * every entry in hand before they can fire.
+ */
+export function checkEntries(entries: ContentEntry[], graph: Graph): Diagnostic[] {
+	return [...graph.diagnostics, ...findDuplicateNames(entries), ...findNoncanonicalTitles(entries)];
 }

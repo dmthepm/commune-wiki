@@ -46,7 +46,7 @@ test('inbound and outbound stay resolved urlPaths only', async () => {
 test('the fixture vault resolves its links and reports its one broken edge', async () => {
 	const graph = buildGraph(await loadContentEntries({ root: VAULT }));
 
-	assert.equal(Object.keys(graph.nodes).length, 9);
+	assert.equal(Object.keys(graph.nodes).length, 10);
 	assert.deepEqual(
 		graph.diagnostics.filter((d) => d.rule === 'broken-link').map((d) => d.target),
 		['Nonexistent Note']
