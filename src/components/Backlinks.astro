@@ -2,7 +2,7 @@
 export interface Props { slug: string; title?: string; hideCount?: boolean; }
 const { slug, hideCount = false } = Astro.props;
 ---
-<aside class="backlinks" data-backlinks-for={slug} data-hide-count={hideCount}>
+<aside class="backlinks" data-backlinks-for={slug} data-hide-count={hideCount ? 'true' : undefined}>
   <h4>Links to this note</h4>
   <ul class="backlinks-list"></ul>
 </aside>
