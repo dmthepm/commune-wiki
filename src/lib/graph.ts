@@ -121,21 +121,42 @@ function isPublic(collection: CollectionName, data: Record<string, unknown>): bo
 	return data.visibility === 'public';
 }
 
+/** Where to read content from. */
+export interface GraphOptions {
+	/**
+	 * The project root: the directory that *contains* `src/content`, not
+	 * `src/content` itself.
+	 *
+	 * Every path the graph exposes is derived from this directory — `file` is
+	 * relative to it, and `toUrlPath` strips `CONTENT_DIRS[collection]` off the
+	 * front of `file` to get a slug. Point it one level too deep and every slug
+	 * silently changes. Defaults to `process.cwd()`.
+	 */
+	root?: string;
+}
+
 /**
  * Read every public content entry, in a stable order.
  *
  * Deliberately uncached: the backlinks integration runs this on each build hook
  * and the dev server must see content edits without a restart.
+ *
+ * The root is a parameter rather than a `process.chdir`, so one process can
+ * read several vaults — which is what the CLI does when it is pointed at
+ * another wiki — without the cwd becoming shared mutable state.
  */
-export async function loadContentEntries(): Promise<ContentEntry[]> {
+export async function loadContentEntries(options: GraphOptions = {}): Promise<ContentEntry[]> {
+	const root = options.root ?? process.cwd();
 	const entries: ContentEntry[] = [];
 
 	for (const collection of COLLECTIONS) {
-		const files = await globby(`${CONTENT_DIRS[collection]}/**/*.{md,mdx}`);
+		// `cwd` keeps globby's results root-relative, which is exactly the
+		// spelling `ContentEntry.file` promises; only the read needs the join.
+		const files = await globby(`${CONTENT_DIRS[collection]}/**/*.{md,mdx}`, { cwd: root });
 		files.sort();
 
 		for (const file of files) {
-			const source = await readFile(file, 'utf8');
+			const source = await readFile(path.join(root, file), 'utf8');
 			const { content, data } = matter(source);
 
 			if (!isPublic(collection, data)) continue;
