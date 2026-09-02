@@ -36,3 +36,29 @@ test('attachment embed is an edge', () => {
 		{ kind: 'name', target: 'diagram.png' },
 	]);
 });
+
+// BUG 1 — Obsidian stores the edge without the subpath, so `[[Note#Heading]]`
+// and `[[Note]]` are the same edge. Keeping the subpath matched no title and
+// was reported as a broken link.
+
+test('heading subpath is stripped from a wikilink', () => {
+	assert.deepEqual(extractLinks('[[Evergreen Notes#Why]]'), [
+		{ kind: 'name', target: 'Evergreen Notes' },
+	]);
+});
+
+test('block subpath is stripped from a wikilink', () => {
+	assert.deepEqual(extractLinks('[[Evergreen Notes^abc123]]'), [
+		{ kind: 'name', target: 'Evergreen Notes' },
+	]);
+});
+
+test('a same-file subpath link is not an edge', () => {
+	assert.deepEqual(extractLinks('Jump to [[#Why]] or [[^abc123]].'), []);
+});
+
+test('subpath and display text collapse to one edge', () => {
+	assert.deepEqual(extractLinks('[[Evergreen Notes#Why|why]] and [[Evergreen Notes]]'), [
+		{ kind: 'name', target: 'Evergreen Notes' },
+	]);
+});

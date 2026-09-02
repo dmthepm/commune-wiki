@@ -249,7 +249,8 @@ export function extractLinks(content: string): ExtractedLink[] {
 	const prose = stripCode(content);
 
 	for (const match of prose.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)) {
-		links.push({ kind: 'name', target: match[1].trim() });
+		const target = stripSubpath(match[1]);
+		if (target) links.push({ kind: 'name', target });
 	}
 
 	for (const match of prose.matchAll(/\[([^\]]+)\]\(\/notes\/([^)]+)\/?/g)) {
@@ -257,6 +258,17 @@ export function extractLinks(content: string): ExtractedLink[] {
 	}
 
 	return dedupe(links);
+}
+
+/**
+ * Drop an Obsidian subpath: everything from the first `#` heading or `^` block id.
+ *
+ * `resolvedLinks` records `[[Note#Heading]]` as an edge to `Note`, so the
+ * subpath must not survive into the target. What remains can be empty — a bare
+ * `[[#Heading]]` points inside the current file and is not an edge at all.
+ */
+function stripSubpath(text: string): string {
+	return text.split(/[#^]/)[0].trim();
 }
 
 /** Drop repeated edges, keeping first-seen order. */
