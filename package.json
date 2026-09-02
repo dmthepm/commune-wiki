@@ -3,6 +3,15 @@
   "type": "module",
   "version": "1.0.0",
   "description": "Commune public wiki - build in public documentation",
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmthepm/commune-wiki.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dmthepm/commune-wiki/issues"
+  },
+  "homepage": "https://github.com/dmthepm/commune-wiki#readme",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",

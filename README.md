@@ -50,7 +50,7 @@
 
 ```bash
 # Clone repository
-git clone git@github.com:commune-hq/commune-wiki.git
+git clone git@github.com:dmthepm/commune-wiki.git
 cd commune-wiki
 
 # Install dependencies
@@ -340,7 +340,7 @@ pnpm build 2>&1 | grep "Broken link"
 **For Users**:
 - This README covers installation and usage
 - See [devonmeadows.com](https://devonmeadows.com) for live example
-- Issues/questions: [GitHub Issues](https://github.com/commune-hq/commune-wiki/issues)
+- Issues/questions: [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)
 
 ---
 
@@ -419,5 +419,5 @@ AGPL-3.0 - See [LICENSE](LICENSE) file.
 ---
 
 **Created by**: [Devon Meadows](https://devonmeadows.com)  
-**Organization**: [commune-hq](https://github.com/commune-hq)  
-**Support**: [GitHub Issues](https://github.com/commune-hq/commune-wiki/issues)
+**Repository**: [dmthepm/commune-wiki](https://github.com/dmthepm/commune-wiki)  
+**Support**: [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)

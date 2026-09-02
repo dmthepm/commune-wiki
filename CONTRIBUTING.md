@@ -28,7 +28,7 @@ This project follows standard open-source community guidelines:
 ### 🐛 Reporting Bugs
 
 **Before submitting a bug report**:
-- Check existing [GitHub Issues](https://github.com/commune-hq/commune-wiki/issues)
+- Check existing [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)
 - Include clear steps to reproduce
 - Describe expected vs actual behavior
 - Include screenshots if relevant
@@ -59,7 +59,7 @@ If applicable.
 ### 💡 Feature Requests
 
 **Before requesting a feature**:
-- Check existing [GitHub Issues](https://github.com/commune-hq/commune-wiki/issues)
+- Check existing [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)
 - Explain the use case clearly
 - Describe how it benefits users
 
@@ -113,7 +113,7 @@ git clone git@github.com:YOUR_USERNAME/commune-wiki.git
 cd commune-wiki
 
 # Add upstream remote
-git remote add upstream git@github.com:commune-hq/commune-wiki.git
+git remote add upstream git@github.com:dmthepm/commune-wiki.git
 
 # Install dependencies
 pnpm install
@@ -302,8 +302,8 @@ Link with custom text: [[Note Title|custom text]]
 - [Remark Plugins](https://github.com/remarkjs/remark/blob/main/doc/plugins.md)
 
 **Community**:
-- [GitHub Discussions](https://github.com/commune-hq/commune-wiki/discussions)
-- [GitHub Issues](https://github.com/commune-hq/commune-wiki/issues)
+- [GitHub Discussions](https://github.com/dmthepm/commune-wiki/discussions)
+- [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)
 
 **Inspiration**:
 - [Andy Matuschak's Notes](https://notes.andymatuschak.org/)
@@ -313,8 +313,8 @@ Link with custom text: [[Note Title|custom text]]
 
 ## Questions?
 
-- **Bugs/Features**: [Open an issue](https://github.com/commune-hq/commune-wiki/issues/new)
-- **General Questions**: [Start a discussion](https://github.com/commune-hq/commune-wiki/discussions/new)
+- **Bugs/Features**: [Open an issue](https://github.com/dmthepm/commune-wiki/issues/new)
+- **General Questions**: [Start a discussion](https://github.com/dmthepm/commune-wiki/discussions/new)
 - **Security Issues**: Email security@commune.app (if domain is registered)
 
 ---
