@@ -10,7 +10,9 @@ node_modules/
 # `dist/` is Astro's, and `astro build` empties it before every run; `lib/` is
 # the compiled package (tsc), which is why it is not written there.
 dist/
-lib/
+# Anchored: unanchored `lib/` also matches `src/lib/`, where the graph core
+# lives, so every new file there was silently untracked.
+/lib/
 .astro/
 
 # Environment

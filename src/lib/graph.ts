@@ -22,6 +22,9 @@ import { slug as githubSlug } from 'github-slugger';
 import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { readGitHistory, readMtimeDate, type DateSource } from './dates.ts';
+
+export type { DateSource } from './dates.ts';
 
 export type CollectionName = 'notes' | 'research' | 'pages';
 
@@ -47,7 +50,28 @@ export interface ContentEntry {
 	tags: string[];
 	status: string;
 	summary?: string;
+	/**
+	 * When this entry last changed, by the best answer available.
+	 *
+	 * Frontmatter wins when an author wrote one down; otherwise the file's
+	 * last commit date, and in a tree with no history its mtime. `updatedSource`
+	 * says which of those this is, so a site can decide whether to show it.
+	 */
 	updated?: string;
+	/** Which of the three answers `updated` is. */
+	updatedSource: DateSource;
+	/** When this entry first appeared, by the same precedence as `updated`. */
+	created?: string;
+	/**
+	 * The date of the file's last commit, whatever `updated` ended up being.
+	 *
+	 * Carried separately so a site can show both — "updated 2026-01-21, last
+	 * touched 2026-09-03" is the sentence that catches a stale `updated:` field,
+	 * and it cannot be written if the two dates have already been collapsed
+	 * into one. Absent when the project is not a git checkout, or when the file
+	 * has never been committed.
+	 */
+	modifiedInGit?: string;
 	/** Markdown body with frontmatter stripped. */
 	body: string;
 	/** Parsed frontmatter. Kept because links can live in it. */
@@ -161,6 +185,67 @@ export function normalizeDate(value: unknown): string | undefined {
 	return undefined;
 }
 
+/**
+ * The date an author wrote down, if they wrote one down.
+ *
+ * `updated` first, then `date` — the key the changelog-shaped collections use,
+ * where the entry *is* a dated thing rather than a page that happens to have
+ * been edited. Kept as one function so the graph, `--recent` and the site-wide
+ * last-updated value can never disagree about what an author claimed.
+ */
+export function claimedDate(data: Record<string, unknown>): string | undefined {
+	return normalizeDate(data.updated) ?? normalizeDate(data.date);
+}
+
+/**
+ * Decide an entry's dates, and say where the answer came from.
+ *
+ * Precedence, for both `created` and `updated`: what the author wrote, then
+ * what the repository records, then the file's mtime. The first is a claim and
+ * can be years stale; the second is a fact about the file and is what the
+ * ticket asked for; the third is a guess that exists so a build from a tarball
+ * — no `.git`, no history — produces dates instead of an exception.
+ *
+ * `updatedSource` is reported and `createdSource` is not, deliberately: the
+ * date a site displays and a reader judges is `updated`, and one honest label
+ * beside it is worth more than two labels nobody reads. `created` follows the
+ * same precedence, and `modifiedInGit` is carried whenever git knew the file,
+ * so anything that needs to audit the pair has both halves.
+ */
+async function resolveDates(
+	root: string,
+	file: string,
+	data: Record<string, unknown>,
+	history: Map<string, { created: string; updated: string }> | undefined
+): Promise<Pick<ContentEntry, 'updated' | 'updatedSource' | 'created' | 'modifiedInGit'>> {
+	const claimed = claimedDate(data);
+	const createdClaim = normalizeDate(data.created);
+	const committed = history?.get(file);
+
+	// Read once, and only when something is actually missing: a vault with
+	// complete frontmatter and a complete history never stats a file at all.
+	let mtime: string | undefined;
+	const fileMtime = async () => (mtime ??= await readMtimeDate(root, file));
+
+	const updated = claimed ?? committed?.updated ?? (await fileMtime());
+	const created = createdClaim ?? committed?.created ?? (await fileMtime());
+
+	const updatedSource: DateSource = claimed
+		? 'frontmatter'
+		: committed
+			? 'git'
+			: updated
+				? 'mtime'
+				: 'none';
+
+	return {
+		...(updated ? { updated } : {}),
+		updatedSource,
+		...(created ? { created } : {}),
+		...(committed ? { modifiedInGit: committed.updated } : {}),
+	};
+}
+
 /** Is this entry publicly visible? Notes opt in; research and pages are always public. */
 function isPublic(collection: CollectionName, data: Record<string, unknown>): boolean {
 	if (collection !== 'notes') return true;
@@ -195,6 +280,10 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 	const root = options.root ?? process.cwd();
 	const entries: ContentEntry[] = [];
 
+	// One walk for the whole vault, before the scan rather than inside it: the
+	// alternative is a `git log` per file, which is a child process per note.
+	const history = await readGitHistory(root, Object.values(CONTENT_DIRS));
+
 	for (const collection of COLLECTIONS) {
 		// `cwd` keeps globby's results root-relative, which is exactly the
 		// spelling `ContentEntry.file` promises; only the read needs the join.
@@ -209,7 +298,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 
 			const { slug, urlPath } = toUrlPath(file, collection, data);
 			const summary = typeof data.summary === 'string' ? data.summary : undefined;
-			const updated = normalizeDate(data.updated);
+			const dates = await resolveDates(root, file, data, history);
 
 			entries.push({
 				slug,
@@ -220,7 +309,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 				tags: (data.tags as string[]) || [],
 				status: (data.status as string) || 'seed',
 				...(summary ? { summary } : {}),
-				...(updated ? { updated } : {}),
+				...dates,
 				body: content,
 				frontmatter: data,
 				file,
@@ -618,6 +707,7 @@ export interface NoteMetadata {
 	tags: string[];
 	status: string;
 	summary?: string;
+	/** The author's claimed date. Not the resolved one — see `buildGraph`. */
 	updated?: string;
 	isStarred?: boolean; // ⭐ indicator
 }
@@ -776,6 +866,14 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 	for (const entry of entries) {
 		extracted.set(entry.urlPath, extractLinks(entry.body, entry.frontmatter));
 		files.set(entry.urlPath, entry.file);
+		// `updated` here is the author's claim, not the resolved date on the
+		// entry, and it stays that way on purpose. `backlinks.json` is committed,
+		// and a git-derived date cannot be committed alongside the commit that
+		// changes it: the file's new date does not exist until that commit does,
+		// so every content commit would land with the artifact already stale.
+		// The resolved date is on `ContentEntry`, in `graph query --json`, and in
+		// the build-time `site.json` — all of which are computed, not stored.
+		const claimed = claimedDate(entry.frontmatter);
 		notes.set(entry.urlPath, {
 			slug: entry.urlPath,
 			title: entry.title,
@@ -786,7 +884,7 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 			tags: entry.tags,
 			status: entry.status,
 			...(entry.summary ? { summary: entry.summary } : {}),
-			...(entry.updated ? { updated: entry.updated } : {}),
+			...(claimed ? { updated: claimed } : {}),
 		});
 	}
 

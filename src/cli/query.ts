@@ -12,6 +12,7 @@ import {
 	loadContentEntries,
 	type CollectionName,
 	type ContentEntry,
+	type DateSource,
 	type Graph,
 } from '../lib/graph.ts';
 import { SCHEMA, writeJson, writeLines } from './render.ts';
@@ -35,6 +36,11 @@ export interface QueryEntry {
 	status: string;
 	aliases: string[];
 	updated?: string;
+	/** Where `updated` came from: frontmatter, git history, the file's mtime, or nowhere. */
+	updatedSource: DateSource;
+	created?: string;
+	/** The file's last commit date, whatever `updated` ended up being. */
+	modifiedInGit?: string;
 	outbound: string[];
 	inbound: string[];
 }
@@ -52,6 +58,9 @@ function toQueryEntry(entry: ContentEntry, graph: Graph): QueryEntry {
 		status: entry.status,
 		aliases: entry.aliases,
 		...(entry.updated ? { updated: entry.updated } : {}),
+		updatedSource: entry.updatedSource,
+		...(entry.created ? { created: entry.created } : {}),
+		...(entry.modifiedInGit ? { modifiedInGit: entry.modifiedInGit } : {}),
 		outbound: node.outbound,
 		inbound: node.inbound,
 	};

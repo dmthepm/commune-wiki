@@ -36,6 +36,32 @@ test('a root is a project root, so file and slug are spelled from it', async () 
 	assert.deepEqual(alpha.inbound, ['/notes/beta/', '/research/vault-research/']);
 });
 
+test('every entry says where its date came from', async () => {
+	const { stdout } = await commune('--root', VAULT, 'graph', 'query', '--json');
+	const entries = JSON.parse(stdout).entries;
+
+	// Alpha is the one fixture note carrying an `updated:` field, so it is the
+	// one entry whose date is a claim rather than a fact about the file.
+	const alpha = entries.find((entry) => entry.title === 'Alpha');
+	assert.equal(alpha.updated, '2026-01-02');
+	assert.equal(alpha.updatedSource, 'frontmatter');
+
+	// The rest are dated from this repository's own history — the fixture is
+	// committed here — so they carry a git date and a source that says so.
+	const beta = entries.find((entry) => entry.title === 'Beta');
+	assert.equal(beta.updatedSource, 'git');
+	assert.match(beta.updated, /^\d{4}-\d{2}-\d{2}$/);
+	assert.equal(beta.modifiedInGit, beta.updated);
+
+	// Every entry answers the question, whatever the answer is.
+	for (const entry of entries) {
+		assert.ok(
+			['frontmatter', 'git', 'mtime', 'none'].includes(entry.updatedSource),
+			`${entry.urlPath} has updatedSource ${entry.updatedSource}`
+		);
+	}
+});
+
 test('--root is accepted after the subcommand too', async () => {
 	const before = await commune('--root', VAULT, 'graph', 'query', '--json');
 	const after = await commune('graph', 'query', '--root', VAULT, '--json');
