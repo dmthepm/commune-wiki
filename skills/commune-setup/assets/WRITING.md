@@ -82,6 +82,8 @@ url: /<path>/              # required — absolute, trailing slash
 summary: <one sentence>    # required
 aliases: []
 tags: []
+created: <yyyy-mm-dd>
+updated: <yyyy-mm-dd>
 ```
 
 **Dumps.** `dumps.publish: <never | opt-in | all>` — whether the dictated dumps

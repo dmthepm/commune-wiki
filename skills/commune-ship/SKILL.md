@@ -45,7 +45,7 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    that sentence is the human's — dictated or edited by them — and `true` when
    you wrote it and they only approved. Show them the sentence.
 
-4. **Build and gate.** `pnpm astro build`, then `$COMMUNE gate`. `gate` reads
+4. **Build and gate.** `pnpm exec astro build`, then `$COMMUNE gate`. `gate` reads
    `public/backlinks.json`, which only a build writes, so there is no gate
    without the build. `gate` exits 1 when the built site is wrong; that stops
    the ship.
