@@ -137,10 +137,12 @@ body.modal-open {
    This is a design-system invariant: one rule, globally, so no page or
    component has to remember to add its own. */
 
-/* The marker must never wrap onto its own line, orphaned from the label it
-   belongs to. `nowrap` has to come before the ::after rule that creates it. */
+/* Long link text has to wrap. The marker below is a ::after with no
+   whitespace before it, so there is no break opportunity between it and the
+   last word — it follows the wrap on its own, and does not need the whole
+   link held on one line to stay attached to its label. */
 a[target="_blank"] {
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 a[target="_blank"]::after {
