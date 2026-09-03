@@ -92,4 +92,21 @@ describe('the rendered site', () => {
 			}
 		}
 	});
+
+	test('no page loads a subresource from another origin', async () => {
+		// The tags a browser fetches without being asked: scripts, stylesheets,
+		// preloads, images, frames. A link in prose is the reader's decision and
+		// is not one of these; `<a>` is deliberately absent from the list.
+		const subresource = /<(?:script|link|img|iframe|source|video|audio|embed|object)\b[^>]*\b(?:src|href|data|srcset)="([^"]+)"/gi;
+
+		for (const [file, html] of await pages()) {
+			for (const [, url] of html.matchAll(subresource)) {
+				assert.doesNotMatch(
+					url,
+					/^(?:https?:)?\/\//,
+					`${file} loads ${url} from another origin`
+				);
+			}
+		}
+	});
 });

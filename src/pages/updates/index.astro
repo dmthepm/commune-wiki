@@ -3,7 +3,6 @@ import { getCollection } from 'astro:content';
 import Header from '../../components/Header.astro';
 import SearchModal from '../../components/SearchModal.astro';
 import Footer from '../../components/Footer.astro';
-import PlausibleScript from '../../components/PlausibleScript.astro';
 import '../../styles/design-system.css';
 import '../../styles/notes.css';
 
@@ -36,7 +35,6 @@ function getRelativeDate(dateString: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Changelog of updates to Devon's working notes and research" />
   <link rel="icon" type="image/png" href="/favicon-32x32.png" />
-  <PlausibleScript domain="devonmeadows.com" />
 </head>
 <body>
   <Header />

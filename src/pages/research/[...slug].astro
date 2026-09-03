@@ -6,7 +6,6 @@ import SearchModal from '../../components/SearchModal.astro';
 import Footer from '../../components/Footer.astro';
 import MarkdownLink from '../../components/MarkdownLink.astro';
 import { toMarkdownHref } from '../../lib/graph.ts';
-import PlausibleScript from '../../components/PlausibleScript.astro';
 import StarredLinksScript from '../../components/StarredLinksScript.astro';
 import '../../styles/design-system.css';
 import '../../styles/notes.css';
@@ -61,7 +60,6 @@ const formattedWordCount = data.wordCount.toLocaleString();
 
   <meta name="author" content={data.author} />
   <link rel="icon" type="image/png" href="/favicon-32x32.png" />
-  <PlausibleScript domain="devonmeadows.com" />
 
   <!-- JSON-LD Structured Data: Article + BreadcrumbList -->
   <script type="application/ld+json" set:html={JSON.stringify({
