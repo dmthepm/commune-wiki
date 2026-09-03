@@ -80,7 +80,7 @@
   },
   "dependencies": {
     "github-slugger": "^2.0.0",
-    "globby": "^14.0.0",
+    "globby": "^16.2.4",
     "gray-matter": "^4.0.3",
     "unist-util-visit": "^5.0.0"
   },
