@@ -145,7 +145,6 @@ commune-wiki/
 │   └── integration.ts      # Backlinks / markdown-twin integration
 ├── bin/commune.mjs         # CLI entry point (runs lib/)
 ├── public/                 # Static assets
-├── scripts/                # Build scripts
 └── astro.config.mjs        # Astro configuration
 ```
 
