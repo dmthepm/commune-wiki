@@ -5,6 +5,16 @@
 (function() {
   let backlinksData = null;
 
+  // Note titles are the vault author's prose and go into markup below; a stray
+  // <, & or " in one should read as that character rather than break the list
+  // open.
+  const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
   async function initializeBacklinks(scope = document) {
     try {
       // Fetch backlinks data if not already loaded
@@ -57,7 +67,7 @@
         };
 
         // Render links and then add stars as separate clickable elements
-        list.innerHTML = items.map(s => `<li><a href="${s}">${titleFor(s)}</a></li>`).join('');
+        list.innerHTML = items.map(s => `<li><a href="${escapeHtml(s)}">${escapeHtml(titleFor(s))}</a></li>`).join('');
 
         // Add stars to starred notes
         list.querySelectorAll('li').forEach((li, index) => {
