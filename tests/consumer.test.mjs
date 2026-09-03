@@ -29,8 +29,11 @@
  * It is the slowest test here after `install.test.mjs`: pnpm installs Astro
  * into the fixture and Astro builds it.
  *
- * `dist/404.html` is deliberately not asserted. The engine has no 404 route
- * to give a consumer yet; that is #36.
+ * `dist/404.html` is deliberately not asserted. The engine now has a 404 route
+ * (#36), but a route is a page, and pages are the consumer's own — the package
+ * ships components and styles, not `src/pages/**`. A consumer who wants one
+ * writes it, the way this fixture writes its note route. What the engine's own
+ * 404 guarantees is asserted in `tests/rendered-site.test.mjs` instead.
  */
 
 import { test } from 'node:test';

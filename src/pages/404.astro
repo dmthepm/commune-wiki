@@ -1,0 +1,219 @@
+---
+/**
+ * The page a reader lands on when a URL does not exist.
+ *
+ * A static build has no server to route unknown paths, so the host serves
+ * `dist/404.html` — every static host looks for exactly that filename. Without
+ * it a mistyped URL, an old link, or a renamed note gets the host's own bare
+ * error page: no header, no search, no way back into the site.
+ *
+ * It also gives `SlidingPanes.astro` somewhere honest to land. A wikilink to a
+ * note that does not exist still renders as a link; when the pane fetch fails,
+ * that script hands the URL to the browser rather than leaving the address bar
+ * naming a note the reader is not looking at. This is the page it lands on.
+ */
+import { getCollection } from 'astro:content';
+import Header from '../components/Header.astro';
+import SearchModal from '../components/SearchModal.astro';
+import Footer from '../components/Footer.astro';
+import '../site.css';
+import '../styles/design-system.css';
+import '../styles/notes.css';
+
+const title = 'Page not found | Commune';
+const description = 'That page is not here. The notes and updates indexes are.';
+
+const notes = await getCollection('notes', ({ data }) => data.visibility === 'public');
+notes.sort((a, b) => (b.data.updated ?? b.data.created ?? '').localeCompare(a.data.updated ?? a.data.created ?? ''));
+const recent = notes.slice(0, 5);
+---
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>{title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content={description} />
+  <!-- A 404 is not a page anyone should arrive at from a search engine, and
+       every unknown URL renders this same body. -->
+  <meta name="robots" content="noindex" />
+
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Commune" />
+
+  <link rel="icon" type="image/png" href="/favicon-32x32.png" />
+</head>
+<body>
+  <Header />
+  <SearchModal />
+
+  <main id="main" class="notfound">
+    <p class="status">404</p>
+    <h1>That page is not here.</h1>
+    <p class="lede">
+      The link may be old, or the note may have been renamed. Everything below is still where it was.
+    </p>
+
+    <p class="requested" data-requested hidden>You asked for <code data-requested-path></code>.</p>
+
+    <nav class="routes" aria-label="Where to go next">
+      <a href="/">Home</a>
+      <a href="/notes/">All notes</a>
+      <a href="/updates/">Updates</a>
+      <button type="button" class="search-link" onclick="window.dispatchEvent(new CustomEvent('commune:openSearch'))">
+        Search the notes
+      </button>
+    </nav>
+
+    <section class="recent" aria-labelledby="recent-heading">
+      <h2 id="recent-heading">Recently updated</h2>
+      <ul>
+        {recent.map((note) => (
+          <li><a href={`/notes/${note.id}/`}>{note.data.title ?? note.id}</a></li>
+        ))}
+      </ul>
+    </section>
+
+    <Footer />
+  </main>
+
+  <script is:inline>
+    // Show the path that missed, so a mistyped or truncated URL is obvious.
+    // Rendered client-side because the file is static: one `404.html` answers
+    // for every unknown URL, and only the browser knows which one was asked
+    // for. `textContent` rather than markup — the path is attacker-supplied.
+    (() => {
+      const row = document.querySelector('[data-requested]');
+      const slot = document.querySelector('[data-requested-path]');
+      if (!row || !slot) return;
+      const path = window.location.pathname + window.location.search;
+      if (!path || path === '/') return;
+      slot.textContent = path.length > 120 ? path.slice(0, 117) + '…' : path;
+      row.hidden = false;
+    })();
+  </script>
+</body>
+</html>
+
+<style>
+  body {
+    background: var(--c-bg);
+    color: var(--c-text);
+  }
+
+  .notfound {
+    max-width: 65ch;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 2rem;
+    min-height: calc(100vh - 200px);
+  }
+
+  .status {
+    margin: 0 0 0.5rem;
+    color: var(--c-text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .notfound h1 {
+    font-size: 2.4rem;
+    line-height: 1.2;
+    font-weight: 700;
+    margin: 0 0 1rem;
+    overflow-wrap: break-word;
+  }
+
+  .lede {
+    margin: 0 0 1.5rem;
+    color: var(--c-text-muted);
+    line-height: 1.7;
+  }
+
+  .requested {
+    margin: 0 0 2rem;
+    color: var(--c-text-muted);
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+  }
+
+  .requested code {
+    background: var(--c-bg-soft);
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--c-radius-sm);
+    font-size: 0.9em;
+  }
+
+  .routes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin: 0 0 3rem;
+  }
+
+  .routes a,
+  .routes .search-link {
+    min-height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid var(--c-border);
+    border-radius: var(--c-radius-md);
+    background: var(--c-bg-soft);
+    color: var(--c-text-muted);
+    font: inherit;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .routes a:hover,
+  .routes .search-link:hover {
+    border-color: var(--c-accent);
+    background: var(--c-bg);
+    color: var(--c-accent);
+  }
+
+  .recent h2 {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--c-text-muted);
+    margin: 0 0 0.8rem;
+  }
+
+  .recent ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .recent li {
+    margin: 0.4rem 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .recent a {
+    color: var(--c-accent);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+
+  .recent a:hover {
+    color: var(--c-accent-hover);
+    border-bottom-color: var(--c-accent-hover);
+  }
+
+  @media (max-width: 768px) {
+    .notfound {
+      padding-top: 2.5rem;
+    }
+
+    .notfound h1 {
+      font-size: 1.875rem;
+      line-height: 1.25;
+    }
+  }
+</style>

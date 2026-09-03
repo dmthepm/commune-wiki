@@ -57,6 +57,24 @@ describe('the rendered site', () => {
 		if (DIST) await rm(DIST, { recursive: true, force: true });
 	});
 
+	test('the build emits a 404 page, and keeps it out of the index', async () => {
+		// Every static host serves this exact filename for an unknown path, so
+		// the assertion is on the name as much as on the content: rename it and
+		// a mistyped URL falls back to the host's own bare error page.
+		const html = await readFile(path.join(DIST, '404.html'), 'utf8');
+
+		assert.match(html, /<meta name="robots" content="noindex"/);
+		// One file answers for every unknown URL, so it must not be indexed as a
+		// page in its own right either.
+		const sitemap = await readFile(path.join(DIST, 'sitemap-0.xml'), 'utf8');
+		assert.doesNotMatch(sitemap, /404/);
+
+		// It is a page of the site, not a stub: header, search and a way back.
+		assert.match(html, /class="skip-link"/);
+		assert.match(html, /id="commune-search"/);
+		assert.match(html, /href="\/notes\/"/);
+	});
+
 	test('the search modal ships no semantic tier when no page asks for one', async () => {
 		const rendered = await pages();
 		assert.ok(rendered.length > 0, 'no pages were built');
