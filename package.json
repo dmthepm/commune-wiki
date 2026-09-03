@@ -91,7 +91,7 @@
     "@tailwindcss/typography": "^0.5.10",
     "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4",
-    "@types/node": "^22.20.1",
+    "@types/node": "^26.4.0",
     "astro": "^7.2.10",
     "autoprefixer": "^10.4.16",
     "puppeteer": "^24.25.0",
