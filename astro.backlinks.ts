@@ -1,15 +1,16 @@
 /**
- * Astro integration for building backlinks and graph data at build time.
+ * Astro integration for building backlinks and graph data at build time, and
+ * for writing each entry's source markdown beside its rendered page.
  *
- * Thin by design: it owns *when* the graph is built and *where* the artifact is
- * written, and nothing else. Which content exists, how links resolve, how stars
- * are ranked and what counts as a finding are all decided by the graph core in
- * `src/lib/graph.ts`, so the `commune` CLI produces the same graph without an
- * Astro process anywhere in sight.
+ * Thin by design: it owns *when* the graph is built and *where* the artifacts
+ * are written, and nothing else. Which content exists, how links resolve, how
+ * stars are ranked and what counts as a finding are all decided by the graph
+ * core in `src/lib/graph.ts`, so the `commune` CLI produces the same graph
+ * without an Astro process anywhere in sight.
  */
 
 import type { AstroIntegration } from 'astro';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { copyFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -17,12 +18,17 @@ import {
 	formatDiagnostic,
 	loadContentEntries,
 	toBacklinksJson,
+	toMarkdownPath,
+	type ContentEntry,
 	type Graph,
 	type NoteMetadata,
 } from './src/lib/graph.ts';
 
-async function buildBacklinksGraph(logger: Pick<Console, 'info' | 'warn'>): Promise<Graph> {
-	const graph = buildGraph(await loadContentEntries());
+function buildBacklinksGraph(
+	entries: ContentEntry[],
+	logger: Pick<Console, 'info' | 'warn'>
+): Graph {
+	const graph = buildGraph(entries);
 
 	logger.info(`📝 Found ${Object.keys(graph.nodes).length} public content entries`);
 
@@ -43,6 +49,25 @@ async function writeBacklinksFile(filePath: string, graph: Record<string, NoteMe
 	await writeFile(filePath, JSON.stringify(graph, null, 2) + '\n');
 }
 
+/**
+ * Copy every entry's source file next to its rendered page, at `<url>.md`.
+ *
+ * `copyFile` rather than a re-serialization on purpose: the promise of the `.md`
+ * URL is that it returns *the file*, frontmatter and `[[wikilinks]]` untouched,
+ * so anything that reformats on the way through would break it. The graph
+ * already decided which entries exist and where each one lives; this only moves
+ * bytes.
+ */
+async function writeMarkdownFiles(entries: ContentEntry[], outDir: string): Promise<number> {
+	for (const entry of entries) {
+		const destination = path.join(outDir, toMarkdownPath(entry.urlPath));
+		await mkdir(path.dirname(destination), { recursive: true });
+		await copyFile(entry.file, destination);
+	}
+
+	return entries.length;
+}
+
 function summarize(graph: Graph): string {
 	return `📊 ${graph.totalBacklinks} total backlinks across ${Object.keys(graph.nodes).length} entries`;
 }
@@ -58,7 +83,7 @@ export default function backlinksIntegration(): AstroIntegration {
 				logger.info('🔗 Building public backlinks index...');
 
 				try {
-					const graph = await buildBacklinksGraph(logger);
+					const graph = buildBacklinksGraph(await loadContentEntries(), logger);
 					await writeBacklinksFile(path.join('public', 'backlinks.json'), toBacklinksJson(graph));
 					logger.info(`✅ Backlinks index written to public/backlinks.json`);
 					logger.info(summarize(graph));
@@ -72,7 +97,8 @@ export default function backlinksIntegration(): AstroIntegration {
 				logger.info('🔗 Building backlinks index...');
 
 				try {
-					const graph = await buildBacklinksGraph(logger);
+					const entries = await loadContentEntries();
+					const graph = buildBacklinksGraph(entries, logger);
 					const json = toBacklinksJson(graph);
 
 					// `dir` is a URL, and `dir.pathname` percent-encodes: a project
@@ -84,7 +110,10 @@ export default function backlinksIntegration(): AstroIntegration {
 					// Use relative path from cwd to handle different build contexts
 					await writeBacklinksFile(path.join('public', 'backlinks.json'), json);
 
+					const written = await writeMarkdownFiles(entries, fileURLToPath(dir));
+
 					logger.info(`✅ Backlinks index written to /backlinks.json (dist + public)`);
+					logger.info(`📄 ${written} source files written as .md alongside their pages`);
 					logger.info(summarize(graph));
 
 				} catch (error) {

@@ -1,0 +1,36 @@
+---
+/**
+ * "view as markdown" — the source-file affordance on every rendered entry.
+ *
+ * Deliberately one line of text: the real interface is the URL convention
+ * (append `.md` to any page), and this link is only the thing that teaches a
+ * reader the convention exists. A card or an icon would sell it as a feature.
+ */
+interface Props {
+	href: string;
+}
+
+const { href } = Astro.props;
+---
+<p class="markdown-link"><a href={href}>view as markdown</a></p>
+
+<style>
+  .markdown-link {
+    margin: 2.5rem 0 0;
+    font-size: 0.9rem;
+    color: var(--c-text-muted);
+  }
+
+  .markdown-link a {
+    color: var(--c-text-muted);
+    text-decoration: none;
+    border-bottom: 1px solid var(--c-border);
+    padding-bottom: 1px;
+    transition: all 0.15s ease;
+  }
+
+  .markdown-link a:hover {
+    color: var(--c-accent);
+    border-bottom-color: var(--c-accent);
+  }
+</style>
