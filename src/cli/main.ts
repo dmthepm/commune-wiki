@@ -22,6 +22,7 @@ import { checkCommand } from './check.ts';
 import { gateCommand } from './gate.ts';
 import { relatedCommand } from './related.ts';
 import { COMMAND_USAGE, USAGE } from './usage.ts';
+import { readVersion } from './version.ts';
 
 /** Options understood everywhere, in any position. */
 const GLOBAL: ParseArgsOptionsConfig = {
@@ -180,6 +181,21 @@ export async function run(args: string[]): Promise<number> {
 	const json = args.includes('--json');
 
 	try {
+		// Before the route table, not in it: `--version` is a question about the
+		// installed package, not about a project, so it must answer from
+		// anywhere — including a directory with no `src/content` in it, where
+		// every real verb exits 1. Plain stdout and nothing else, because the
+		// thing most likely to read it is a script.
+		//
+		// Read out of argv wherever it appears, like `--json` two lines above
+		// and for the same reason as `--root`: every other flag in this CLI is
+		// position-insensitive, and a `--version` that only worked first would
+		// be the one exception nobody would remember. No `-v` alias — `-v` is
+		// "verbose" in enough tools to be worth not claiming for something else.
+		if (args.includes('--version')) {
+			process.stdout.write(`${await readVersion()}\n`);
+			return EXIT_OK;
+		}
 		if (!args.length || args[0] === '--help' || args[0] === '-h') {
 			process.stdout.write(`${USAGE}\n`);
 			return args.length ? EXIT_OK : EXIT_USAGE;

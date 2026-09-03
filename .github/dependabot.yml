@@ -1,0 +1,65 @@
+# Dependency updates, opened as pull requests that CI already tests.
+#
+# `ci.yml` runs `pnpm test`, `pnpm test:consumer`, the git-install step and
+# `pnpm build` on every pull request, so a Dependabot PR is a free answer to
+# "does this bump break the engine". Nothing here needs its own test job.
+#
+# Sources, fetched 2026-09-03:
+# - github.com/../dependabot-options-reference — `groups`, `update-types`,
+#   `directories`, `ignore`, `schedule.interval`.
+# - github.com/../supported-ecosystems-and-repositories — pnpm is served by the
+#   `npm` ecosystem ("pnpm | `npm` | v7, v8, v9, v10"); there is no `pnpm`
+#   value to write.
+
+version: 2
+
+updates:
+  # The package's own dependencies. `npm` is the right ecosystem for a pnpm
+  # repo — Dependabot reads `pnpm-lock.yaml` under that name.
+  #
+  # `directory: "/"` and nothing else, which is what keeps
+  # `tests/fixtures/consumer/` out of it. That fixture is a *consumer*: its
+  # `package.json` depends on `file:../../..` and its committed lockfile pins
+  # this package, so a Dependabot PR there would bump Astro in a project whose
+  # whole job is to install the engine and build once. There is no
+  # `pnpm-workspace.yaml` in this repo, so Dependabot never descends into it on
+  # its own and no `ignore` entry is needed to keep it out — this comment is
+  # the only thing standing between that fact and someone "fixing" it by adding
+  # `directories`.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # One PR a week for everything that cannot change an API, and a PR of its
+    # own for everything that can. A grouped minor+patch bump is a single
+    # green-or-red signal; a major is a decision, and it deserves to arrive
+    # alone with its own changelog. Majors are deliberately in no group: an
+    # ungrouped update is one PR per dependency, which is the behaviour wanted.
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # The workflows' own actions — `actions/checkout`, `pnpm/action-setup`,
+  # `actions/setup-node`, `googleapis/release-please-action`. These are pinned
+  # by major tag, so without this they silently never move, and the release
+  # workflow is exactly the place where a stale action is expensive.
+  - package-ecosystem: github-actions
+    # "/" is the documented value for this ecosystem: Dependabot searches
+    # `.github/workflows` and the root-level action files from there.
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-and-patch:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

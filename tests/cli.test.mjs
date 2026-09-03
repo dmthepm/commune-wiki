@@ -10,6 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { BIN, commune, run, VAULT } from './helpers.mjs';
 
@@ -166,6 +167,38 @@ test('--help exits 0 and prints usage on stdout', async () => {
 	assert.equal(code, 0);
 	assert.match(stdout, /graph query/);
 	assert.match(stdout, /--root <dir>/);
+});
+
+test('--version prints package.json version, and only that', async () => {
+	const { version } = JSON.parse(
+		await readFile(new URL('../package.json', import.meta.url), 'utf8')
+	);
+	const { code, stdout, stderr } = await commune('--version');
+
+	assert.equal(code, 0);
+	assert.equal(stderr, '');
+	// The whole of stdout, not a match inside it: this is what release-please
+	// bumps and what a script reads, so a banner or a `v` prefix would be a
+	// breaking change to a one-line contract.
+	assert.equal(stdout, `${version}\n`);
+	assert.match(version, /^\d+\.\d+\.\d+/);
+});
+
+test('--version answers from anywhere, unlike every verb', async () => {
+	// `--root /tmp` is exit 1 (ENOCONTENT) for `graph query` and `check`,
+	// which is the point: the version of an installed package is not a fact
+	// about a project, and asking for it outside one has to work. Also pins
+	// that the flag is read wherever it appears, not only first.
+	const { code, stdout } = await commune('--root', '/tmp', '--version');
+
+	assert.equal(code, 0);
+	assert.match(stdout, /^\d+\.\d+\.\d+/);
+});
+
+test('--help lists --version', async () => {
+	const { stdout } = await commune('--help');
+
+	assert.match(stdout, /--version/);
 });
 
 test('no Astro module is loaded on the CLI path', async () => {

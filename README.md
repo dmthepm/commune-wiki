@@ -64,18 +64,29 @@ pnpm build
 pnpm preview
 ```
 
-### Installing from git
+### Install
 
-This package is not on npm yet, so it is installed from a git ref:
+The engine is a package. Add it to an Astro 7 project:
 
 ```bash
-pnpm add github:dmthepm/commune-wiki#<tag>
+pnpm add @dmthepm/commune
 ```
 
-**pnpm consumers need one extra line.** The Node-side code ships compiled, and
-the compile runs in the package's `prepare` script. pnpm 10 refuses to run a
-git-hosted dependency's build scripts unless your project names the package, so
-without this the install fails with `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`:
+npm and yarn take the same line. The published tarball ships `lib/` already
+compiled, so nothing builds on install, no build script needs approving, and a
+consumer needs only Node 22.12+ — Astro's own floor.[^git]
+
+[^git]: **Before `v0.1.0` reaches npm, install from a git ref instead** —
+    `pnpm add github:dmthepm/commune-wiki#<tag>` — and pnpm consumers need one
+    extra line for it, because a git dependency arrives as source and compiles
+    itself in its `prepare` script. pnpm 10 refuses to run that unless your
+    project names the package, and without the entry the install fails with
+    `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`. The details are folded below; all
+    of it goes away on the first npm publish, which is what this footnote is
+    counting down to.
+
+<details>
+<summary>Installing from a git ref, in full</summary>
 
 ```jsonc
 // your package.json
@@ -104,8 +115,9 @@ guess which side of the line you are on: run the install and read the error.
 pnpm prints the exact entry your version expects.
 
 npm and yarn need nothing extra — they run a git dependency's `prepare` without
-asking. All of this goes away once the package is published to npm: a published
-tarball ships `lib/` already built, so there is no `prepare` to approve.
+asking.
+
+</details>
 
 ### Create Your First Note
 

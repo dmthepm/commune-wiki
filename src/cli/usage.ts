@@ -7,11 +7,13 @@ Usage:
   commune [--root <dir>] graph related <path|text|-> [--json]
   commune [--root <dir>] check         [--json]
   commune [--root <dir>] gate          [--dist <dir>] [--json]
+  commune --version
 
 Global options:
   --root <dir>   Project root: the directory containing src/content. Default: cwd.
   --json         Emit one JSON document on stdout. Everything else goes to stderr.
   --help         Show this text.
+  --version      Print the version of the installed package and exit.
 
 graph query filters (any-of within a flag, all-of across flags):
   --collection <notes|research|pages>   Repeatable.
