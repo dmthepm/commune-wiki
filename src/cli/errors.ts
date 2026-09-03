@@ -9,12 +9,13 @@
 
 /** The command ran to completion. Findings, if any, are in the payload. */
 export const EXIT_OK = 0;
-/** The command could not finish: bad root, unreadable file, unparseable frontmatter. */
+/** The command could not finish: bad root, unreadable file, unparseable frontmatter,
+ *  or a file it would have written already being there. */
 export const EXIT_FAILED = 1;
 /** The command was invoked wrongly: unknown flag, missing value, unknown subcommand. */
 export const EXIT_USAGE = 2;
 
-export type ErrorCode = 'EUSAGE' | 'ENOCONTENT' | 'EPARSE' | 'EINTERNAL';
+export type ErrorCode = 'EUSAGE' | 'ENOCONTENT' | 'EPARSE' | 'EEXISTS' | 'EINTERNAL';
 
 /** An error the CLI knows how to render on either side of the `--json` switch. */
 export class CliError extends Error {
