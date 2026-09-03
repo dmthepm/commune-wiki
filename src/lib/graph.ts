@@ -951,11 +951,11 @@ function distinct<T>(items: T[], key: (item: T) => string): T[] {
 /**
  * WikiLinks that resolve but do not name their target exactly.
  *
- * The rule this implements used to live in `scripts/test-search-index.mjs`,
- * with its own lookup table and its own regex — a second copy of a rule the
- * graph core already had the ingredients for, which is the bug class #3 was
- * opened to kill. One implementation now, two callers: `check` reports it and
- * the build gate fails on it.
+ * The rule this implements used to live in the build gate script, with its own
+ * lookup table and its own regex — a second copy of a rule the graph core
+ * already had the ingredients for, which is the bug class #3 was opened to
+ * kill. One implementation now, two callers: `check` reports it and
+ * `commune gate` fails on it.
  *
  * Worth checking precisely because it is invisible: a piped link or a
  * near-miss title still renders, and the vault quietly decouples from the site.

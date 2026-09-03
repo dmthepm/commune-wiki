@@ -6,7 +6,7 @@
  * is locked here so a future regex tweak cannot silently drop an edge.
  *
  * Node strips the types for a local `.ts` import, so this `.mjs` file imports
- * the graph core directly — the same trick `scripts/test-search-index.mjs` uses.
+ * the graph core directly — the same trick `astro.config.mjs` uses.
  */
 
 import { test } from 'node:test';
