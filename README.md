@@ -243,7 +243,7 @@ commune gate
 | Verb | What it answers |
 | --- | --- |
 | `graph query` | Every entry with its edges and dates. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`, `--recent`. |
-| `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. |
+| `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. Titles are matched across whitespace and case, so a dictated "noon tide" still finds `Noontide`. |
 | `update` | Scaffold a dated update entry from what changed. Prints it; `--write` files it. |
 | `check` | Broken links, duplicate names, ambiguous targets, non-canonical titles. |
 | `gate` | Run after a build, against the built site. |

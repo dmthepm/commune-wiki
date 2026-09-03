@@ -17,6 +17,15 @@ export const run = promisify(execFile);
 /** A minimal project root: the directory containing `src/content`, never `src/content`. */
 export const VAULT = fileURLToPath(new URL('./fixtures/vault/', import.meta.url));
 
+/**
+ * Three notes whose only job is `graph related`'s name normalisation (#69).
+ *
+ * A separate root rather than three more notes in `VAULT`, because `VAULT`'s
+ * entry, edge and finding counts are asserted exactly in four suites, and a
+ * fixture added for one rule should not make every other suite's numbers move.
+ */
+export const DICTATION = fileURLToPath(new URL('./fixtures/dictation/', import.meta.url));
+
 export const BIN = fileURLToPath(new URL('../bin/commune.mjs', import.meta.url));
 
 /** Run the bin, never throwing: the exit code is part of what is under test. */
