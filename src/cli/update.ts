@@ -17,7 +17,7 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CONTENT_DIRS, loadContentEntries, type ContentEntry } from '../lib/graph.ts';
-import { SCHEMA, writeJson, writeLines } from './render.ts';
+import { SCHEMA, writeJson, writeLines } from './output.ts';
 import { EXIT_OK, failure } from './errors.ts';
 
 /**

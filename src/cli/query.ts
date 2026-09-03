@@ -16,7 +16,7 @@ import {
 	type DateSource,
 	type Graph,
 } from '../lib/graph.ts';
-import { SCHEMA, writeJson, writeLines } from './render.ts';
+import { SCHEMA, writeJson, writeLines } from './output.ts';
 import { EXIT_OK } from './errors.ts';
 
 export interface QueryFilters {
@@ -25,6 +25,7 @@ export interface QueryFilters {
 	status?: string;
 	orphans: boolean;
 	deadends: boolean;
+	unreferenced: boolean;
 	/** Inclusive `yyyy-mm-dd` cutoff from `--recent`. Entries older than it, and
 	 *  entries with no date at all, are not returned. */
 	since?: string;
@@ -116,6 +117,20 @@ function isDeadend(entry: QueryEntry): boolean {
 }
 
 /**
+ * Nobody links here. Whether it links *out* is a separate question.
+ *
+ * The other half of the orphan split, and the half the connect step actually
+ * wants: a note that cites three others but that nothing cites back is not
+ * isolated, it is unplaced — and a wiki accumulates those silently, because
+ * writing a note is the moment you think about its outbound links and never
+ * about its inbound ones. `--orphans` returns 0 on a vault like that, which is
+ * the true answer to a different question.
+ */
+function isUnreferenced(entry: QueryEntry): boolean {
+	return entry.inbound.length === 0;
+}
+
+/**
  * Repeated values of one flag widen the match; different flags narrow it.
  *
  * `--collection notes --collection pages --tag seed` means "a note or a page,
@@ -128,6 +143,15 @@ function matches(entry: QueryEntry, filters: QueryFilters): boolean {
 	if (filters.status !== undefined && entry.status !== filters.status) return false;
 	if (filters.orphans && !isOrphan(entry)) return false;
 	if (filters.deadends && !isDeadend(entry)) return false;
+	if (filters.unreferenced) {
+		if (!isUnreferenced(entry)) return false;
+		// A dated changelog entry is *expected* to have nothing pointing at it,
+		// so leaving `updates` in would bury the notes this filter exists to
+		// surface under one row per week. Asking for the collection by name is
+		// the way to say you meant it — and it is the only way, so the exclusion
+		// can never quietly hide an answer somebody asked for.
+		if (entry.collection === 'updates' && !filters.collections.includes('updates')) return false;
+	}
 	// An entry with no date is not "unchanged since the cutoff", it is unknown —
 	// and a list of what changed this week is worth less with unknowns in it.
 	if (filters.since !== undefined && !(entry.updated && entry.updated >= filters.since)) {
@@ -154,6 +178,12 @@ function summarize(results: QueryEntry[], since?: string) {
 		edges: results.reduce((total, entry) => total + entry.outbound.length, 0),
 		orphans: results.filter(isOrphan).length,
 		deadends: results.filter(isDeadend).length,
+		// Counted over what came back, like every other number here, so it can
+		// never contradict `entries` beside it. Note that on an *unfiltered*
+		// query this includes `updates` entries — the exclusion belongs to
+		// `--unreferenced` the filter, not to "has nothing pointing at it" the
+		// property.
+		unreferenced: results.filter(isUnreferenced).length,
 		// The resolved cutoff, not the string the caller typed: `--recent 7d`
 		// means a different day tomorrow, and a job that records what it asked
 		// needs the day, not the duration.
@@ -187,7 +217,7 @@ export async function queryCommand(
 				`→${entry.outbound.length} ←${entry.inbound.length}`
 		),
 		`${summary.entries} entries, ${summary.edges} edges, ${summary.orphans} orphans, ` +
-			`${summary.deadends} dead ends` +
+			`${summary.deadends} dead ends, ${summary.unreferenced} unreferenced` +
 			(summary.since !== undefined ? `, updated since ${summary.since}` : ''),
 	]);
 	return EXIT_OK;

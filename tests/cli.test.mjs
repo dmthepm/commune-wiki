@@ -229,6 +229,56 @@ test('orphans are isolated, not merely unlinked-to', async () => {
 	assert.equal(JSON.parse(deadends.stdout).count, 8);
 });
 
+test('--unreferenced is zero inbound with any outbound, and hides updates', async () => {
+	const { code, stdout } = await commune(
+		'--root', VAULT, 'graph', 'query', '--unreferenced', '--json'
+	);
+
+	assert.equal(code, 0);
+	const payload = JSON.parse(stdout);
+	// The updates entry has zero inbound too, and is the one thing missing from
+	// this list: a dated changelog entry is expected to have nothing pointing
+	// at it, so it would be noise in every answer this filter is asked for.
+	assert.deepEqual(
+		payload.entries.map((entry) => entry.urlPath),
+		[
+			'/notes/duplicate-one/',
+			'/notes/index/',
+			'/notes/isolated/',
+			'/notes/sub-dir/nested-note/',
+			'/research/isolated/',
+			'/vault-page/',
+		]
+	);
+	assert.equal(payload.summary.unreferenced, payload.count);
+});
+
+test('--collection updates is how you say you meant the changelog', async () => {
+	const { stdout } = await commune(
+		'--root', VAULT, 'graph', 'query', '--unreferenced', '--collection', 'updates', '--json'
+	);
+	const payload = JSON.parse(stdout);
+
+	assert.deepEqual(payload.entries.map((entry) => entry.urlPath), ['/updates/2026-02-14/']);
+	// Two links out and nothing in: unreferenced, and emphatically not an
+	// orphan. This entry is the difference between the two filters.
+	assert.equal(payload.summary.orphans, 0);
+	assert.equal(payload.summary.edges, 2);
+	assert.equal(payload.summary.unreferenced, 1);
+});
+
+test('summary.unreferenced counts the result set, filter or no filter', async () => {
+	const { stdout } = await commune('--root', VAULT, 'graph', 'query', '--json');
+	const { summary } = JSON.parse(stdout);
+
+	// Seven, not the six `--unreferenced` returns: the property is "nothing
+	// points here", and the updates exclusion belongs to the filter rather than
+	// to the property. Every other number in `summary` describes what came
+	// back, and this one has to as well or they stop adding up together.
+	assert.equal(summary.unreferenced, 7);
+	assert.equal(summary.orphans, 6);
+});
+
 test('query and check answer "what did I get" in the same place', async () => {
 	const query = await commune('--root', VAULT, 'graph', 'query', '--json');
 	const check = await commune('--root', VAULT, 'check', '--json');
@@ -244,7 +294,7 @@ test('query and check answer "what did I get" in the same place', async () => {
 	// deduplicated inbound on the other — which is what makes this worth pinning.
 	assert.equal(q.summary.entries, c.summary.entries);
 	assert.equal(q.summary.edges, c.summary.edges);
-	assert.deepEqual(q.summary, { entries: 12, edges: 7, orphans: 6, deadends: 8 });
+	assert.deepEqual(q.summary, { entries: 12, edges: 7, orphans: 6, deadends: 8, unreferenced: 7 });
 });
 
 test('summary describes what was returned, not the whole corpus', async () => {
@@ -258,7 +308,7 @@ test('summary describes what was returned, not the whole corpus', async () => {
 	// edge *out of the notes collection*. Degrees on each entry stay
 	// whole-graph — Alpha still reports both its inbound links — but the
 	// summary counts only what was returned.
-	assert.deepEqual(summary, { entries: 8, edges: 4, orphans: 4, deadends: 6 });
+	assert.deepEqual(summary, { entries: 8, edges: 4, orphans: 4, deadends: 6, unreferenced: 4 });
 });
 
 test('a filtered query reports itself consistently', async () => {

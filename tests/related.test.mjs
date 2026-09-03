@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BIN, commune, run, VAULT } from './helpers.mjs';
+import { BIN, commune, DICTATION, run, VAULT } from './helpers.mjs';
 
 test('a file source returns its links, its mentions and its inbound entries', async () => {
 	const { code, stdout } = await commune(
@@ -137,4 +137,64 @@ test('related runs on the engine with no Astro module on the path', async () => 
 	assert.equal(payload.source.urlPath, '/notes/atomic-notes/');
 	assert.ok(payload.summary.resolved > 0, 'expected resolved links');
 	assert.ok(payload.summary.inbound > 0, 'expected inbound entries');
+});
+
+test('a dictated title split across a space still finds the note', async () => {
+	const { code, stdout } = await commune(
+		'--root', DICTATION, 'graph', 'related', 'I talked about noon tide today.', '--json'
+	);
+
+	assert.equal(code, 0);
+	const { mentions } = JSON.parse(stdout);
+	assert.deepEqual(
+		mentions.map((mention) => [mention.title, mention.matched, mention.count]),
+		[['Noontide', 'noon tide', 1]]
+	);
+});
+
+test('a dictated title run together still finds the note', async () => {
+	const { stdout } = await commune(
+		'--root', DICTATION, 'graph', 'related', 'Merged it into mainbranch.', '--json'
+	);
+
+	// The title is "Main Branch"; `matched` reports the surface form, so the
+	// connect step can show which phrase in the dump the link would replace.
+	assert.deepEqual(
+		JSON.parse(stdout).mentions.map((mention) => [mention.title, mention.matched]),
+		[['Main Branch', 'mainbranch']]
+	);
+});
+
+test('normalising whitespace does not dissolve the word boundary at a title\'s edges', async () => {
+	const { stdout } = await commune(
+		'--root', DICTATION, 'graph', 'related', 'I ate a pancake.', '--json'
+	);
+
+	// "pancake" contains "cake" but is one word, so it is not a mention of Cake.
+	assert.deepEqual(JSON.parse(stdout).mentions, []);
+});
+
+test('a title inside a longer phrase is still a mention when the boundary is real', async () => {
+	const { stdout } = await commune(
+		'--root', DICTATION, 'graph', 'related', 'I ate a pan cake and some more cake.', '--json'
+	);
+
+	// "pan cake" normalises to "pancake", which contains "cake" at a real word
+	// boundary in the original — dictation splitting a word is exactly the case
+	// #69 exists for, and it cannot be told apart from a genuine two-word phrase.
+	assert.deepEqual(
+		JSON.parse(stdout).mentions.map((mention) => [mention.title, mention.matched, mention.count]),
+		[['Cake', 'cake', 2]]
+	);
+});
+
+test('a dictated draft on stdin finds both distorted titles at once', async () => {
+	const child = run(process.execPath, [BIN, '--root', DICTATION, 'graph', 'related', '-', '--json']);
+	child.child.stdin.end('---\ntitle: Draft\n---\n\nNoon Tide and Main Branch, dictated.\n');
+	const { stdout } = await child;
+
+	assert.deepEqual(
+		JSON.parse(stdout).mentions.map((mention) => [mention.title, mention.matched]),
+		[['Main Branch', 'main branch'], ['Noontide', 'noon tide']]
+	);
 });

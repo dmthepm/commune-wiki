@@ -18,7 +18,7 @@ import {
 	type Diagnostic,
 	type DiagnosticRule,
 } from '../lib/graph.ts';
-import { SCHEMA, writeJson, writeLines } from './render.ts';
+import { SCHEMA, writeJson, writeLines } from './output.ts';
 import { EXIT_OK } from './errors.ts';
 
 const RULES: DiagnosticRule[] = [
