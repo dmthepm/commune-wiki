@@ -673,4 +673,75 @@ if (window.wikiInitialized) {
       display: none;
     }
   }
+  /* --- Print ---
+     The pane layout is a fixed-height viewport widget: the container is
+     absolutely positioned, body scroll is locked, and each pane's text lives
+     inside an `overflow: auto` wrapper. Printed as-is, a note stops at
+     whatever fitted on one screen. This unwinds the widget back into document
+     flow so the whole note prints, and starts each open pane on its own sheet
+     so the reader gets exactly the trail they had open. */
+  @media print {
+    body {
+      overflow: visible !important;
+    }
+
+    #pane-container {
+      position: static;
+      display: block;
+      height: auto;
+      padding: 0 !important;
+      overflow: visible;
+    }
+
+    .pane {
+      display: block;
+      flex: none;
+      width: auto !important;
+      max-width: none !important;
+      height: auto !important;
+      margin: 0 !important;
+      overflow: visible !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      break-inside: auto;
+    }
+
+    /* Paper is narrower than 1024px, so the mobile rules apply while printing
+       and would drop every pane but the first. The reader asked to print what
+       they had open, so each open pane prints, one per sheet. */
+    .pane:not(:first-child) {
+      display: block;
+    }
+
+    .pane + .pane {
+      break-before: page;
+    }
+
+    .pane .body-wrapper {
+      height: auto !important;
+      overflow: visible !important;
+    }
+
+    .pane .body {
+      max-width: none;
+      padding: 0;
+    }
+
+    .pane .close {
+      display: none !important;
+    }
+
+    .prose h1,
+    .prose h2,
+    .prose h3 {
+      break-after: avoid;
+    }
+
+    .prose pre,
+    .prose blockquote,
+    .prose li {
+      break-inside: avoid;
+    }
+  }
 </style>

@@ -159,3 +159,60 @@ a[target="_blank"]:hover::after {
   opacity: 1;
 }
 
+/* --- Print -------------------------------------------------------------
+ * Paper is always the light theme. Without this the dark tokens survive into
+ * the print stylesheet, the browser drops backgrounds, and a reader in dark
+ * mode gets #e4e4e4 body text on white paper.
+ */
+@page {
+  margin: 16mm;
+}
+
+@media print {
+  :root,
+  :root[data-theme="dark"],
+  :root[data-theme="light"] {
+    color-scheme: light;
+
+    --c-bg: #ffffff;
+    --c-bg-soft: #f5f5f5;
+    --c-bg-muted: #ebebeb;
+    --c-text: #111111;
+    --c-text-muted: #555555;
+    --c-text-accent: #333333;
+    --c-border: rgba(0, 0, 0, 0.25);
+    --c-border-focus: rgba(0, 0, 0, 0.4);
+
+    --c-accent: #16389c;
+    --c-accent-hover: #16389c;
+    --c-accent-soft: transparent;
+    --c-accent-border: rgba(0, 0, 0, 0.3);
+
+    --c-shadow-sm: none;
+    --c-shadow-md: none;
+    --c-shadow-lg: none;
+    --c-shadow-xl: none;
+  }
+
+  body {
+    background: #ffffff;
+    color: #111111;
+  }
+
+  /* The header keeps the byline on paper; its controls do nothing there. */
+  .commune-header {
+    position: static;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .commune-header .controls,
+  #commune-search {
+    display: none !important;
+  }
+
+  /* The external-link marker is the only cue left once nothing is clickable. */
+  a[target="_blank"]::after {
+    opacity: 1;
+  }
+}
