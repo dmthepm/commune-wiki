@@ -171,15 +171,24 @@ if (window.wikiInitialized) {
   };
 
   const openPane = async (url) => {
+    const normalizedUrl = normalizeUrl(url);
+    // The address bar may only claim the note once the pane holding it
+    // actually exists. Anything that stops that — a dead wikilink, a truncated
+    // response, a timeout — hands the URL to the browser so the reader lands
+    // on the real 404 instead of on a page that lies about which note it is
+    // showing.
+    const recordVisit = () => history.pushState({ pane: normalizedUrl }, '', normalizedUrl);
+    const giveUp = () => { window.location.href = url; };
+
     try {
       console.log(`Opening pane for: ${url}`);
-      const normalizedUrl = normalizeUrl(url);
 
       // Check for existing pane to prevent duplicates
       const existingPane = container.querySelector(`[data-url="${normalizedUrl}"]`);
       if (existingPane) {
         console.log('Pane already exists, focusing existing pane');
         focusPane(existingPane);
+        recordVisit();
         return;
       }
 
@@ -195,6 +204,7 @@ if (window.wikiInitialized) {
 
       if (!res.ok) {
         console.error(`Failed to fetch pane content: ${res.status}`);
+        giveUp();
         return;
       }
 
@@ -204,6 +214,7 @@ if (window.wikiInitialized) {
 
       if (!fetchedContent) {
         console.error('No .pane-content found in fetched page');
+        giveUp();
         return;
       }
 
@@ -233,6 +244,12 @@ if (window.wikiInitialized) {
       void pane.offsetHeight;
       updateContainerLayout();
 
+      // Record the visit here, before the per-pane initialisers run:
+      // initializeHeaderStar decides whether to star the pane's title by
+      // reading window.location.pathname, so the URL has to be the new note's
+      // by the time it looks.
+      recordVisit();
+
       // Initialize backlinks, starred links, and header star for the new pane
       if (typeof window.initializeBacklinks === 'function') {
         window.initializeBacklinks(pane);
@@ -256,10 +273,10 @@ if (window.wikiInitialized) {
       setTimeout(() => focusPane(pane), 0);
       console.log('Pane opened successfully');
     } catch (error) {
+      // Includes the 10s AbortError: a click that produced nothing at all is
+      // worse than a full navigation the browser can report on.
       console.error('Error opening pane:', error);
-      if (error.name !== 'AbortError') {
-        window.location.href = url;
-      }
+      giveUp();
     }
   };
 
@@ -305,12 +322,10 @@ if (window.wikiInitialized) {
         // On desktop (>= 1024px), intercept. On mobile, allow normal navigation.
         if (window.innerWidth < 1024) return;
 
-        // Intercept the link and open in a pane!
+        // Intercept the link and open in a pane. openPane owns the history
+        // entry, so the URL only changes if the pane opened.
         e.preventDefault();
-        const targetUrl = normalizeUrl(a.href);
-
         openPane(a.href);
-        history.pushState({ pane: targetUrl }, '', targetUrl);
         return;
       }
     }
