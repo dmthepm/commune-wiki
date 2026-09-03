@@ -29,7 +29,7 @@ jobs:
       # What still needs 22.18 is this repo's own tests and `astro.config.mjs`,
       # which import `src/**/*.ts` directly and rely on Node stripping types by
       # default — first released in 22.18.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm

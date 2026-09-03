@@ -91,7 +91,7 @@ jobs:
       # the 22.14.0 floor trusted publishing requires. Kept in step with
       # `ci.yml` on purpose: the release is meant to run the same toolchain the
       # pull request was green on.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
