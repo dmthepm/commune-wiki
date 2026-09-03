@@ -10,7 +10,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Full history, not the default depth of 1. `tests/install.test.mjs` and
+      # the stranger-install step below both fetch this workspace as a git
+      # dependency, and on a pull request the checked-out commit is a synthetic
+      # merge commit that exists nowhere else — a shallow clone of it is not
+      # something another repository can reliably fetch from.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -45,11 +52,20 @@ jobs:
       # it. A `git+file://` install takes the same path a `github:` user takes,
       # including both. The `ls` is the assertion that matters: `commune --help`
       # alone would also pass if pnpm had silently installed nothing.
+      # It installs from a bare clone rather than from the workspace directly,
+      # for the reason `tests/install.test.mjs` explains at length: on a pull
+      # request the workspace is detached on a merge commit with no branch
+      # pointing at it. `-x` so a failure names the command that failed instead
+      # of an exit code on its own.
       - name: install from a git ref, the way a stranger would
         run: |
-          tmp=$(mktemp -d) && cd "$tmp"
+          set -euxo pipefail
+          tmp=$(mktemp -d)
+          git clone --bare "$GITHUB_WORKSPACE" "$tmp/bare.git"
+          git -C "$tmp/bare.git" update-ref refs/heads/ci-install "$GITHUB_SHA"
+          mkdir "$tmp/consumer" && cd "$tmp/consumer"
           pnpm init >/dev/null
-          pnpm add "git+file://$GITHUB_WORKSPACE#$GITHUB_SHA"
+          pnpm add "git+file://$tmp/bare.git#$GITHUB_SHA"
           ./node_modules/.bin/commune --help
           ls node_modules/*/lib/cli/main.js
 
