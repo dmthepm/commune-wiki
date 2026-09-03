@@ -30,6 +30,12 @@ jobs:
       # The release PR, the tag, the GitHub Release.
       contents: write
       pull-requests: write
+      # Labels. release-please tags its pull request `autorelease: pending` and
+      # the merged one `autorelease: tagged`, and that is how it recognises its
+      # own work on the next run. Labels are an issues API, not a pull-requests
+      # one, so `pull-requests: write` does not cover it — the action's README
+      # lists all three permissions together for exactly this reason.
+      issues: write
 
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}

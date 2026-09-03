@@ -6,13 +6,19 @@
  * away, not values — and release-please bumps exactly one file when it cuts a
  * release. A second copy of the number would be a second thing to forget.
  *
- * `../../package.json` is the same file in both layouts this code runs in, and
- * that is the only reason this can be one line. Compiled, this is
- * `lib/cli/version.js`, so two levels up is the package root; in a checkout the
- * tests and `astro.config.mjs` import `src/cli/version.ts`, so two levels up is
- * the repo root. Same `package.json` either way, including inside an installed
- * `node_modules/@dmthepm/commune` — npm packs `package.json` into every tarball
- * regardless of the `files` allowlist, so it is there on an install too.
+ * `../../package.json` survives compilation because `src/cli/` and `lib/cli/`
+ * sit at the same depth: `tsconfig.build.json` sets `rootDir: src`, so this
+ * file becomes `lib/cli/version.js` and two levels up is the package root
+ * exactly as two levels up from `src/cli/version.ts` is the repo root. Only the
+ * `lib/` layout is ever exercised — nothing imports `src/cli/*.ts` directly,
+ * and the tests reach this code the way a consumer does, by spawning
+ * `bin/commune.mjs`, which imports `../lib/cli/main.js`. The `src/` half of
+ * that sentence is a property of the build, not a path anything walks.
+ *
+ * It resolves inside an installed `node_modules/@dmthepm/commune` too, and for
+ * a reason worth writing down: npm packs `package.json` into every tarball
+ * regardless of the `files` allowlist, so it is there even though `files` never
+ * names it.
  */
 
 import { readFile } from 'node:fs/promises';
