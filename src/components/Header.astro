@@ -239,6 +239,25 @@
     });
   })();
 
+  // Publish the header's real height. The pane container positions itself
+  // against --header-height, and the fallback in the stylesheet is a
+  // hand-counted number the header has outgrown — it measures 73px at the
+  // default font size and more once the text is zoomed. Measuring keeps the
+  // pane's top gap equal to its bottom gap at any zoom level or font size,
+  // and means no consumer has to re-count the number after restyling the
+  // header.
+  (function trackHeaderHeight(){
+    const header = document.querySelector('.commune-header');
+    if (!header) return;
+    const publish = () => {
+      const height = Math.round(header.getBoundingClientRect().height);
+      if (height > 0) document.documentElement.style.setProperty('--header-height', height + 'px');
+    };
+    publish();
+    if ('ResizeObserver' in window) new ResizeObserver(publish).observe(header);
+    else addEventListener('resize', publish);
+  })();
+
   // cmd/ctrl-k opens modal
   addEventListener('keydown', (e) => {
     const mac = navigator.platform.toUpperCase().includes('MAC');
