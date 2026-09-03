@@ -20,7 +20,12 @@ import { mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { loadContentEntries } from '../src/lib/graph.ts';
+import { loadContentEntries, SHALLOW_WARNING } from '../src/lib/graph.ts';
+// The warning is emitted once per root per process; the tests below load several
+// shallow roots in one process, so they reset that memory rather than assert on
+// whichever of them happened to run first.
+import { resetShallowWarnings } from '../src/lib/dates.ts';
+import { commune } from './helpers.mjs';
 
 const run = promisify(execFile);
 
@@ -139,13 +144,15 @@ test('a changelog entry dates itself from its own date field', async () => {
 	});
 });
 
-test('a tree with no git history falls back to file mtimes rather than failing', async () => {
+test('a directory outside any repository falls back to file mtimes', async () => {
 	await withProject(async (dir) => {
-		// No `git init`: this is the consumer whose build runs from a tarball, a
-		// Docker COPY, or a host that ships no git binary at all.
-		const file = path.join(dir, 'src/content/notes/Tarball.md');
-		await writeFile(file, note('Tarball'));
-		const when = new Date('2026-05-06T12:00:00Z');
+		// No `git init`: an unversioned folder on somebody's disk, which is the
+		// only place an mtime is an honest answer. A tarball or a Docker COPY of
+		// a repository is *not* this case — see the shallow test below.
+		const file = path.join(dir, 'src/content/notes/Unversioned.md');
+		await writeFile(file, note('Unversioned'));
+		// Local noon, so the day is the same one on every machine that runs this.
+		const when = new Date(2026, 4, 6, 12, 0, 0);
 		await utimes(file, when, when);
 
 		const [entry] = await loadContentEntries({ root: dir });
@@ -157,7 +164,7 @@ test('a tree with no git history falls back to file mtimes rather than failing',
 	});
 });
 
-test('a file with no commit yet falls back to its mtime inside a repository', async () => {
+test('an uncommitted file inside a repository has no date, not an mtime', async () => {
 	await withProject(async (dir) => {
 		await initRepo(dir);
 		await writeFile(path.join(dir, 'src/content/notes/Committed.md'), note('Committed'));
@@ -165,17 +172,107 @@ test('a file with no commit yet falls back to its mtime inside a repository', as
 
 		const draft = path.join(dir, 'src/content/notes/Draft.md');
 		await writeFile(draft, note('Draft'));
-		const when = new Date('2026-06-07T12:00:00Z');
+		const when = new Date(2026, 5, 7, 12, 0, 0);
 		await utimes(draft, when, when);
 
 		const entries = await loadContentEntries({ root: dir });
 		const drafted = entries.find((entry) => entry.title === 'Draft');
+		const committed = entries.find((entry) => entry.title === 'Committed');
 
-		// The note being written right now is the one an author most wants dated,
-		// and it is exactly the one git has never heard of.
-		assert.equal(drafted.updated, '2026-06-07');
-		assert.equal(drafted.updatedSource, 'mtime');
+		// Inside a checkout an mtime is the day the file reached this disk, which
+		// on CI is the day of the build and on a fresh clone is today. It would be
+		// a confident wrong answer, so there is no answer: an author who wants a
+		// date on an uncommitted draft writes one in frontmatter.
+		assert.equal(drafted.updated, undefined);
+		assert.equal(drafted.created, undefined);
+		assert.equal(drafted.updatedSource, 'none');
 		assert.equal(drafted.modifiedInGit, undefined);
+
+		// Its committed neighbour is unaffected: one file being unknown does not
+		// make the rest of the vault unknown.
+		assert.equal(committed.updated, '2026-03-04');
+		assert.equal(committed.updatedSource, 'git');
+	});
+});
+
+test('a shallow checkout derives nothing, and says so once', async () => {
+	await withProject(async (dir) => {
+		await initRepo(dir);
+		await writeFile(path.join(dir, 'src/content/notes/Old.md'), note('Old'));
+		await commitAll(dir, 'add Old', '2026-01-02T12:00:00+00:00');
+		await writeFile(path.join(dir, 'src/content/notes/New.md'), note('New'));
+		await commitAll(dir, 'add New', '2026-03-04T12:00:00+00:00');
+
+		// What `actions/checkout` does by default. `file://` because git ignores
+		// `--depth` on a plain local path clone and says so.
+		const clone = path.join(dir, 'clone');
+		await run('git', ['clone', '--quiet', '--depth', '1', `file://${dir}`, clone]);
+		assert.equal(
+			(await run('git', ['rev-parse', '--is-shallow-repository'], { cwd: clone })).stdout.trim(),
+			'true'
+		);
+
+		resetShallowWarnings();
+		const entries = await loadContentEntries({ root: clone });
+
+		// In this tree git would happily report 2026-03-04 for `Old.md`, whose
+		// real last commit was January: the grafted boundary makes one commit
+		// stand in for all of them. Refused rather than reported.
+		assert.equal(entries.length, 2);
+		for (const entry of entries) {
+			assert.equal(entry.updated, undefined, entry.file);
+			assert.equal(entry.created, undefined, entry.file);
+			assert.equal(entry.updatedSource, 'none', entry.file);
+			assert.equal(entry.modifiedInGit, undefined, entry.file);
+		}
+	});
+});
+
+test('frontmatter still answers in a shallow checkout', async () => {
+	await withProject(async (dir) => {
+		await initRepo(dir);
+		await writeFile(
+			path.join(dir, 'src/content/notes/Claimed.md'),
+			note('Claimed', 'updated: 2025-12-25\n')
+		);
+		await writeFile(path.join(dir, 'src/content/notes/Silent.md'), note('Silent'));
+		await commitAll(dir, 'add two', '2026-03-04T12:00:00+00:00');
+
+		const clone = path.join(dir, 'clone');
+		await run('git', ['clone', '--quiet', '--depth', '1', `file://${dir}`, clone]);
+
+		resetShallowWarnings();
+		const entries = await loadContentEntries({ root: clone });
+		const claimed = entries.find((entry) => entry.title === 'Claimed');
+		const silent = entries.find((entry) => entry.title === 'Silent');
+
+		// A truncated history costs the derived dates, not the written ones.
+		assert.equal(claimed.updated, '2025-12-25');
+		assert.equal(claimed.updatedSource, 'frontmatter');
+		assert.equal(silent.updatedSource, 'none');
+	});
+});
+
+test('the shallow warning reaches stderr, once, leaving stdout a clean document', async () => {
+	await withProject(async (dir) => {
+		await initRepo(dir);
+		await writeFile(path.join(dir, 'src/content/notes/Only.md'), note('Only'));
+		await commitAll(dir, 'add Only', '2026-03-04T12:00:00+00:00');
+
+		const clone = path.join(dir, 'clone');
+		await run('git', ['clone', '--quiet', '--depth', '1', `file://${dir}`, clone]);
+
+		const { code, stdout, stderr } = await commune('--root', clone, 'graph', 'query', '--json');
+
+		assert.equal(code, 0);
+		assert.equal(stderr.trimEnd(), SHALLOW_WARNING);
+		// Said once, though the command loads the graph and builds it: a warning
+		// repeated per entry is a warning nobody reads.
+		assert.equal(stderr.trimEnd().split('\n').length, 1);
+
+		// `--json` still means one document on stdout and nothing else.
+		const payload = JSON.parse(stdout);
+		assert.equal(payload.entries[0].updatedSource, 'none');
 	});
 });
 

@@ -10,6 +10,7 @@
 import {
 	buildGraph,
 	loadContentEntries,
+	toIsoDay,
 	type CollectionName,
 	type ContentEntry,
 	type DateSource,
@@ -27,13 +28,6 @@ export interface QueryFilters {
 	/** Inclusive `yyyy-mm-dd` cutoff from `--recent`. Entries older than it, and
 	 *  entries with no date at all, are not returned. */
 	since?: string;
-}
-
-/** A local calendar day as `yyyy-mm-dd` — the spelling every date in the graph uses. */
-function toIsoDay(date: Date): string {
-	const month = String(date.getMonth() + 1).padStart(2, '0');
-	const day = String(date.getDate()).padStart(2, '0');
-	return `${date.getFullYear()}-${month}-${day}`;
 }
 
 /**

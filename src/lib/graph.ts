@@ -22,9 +22,15 @@ import { slug as githubSlug } from 'github-slugger';
 import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { readGitHistory, readMtimeDate, type DateSource } from './dates.ts';
+import {
+	readContentHistory,
+	readMtimeDate,
+	type ContentHistory,
+	type DateSource,
+} from './dates.ts';
 
-export type { DateSource } from './dates.ts';
+export type { ContentHistory, DateSource, HistoryKind } from './dates.ts';
+export { SHALLOW_WARNING, toIsoDay } from './dates.ts';
 
 export type CollectionName = 'notes' | 'research' | 'pages' | 'updates';
 
@@ -208,10 +214,17 @@ export function claimedDate(data: Record<string, unknown>): string | undefined {
  * Decide an entry's dates, and say where the answer came from.
  *
  * Precedence, for both `created` and `updated`: what the author wrote, then
- * what the repository records, then the file's mtime. The first is a claim and
- * can be years stale; the second is a fact about the file and is what the
- * ticket asked for; the third is a guess that exists so a build from a tarball
- * — no `.git`, no history — produces dates instead of an exception.
+ * what the repository records, then — only outside a repository — the file's
+ * mtime. The first is a claim and can be years stale; the second is a fact
+ * about the file and is what the ticket asked for; the third exists so a
+ * developer's unversioned folder produces dates instead of blanks.
+ *
+ * What is deliberately *not* here is a fourth fallback. Inside a shallow
+ * checkout there is no honest date to be had — every file's only commit is the
+ * one the CI runner fetched, and every file's mtime is the moment it was
+ * written to disk — so both are refused and `updatedSource` says `none`. A
+ * missing date a site can decline to render; a wrong one it renders
+ * confidently. The same goes for a file that has never been committed.
  *
  * `updatedSource` is reported and `createdSource` is not, deliberately: the
  * date a site displays and a reader judges is `updated`, and one honest label
@@ -223,16 +236,17 @@ async function resolveDates(
 	root: string,
 	file: string,
 	data: Record<string, unknown>,
-	history: Map<string, { created: string; updated: string }> | undefined
+	history: ContentHistory
 ): Promise<Pick<ContentEntry, 'updated' | 'updatedSource' | 'created' | 'modifiedInGit'>> {
 	const claimed = claimedDate(data);
 	const createdClaim = normalizeDate(data.created);
-	const committed = history?.get(file);
+	const committed = history.files.get(file);
 
-	// Read once, and only when something is actually missing: a vault with
-	// complete frontmatter and a complete history never stats a file at all.
+	// Read once, and only where an mtime is an answer at all: a versioned tree
+	// never stats a file, and a complete vault outside one never stats twice.
 	let mtime: string | undefined;
-	const fileMtime = async () => (mtime ??= await readMtimeDate(root, file));
+	const fileMtime = async () =>
+		history.kind === 'unversioned' ? (mtime ??= await readMtimeDate(root, file)) : undefined;
 
 	const updated = claimed ?? committed?.updated ?? (await fileMtime());
 	const created = createdClaim ?? committed?.created ?? (await fileMtime());
@@ -289,7 +303,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 
 	// One walk for the whole vault, before the scan rather than inside it: the
 	// alternative is a `git log` per file, which is a child process per note.
-	const history = await readGitHistory(root, Object.values(CONTENT_DIRS));
+	const history = await readContentHistory(root, Object.values(CONTENT_DIRS));
 
 	for (const collection of COLLECTIONS) {
 		// `cwd` keeps globby's results root-relative, which is exactly the

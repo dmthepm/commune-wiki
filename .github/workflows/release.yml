@@ -82,6 +82,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
+          # The whole history, as in `ci.yml`. This job runs `pnpm test`, and
+          # the date tests read commit dates: in the default depth-1 checkout
+          # the engine refuses to derive any date at all, which is the correct
+          # behaviour and a test failure on a release that has nothing wrong
+          # with it.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
         with:

@@ -17,6 +17,7 @@ import type { ParseArgsOptionsConfig } from 'node:util';
 import { CliError, EXIT_OK, EXIT_USAGE, isParseArgsError, usageError } from './errors.ts';
 import { writeError } from './render.ts';
 import { resolveRoot } from './root.ts';
+import { toIsoDay } from '../lib/graph.ts';
 import { parseRecent, queryCommand, type QueryFilters } from './query.ts';
 import { checkCommand } from './check.ts';
 import { gateCommand } from './gate.ts';
@@ -116,9 +117,7 @@ function resolveRecent(value: string | undefined, usage: string): string | undef
 
 /** Today, as a local calendar day: the date a scaffolded update is filed under. */
 function today(): string {
-	const now = new Date();
-	const month = String(now.getMonth() + 1).padStart(2, '0');
-	return `${now.getFullYear()}-${month}-${String(now.getDate()).padStart(2, '0')}`;
+	return toIsoDay(new Date());
 }
 
 /** Turn `parseArgs`'s typed failures into the CLI's usage error. */

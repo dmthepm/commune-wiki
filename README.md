@@ -119,6 +119,28 @@ Where they are absent the engine reads the repository instead — `updated` is t
 
 Every entry carries `updatedSource`, one of `frontmatter`, `git`, `mtime` or `none`, and `modifiedInGit`, which is the commit date whatever `updated` ended up being. The pair is the point: a note whose `updated:` says January and whose last commit was September changed on a day nobody wrote down, and a page that shows both says so.
 
+### Shallow clones
+
+**A shallow checkout produces no derived dates at all.** In a `--depth 1` clone every file's only commit is the one that was fetched, so every file would date from the day of the build — one confident wrong answer on every entry at once. The engine refuses it rather than reporting it: dates come from frontmatter only, entries without one get `updatedSource: "none"` and no date, and the build prints this once on stderr:
+
+```
+git history is shallow: dates come from frontmatter only. Fetch full history (fetch-depth: 0 / unshallow) to derive dates from commits.
+```
+
+The same refusal applies to file mtimes anywhere inside a repository, and to a file that has never been committed. Inside a checkout an mtime is the moment the file reached that disk — on CI, the moment of the build — so it is the same falsehood wearing a different hat. mtimes are used in one place only: a project that is not in a repository at all.
+
+The fix is to fetch the history. On **GitHub Actions**, `actions/checkout` defaults to depth 1, so set it explicitly:
+
+```yaml
+- uses: actions/checkout@v7
+  with:
+    fetch-depth: 0
+```
+
+On **Cloudflare Workers Builds**, check the build log for the warning above — if it is there, the clone was shallow. Whether Workers Builds exposes a clone-depth setting is not documented here; if it does not, an alternative is to keep `updated:` in frontmatter for anything whose date matters, which wins over history anyway. A build step that runs `git fetch --unshallow` before the build has the same effect wherever the build has network access and credentials for the repository.
+
+**Known gap: renames.** History is read without `--follow`, so a file's derived `created` is the date of the commit that gave it its current path, not the date the writing began. Renaming a note therefore resets its `created` and leaves `updated` correct. `--follow` is per-file by design — it cannot be asked for in the single batched walk this uses — so the fix is a `created:` in frontmatter, which wins over history.
+
 `commune graph query --json` carries all four fields. The build writes the site-wide version to `site.json`:
 
 ```json
