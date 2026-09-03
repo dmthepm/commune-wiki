@@ -122,9 +122,9 @@ test('--json puts the verdict in the payload and leaves stderr empty', async () 
 
 test('--dist names the built output, so a gate can check any build', async () => {
 	await withProject({}, async (root) => {
-		// The engine's own site builds to `dist-site/`, because `dist/` is the
-		// compiled package. A gate that could not be pointed elsewhere would be
-		// unusable in the very repo that ships it.
+		// `dist` is only the default. A build with a configured `outDir` is
+		// still a build, and a gate that could not be pointed at one would be
+		// unusable in exactly the projects that customise it.
 		const missing = await commune('--root', root, 'gate', '--dist', 'somewhere-else');
 		assert.equal(missing.code, 1);
 		assert.match(missing.stderr, /somewhere-else/);

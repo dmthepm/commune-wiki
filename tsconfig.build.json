@@ -1,5 +1,5 @@
 {
-	// The type gate, and the build that produces `dist/`.
+	// The type gate, and the build that produces `lib/`.
 	//
 	// Deliberately not extending `tsconfig.json`: that one is Astro's
 	// `strict` preset, which is tuned for the *site* — JSX, DOM libs, `.astro`
@@ -7,22 +7,30 @@
 	// files a consumer runs outside an Astro process: the graph core, the CLI,
 	// the two unified plugins and the integration.
 	//
-	// `rootDir: src` is what keeps the emitted tree flat (`dist/lib/graph.js`,
-	// `dist/cli/main.js`), so `exports` can point at short paths rather than
-	// `dist/src/...`. `rewriteRelativeImportExtensions` is what lets the source
-	// keep its explicit `./x.ts` specifiers — which Node's type stripping
-	// requires when it runs these files straight from the repo — while the
-	// emitted JavaScript imports `./x.js`.
+	// `lib/`, not `dist/`, because `dist/` is Astro's: `astro build` empties
+	// its output directory before every run, so compiling the package there
+	// means a site build deletes the CLI that is about to check it. Astro keeps
+	// its default, which is what every consumer's host already expects.
+	//
+	// `rootDir: src` is what keeps the emitted tree flat (`lib/lib/graph.js` is
+	// wrong-looking but right — `src/lib/graph.ts` in, `lib/lib/graph.js` out —
+	// and `lib/cli/main.js` beside it), so `exports` can point at short paths
+	// rather than `lib/src/...`. `rewriteRelativeImportExtensions` is what lets
+	// the source keep its explicit `./x.ts` specifiers — which Node's type
+	// stripping requires when it runs these files straight from the repo —
+	// while the emitted JavaScript imports `./x.js`.
+	//
+	// No `sourceMap` or `declarationMap`: `files` ships the compiled output and
+	// not the sources, so every map would point at a file that is not in the
+	// tarball. The source is one click away in the repo.
 	"compilerOptions": {
 		"target": "ES2022",
 		"lib": ["ES2022"],
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"rootDir": "src",
-		"outDir": "dist",
+		"outDir": "lib",
 		"declaration": true,
-		"declarationMap": true,
-		"sourceMap": true,
 		"rewriteRelativeImportExtensions": true,
 		"allowImportingTsExtensions": true,
 		"verbatimModuleSyntax": true,

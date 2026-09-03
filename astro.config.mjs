@@ -15,14 +15,6 @@ const site = 'https://devonmeadows.com';
 // https://astro.build/config
 export default defineConfig({
 	site,
-	// This repo is two things at once: the package, and a wiki built with it.
-	// `dist/` belongs to the package — `tsc` writes the compiled Node side
-	// there and `bin/commune.mjs` imports it — and `astro build` empties its
-	// output directory before every run, so sharing one directory means a site
-	// build deletes the CLI it is about to be checked by. The *site* is the
-	// private artifact here (nothing deploys from this repo; devon-wiki has its
-	// own `dist/`), so the site is the one that moves.
-	outDir: './dist-site',
 	// Astro 7 renders markdown with Sätteri and no longer installs
 	// `@astrojs/markdown-remark`. `src/remark-wikilinks.ts` is the mechanism this
 	// whole project exists for, so the unified pipeline is reinstalled and kept

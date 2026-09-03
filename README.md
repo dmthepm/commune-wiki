@@ -233,7 +233,7 @@ Backlinks are auto-generated at build time via the `src/integration.ts` integrat
 pnpm build
 
 # Output directory
-dist-site/   # this repo's own site; `dist/` is the compiled package
+dist/
 
 # Deploy
 # Connect GitHub repo, auto-deploy on push
@@ -246,7 +246,7 @@ dist-site/   # this repo's own site; `dist/` is the compiled package
 caddy:
   image: caddy:alpine
   volumes:
-    - ./dist-site:/srv:ro
+    - ./dist:/srv:ro
     - ./Caddyfile:/etc/caddy/Caddyfile
   ports:
     - "80:80"

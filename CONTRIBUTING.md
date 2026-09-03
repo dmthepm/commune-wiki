@@ -143,7 +143,7 @@ commune-wiki/
 │   ├── remark-wikilinks.ts # WikiLinks plugin
 │   ├── rehype-external-links.ts
 │   └── integration.ts      # Backlinks / markdown-twin integration
-├── bin/commune.mjs         # CLI entry point (runs dist/)
+├── bin/commune.mjs         # CLI entry point (runs lib/)
 ├── public/                 # Static assets
 ├── scripts/                # Build scripts
 └── astro.config.mjs        # Astro configuration
