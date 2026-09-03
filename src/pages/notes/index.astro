@@ -31,6 +31,12 @@ const seed = list.filter((n:any) => n.data.status === 'seed' || !n.data.status);
       </p>
     </header>
 
+    {list.length === 0 && (
+      <p class="empty-state">
+        No notes are published yet. The <a href="/updates/">updates</a> log records what changes here.
+      </p>
+    )}
+
     {evergreen.length > 0 && (
       <section class="section">
         <h2>🌲 Evergreen Notes</h2>
@@ -185,5 +191,18 @@ const seed = list.filter((n:any) => n.data.status === 'seed' || !n.data.status);
     font-size:.8rem;
     color:var(--c-accent);
     opacity:.8;
+  }
+  /* Nothing published in this collection yet: say so, and point somewhere that
+     is not also empty, rather than ending the page on a heading. */
+  .empty-state {
+    margin: 0;
+    padding: 2rem 0;
+    color: var(--c-text-muted);
+    line-height: 1.7;
+  }
+
+  .empty-state a {
+    color: var(--c-accent);
+    border-bottom: 1px solid var(--c-accent);
   }
 </style>

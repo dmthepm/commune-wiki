@@ -51,6 +51,12 @@ function getRelativeDate(dateString: string): string {
       Changes to notes, research, and the wiki. One update per day when meaningful changes happen.
     </p>
 
+    {updates.length === 0 && (
+      <p class="empty-state">
+        No updates have been posted yet. The <a href="/notes/">notes</a> index lists what is published.
+      </p>
+    )}
+
     <div class="updates-list">
       {updates.map((update) => {
         const relativeDate = getRelativeDate(update.data.date);
@@ -140,5 +146,18 @@ function getRelativeDate(dateString: string): string {
       text-align: left;
       padding-top: 0;
     }
+  }
+  /* Nothing published in this collection yet: say so, and point somewhere that
+     is not also empty, rather than ending the page on a heading. */
+  .empty-state {
+    margin: 0;
+    padding: 2rem 0;
+    color: var(--c-text-muted);
+    line-height: 1.7;
+  }
+
+  .empty-state a {
+    color: var(--c-accent);
+    border-bottom: 1px solid var(--c-accent);
   }
 </style>
