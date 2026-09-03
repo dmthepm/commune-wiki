@@ -39,6 +39,20 @@ jobs:
 
       - run: pnpm test
 
+      # The stranger test. Everything above runs from a checkout, where `lib/`
+      # is on disk because someone built it; none of it can see the two ways an
+      # install differs — `prepare` has to build `lib/`, and `files` has to pack
+      # it. A `git+file://` install takes the same path a `github:` user takes,
+      # including both. The `ls` is the assertion that matters: `commune --help`
+      # alone would also pass if pnpm had silently installed nothing.
+      - name: install from a git ref, the way a stranger would
+        run: |
+          tmp=$(mktemp -d) && cd "$tmp"
+          pnpm init >/dev/null
+          pnpm add "git+file://$GITHUB_WORKSPACE#$GITHUB_SHA"
+          ./node_modules/.bin/commune --help
+          ls node_modules/*/lib/cli/main.js
+
       - run: pnpm build
 
       # The bin has to work from a clean checkout, not just from a warm

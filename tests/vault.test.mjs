@@ -21,7 +21,7 @@ test('a root loads content from another project without changing the process cwd
 	const entries = await loadContentEntries({ root: VAULT });
 
 	assert.equal(process.cwd(), before);
-	assert.equal(entries.length, 10);
+	assert.equal(entries.length, 11);
 });
 
 test('file paths stay relative to the given root, in POSIX spelling', async () => {
@@ -31,6 +31,22 @@ test('file paths stay relative to the given root, in POSIX spelling', async () =
 	assert.equal(alpha.file, 'src/content/notes/Alpha.md');
 	assert.equal(alpha.urlPath, '/notes/alpha/');
 	assert.equal(alpha.slug, 'alpha');
+});
+
+test('every path segment is slugified, not just the first', async () => {
+	const entries = await loadContentEntries({ root: VAULT });
+	const nested = entries.find((entry) => entry.title === 'Nested Note');
+
+	// Astro slugifies each segment separately, and so must the core. The
+	// regression this pins is specific and was live until #7: passing
+	// `githubSlug` straight to `Array.map` handed the array *index* to its
+	// second parameter, `maintainCase`, so every segment after the first was
+	// slugified with a truthy `maintainCase` and kept its capitals —
+	// `/notes/sub-dir/Nested-Note/`. The engine's own content is flat, so
+	// nothing but a nested fixture can catch it.
+	assert.equal(nested.file, 'src/content/notes/sub dir/Nested Note.md');
+	assert.equal(nested.slug, 'sub-dir/nested-note');
+	assert.equal(nested.urlPath, '/notes/sub-dir/nested-note/');
 });
 
 test('a trailing separator on the root does not change any path', async () => {

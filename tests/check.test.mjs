@@ -95,7 +95,7 @@ test('check --json reports counts by rule and exits 0 despite findings', async (
 	});
 	assert.equal(payload.summary.errors, 4);
 	assert.equal(payload.summary.warnings, 1);
-	assert.equal(payload.summary.entries, 10);
+	assert.equal(payload.summary.entries, 11);
 	assert.equal(payload.findings.length, 5);
 });
 
