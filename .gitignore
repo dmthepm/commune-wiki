@@ -30,6 +30,12 @@ lib/
 npm-debug.log*
 pnpm-debug.log*
 
+# The fixture consumer's generated artifacts. The integration writes
+# `backlinks.json` into the public directory as well as into `dist/`, for dev
+# server parity; in the fixture that directory holds nothing else, so it is
+# output and not source.
+tests/fixtures/consumer/public/
+
 # Filtered docs (generated at build time)
 src/content/docs/**
 !src/content/docs/index.mdx

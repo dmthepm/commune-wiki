@@ -46,6 +46,28 @@ jobs:
 
       - run: pnpm test
 
+      # The stranger's *project*. `pnpm test` already runs
+      # `tests/consumer.test.mjs`, which is this plus the assertions, so this
+      # step buys no coverage — it is the named entry point the plan asked for,
+      # and the one to delete first if CI time ever matters.
+      - run: pnpm test:consumer
+
+      # What actually ships. Not an assertion — a listing, so the `files` set is
+      # readable in the log of the run that produced a tag, and a file that
+      # started or stopped being packed is visible in the diff between two runs
+      # rather than after an install fails.
+      #
+      # `--json --out` rather than `--dry-run`: pnpm 10.19 has no `--dry-run`
+      # (`ERROR  Unknown option: 'dry-run'`), and the tarball is written to a
+      # temp directory so nothing is left in the workspace for the later
+      # `git diff` steps to trip over.
+      - name: list what the package would ship
+        run: |
+          set -euo pipefail
+          pnpm pack --json --out "$(mktemp -d)/pkg.tgz" \
+            | sed -n '/^{/,$p' \
+            | node -e 'const c=require("node:fs").readFileSync(0,"utf8");for(const f of JSON.parse(c).files)console.log(f.path);'
+
       # The stranger test. Everything above runs from a checkout, where `lib/`
       # is on disk because someone built it; none of it can see the two ways an
       # install differs — `prepare` has to build `lib/`, and `files` has to pack
@@ -79,7 +101,7 @@ jobs:
             }, null, 2) + "\n");' "$name" "$spec"
           pnpm add "$spec"
           ./node_modules/.bin/commune --help
-          ls node_modules/*/lib/cli/main.js
+          ls "node_modules/$name/lib/cli/main.js"
 
       - run: pnpm build
 

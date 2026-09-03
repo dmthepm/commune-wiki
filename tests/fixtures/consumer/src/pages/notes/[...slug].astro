@@ -1,0 +1,35 @@
+---
+// The one route. It imports every kind of thing the package exports — a
+// compiled function, two `.astro` components and a stylesheet — because the
+// point of this fixture is the resolution, not the page.
+import { getCollection, render } from 'astro:content';
+import Header from '@dmthepm/commune/components/Header.astro';
+import Footer from '@dmthepm/commune/components/Footer.astro';
+import { toMarkdownHref } from '@dmthepm/commune/graph';
+import '@dmthepm/commune/styles/design-system.css';
+
+export async function getStaticPaths() {
+	const notes = await getCollection('notes', (note) => note.data.visibility === 'public');
+	return notes.map((note) => ({ params: { slug: note.id }, props: { note } }));
+}
+
+const { note } = Astro.props;
+const { Content } = await render(note);
+const urlPath = `/notes/${note.id}/`;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>{note.data.title}</title>
+	</head>
+	<body>
+		<Header />
+		<main>
+			<h1>{note.data.title}</h1>
+			<Content />
+			<a href={toMarkdownHref(urlPath)}>source</a>
+		</main>
+		<Footer />
+	</body>
+</html>
