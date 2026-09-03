@@ -83,3 +83,39 @@ a.research-link:hover::after {
 	opacity: 1;
 }
 
+
+/* --- Overflow guards ---------------------------------------------------
+ * Content arrives as Markdown from whoever writes the vault, so the reading
+ * column has to survive whatever lands in it: a title with no spaces, a bare
+ * URL, a long inline token, a wide table, an oversized image. Each rule here
+ * keeps the offending element inside the column instead of letting it push
+ * the whole document wider and hand every phone a horizontal scrollbar.
+ */
+
+.prose {
+	overflow-wrap: break-word;
+}
+
+.prose pre {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.prose img,
+.prose video,
+.prose svg {
+	max-width: 100%;
+	height: auto;
+}
+
+/* Only tables that are still direct children of the column: the research
+ * template wraps its own tables in a `.table-wrapper` scroller once its script
+ * runs, and this is the fallback for everything else — including that template
+ * with JavaScript off. */
+.prose > table,
+.prose li > table,
+.prose blockquote > table {
+	display: block;
+	max-width: 100%;
+	overflow-x: auto;
+}
