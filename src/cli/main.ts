@@ -15,7 +15,7 @@
 import { parseArgs } from 'node:util';
 import type { ParseArgsOptionsConfig } from 'node:util';
 import { CliError, EXIT_OK, EXIT_USAGE, isParseArgsError, usageError } from './errors.ts';
-import { writeError } from './render.ts';
+import { writeError } from './output.ts';
 import { resolveRoot } from './root.ts';
 import { toIsoDay } from '../lib/graph.ts';
 import { parseRecent, queryCommand, type QueryFilters } from './query.ts';
@@ -50,13 +50,18 @@ const UPDATE_OPTIONS: ParseArgsOptionsConfig = {
 	write: { type: 'boolean', default: false },
 };
 
+const RENDER_OPTIONS: ParseArgsOptionsConfig = {
+	...GLOBAL,
+	site: { type: 'string' },
+};
+
 const GATE_OPTIONS: ParseArgsOptionsConfig = {
 	...GLOBAL,
 	dist: { type: 'string' },
 };
 
 /** Every route, longest first, so `graph query` is matched before a bare `graph`. */
-const ROUTES = ['graph query', 'graph related', 'check', 'gate', 'update'];
+const ROUTES = ['graph query', 'graph related', 'check', 'gate', 'update', 'render'];
 
 interface Route {
 	name: string;
@@ -176,6 +181,42 @@ async function dispatch(args: string[]): Promise<number> {
 			return relatedCommand(
 				await resolveRoot(values.root as string | undefined),
 				positionals[0],
+				values.json as boolean
+			);
+		}
+		case 'render': {
+			const { values, positionals } = parseStrict(rest, RENDER_OPTIONS, true, usage);
+			if (values.help) {
+				process.stdout.write(`${usage}\n`);
+				return EXIT_OK;
+			}
+			if (positionals.length !== 1) {
+				throw usageError(
+					positionals.length
+						? `render takes one argument, got ${positionals.length}: ${positionals.join(' ')}. A path containing spaces has to be quoted.`
+						: 'render needs a path to a markdown file, or - for stdin',
+					usage
+				);
+			}
+			const site = values.site as string | undefined;
+			// Checked here rather than where it is used, so a typo is exit 2
+			// beside every other bad flag instead of an internal error from the
+			// URL parse three calls deeper.
+			if (site !== undefined && !URL.canParse(site)) {
+				throw usageError(`--site takes an origin like https://example.com, not ${site}`, usage);
+			}
+			// Imported here rather than at the top of the file: `render` is the
+			// one verb that needs the markdown pipeline, and
+			// `@astrojs/markdown-remark` is a peer dependency. A static import
+			// would make every other verb load it — a startup cost on every
+			// `check`, and an outright failure in a project that has the CLI but
+			// not the renderer, which is the opposite of the promise the rest of
+			// this CLI makes about running without Astro.
+			const { renderCommand } = await import('./render.ts');
+			return renderCommand(
+				await resolveRoot(values.root as string | undefined),
+				positionals[0],
+				site,
 				values.json as boolean
 			);
 		}

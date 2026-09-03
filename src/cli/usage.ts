@@ -5,6 +5,7 @@ export const USAGE = `commune — query the content graph without an Astro proce
 Usage:
   commune [--root <dir>] graph query   [filters] [--json]
   commune [--root <dir>] graph related <path|text|-> [--json]
+  commune [--root <dir>] render        <path|-> [--site <origin>] [--json]
   commune [--root <dir>] update        [--recent <duration|date>] [--write] [--json]
   commune [--root <dir>] check         [--json]
   commune [--root <dir>] gate          [--dist <dir>] [--json]
@@ -28,6 +29,11 @@ graph query filters (any-of within a flag, all-of across flags):
                                                 asks for them.
   --recent <7d|2w|2026-09-01>                   Updated on or since then. Entries
                                                 with no date are not returned.
+
+render options:
+  --site <origin>   The wiki's own origin, which is what decides whether a link
+                    is external. Read from the Astro config when it declares
+                    one; otherwise https://example.com, and it says so.
 
 update options:
   --recent <7d|2w|2026-09-01>   What to roll up. Default: 7d.
@@ -58,6 +64,13 @@ Scaffold a dated update entry from the pages that changed. The draft is
 printed on stdout unless --write is given, and --write refuses to overwrite an
 update that already exists. \`summary\` is left empty on purpose: summarizing a
 week is a judgement, and this command has none.`,
+	render: `Usage: commune [--root <dir>] render <path|-> [--site <origin>] [--json]
+
+Render markdown to HTML through the site's own pipeline, with WikiLinks
+resolved against the content tree and external links marked. Frontmatter is
+split off and not rendered. --json adds the links the document contains and
+the names among them that resolve to nothing — which the HTML cannot tell
+you, since an unresolved WikiLink renders as plain text.`,
 	check: 'Usage: commune [--root <dir>] check [--json]',
 	gate: `Usage: commune [--root <dir>] gate [--dist <dir>] [--json]
 

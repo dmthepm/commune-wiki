@@ -18,9 +18,6 @@
  * still an exact match — just of the right string.
  */
 
-import { readFile, stat } from 'node:fs/promises';
-import path from 'node:path';
-import matter from 'gray-matter';
 import {
 	buildGraph,
 	buildLinkLookup,
@@ -32,8 +29,9 @@ import {
 	type CollectionName,
 	type ContentEntry,
 } from '../lib/graph.ts';
-import { SCHEMA, writeJson, writeLines } from './render.ts';
-import { EXIT_OK, failure } from './errors.ts';
+import { SCHEMA, writeJson, writeLines } from './output.ts';
+import { EXIT_OK } from './errors.ts';
+import { readSource } from './source.ts';
 
 /**
  * Shortest name worth matching, measured after normalisation. Below this, a
@@ -48,14 +46,6 @@ interface Reference {
 	file: string;
 }
 
-interface Source {
-	kind: 'file' | 'text' | 'stdin';
-	file?: string;
-	urlPath?: string;
-	text: string;
-	frontmatter: Record<string, unknown>;
-}
-
 function toReference(entry: ContentEntry): Reference {
 	return {
 		urlPath: entry.urlPath,
@@ -63,68 +53,6 @@ function toReference(entry: ContentEntry): Reference {
 		collection: entry.collection,
 		file: entry.file,
 	};
-}
-
-/**
- * Work out whether the positional is a path, stdin, or literal prose.
- *
- * A path is tried against the root before the cwd, because the root is the
- * vault being asked about and the cwd is wherever the operator happens to be
- * standing. `-` is stdin, which is how a draft that is not a file yet gets
- * asked "what does this connect to".
- */
-async function readSource(input: string, root: string): Promise<Source> {
-	if (input === '-') {
-		const text = await readStdin();
-		const { content, data } = matter(text);
-		return { kind: 'stdin', text: content, frontmatter: data };
-	}
-
-	const candidates = path.isAbsolute(input)
-		? [input]
-		: [path.join(root, input), path.resolve(input)];
-
-	for (const candidate of candidates) {
-		if (!(await isFile(candidate))) continue;
-
-		let source: string;
-		try {
-			source = await readFile(candidate, 'utf8');
-		} catch (error) {
-			throw failure('EPARSE', `cannot read ${candidate}: ${(error as Error).message}`);
-		}
-
-		let parsed;
-		try {
-			parsed = matter(source);
-		} catch (error) {
-			throw failure('EPARSE', `cannot parse frontmatter in ${candidate}: ${(error as Error).message}`);
-		}
-
-		const relative = path.relative(root, candidate).split(path.sep).join('/');
-		return {
-			kind: 'file',
-			file: relative,
-			text: parsed.content,
-			frontmatter: parsed.data,
-		};
-	}
-
-	return { kind: 'text', text: input, frontmatter: {} };
-}
-
-async function isFile(candidate: string): Promise<boolean> {
-	try {
-		return (await stat(candidate)).isFile();
-	} catch {
-		return false;
-	}
-}
-
-async function readStdin(): Promise<string> {
-	const chunks: Buffer[] = [];
-	for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-	return Buffer.concat(chunks).toString('utf8');
 }
 
 const WHITESPACE = /\s/;
@@ -226,7 +154,7 @@ export async function relatedCommand(root: string, input: string, json: boolean)
 	const byUrl = buildUrlLookup(entries);
 	const byUrlPath = new Map(entries.map((entry) => [entry.urlPath, entry]));
 
-	const source = await readSource(input, root);
+	const source = await readSource(input, root, { allowText: true });
 	// A file that happens to be a graph entry gets its inbound links too; a
 	// draft outside the vault, or raw text, has none by definition.
 	const self = source.file ? entries.find((entry) => entry.file === source.file) : undefined;

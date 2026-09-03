@@ -237,6 +237,8 @@ commune graph query --recent 7d
 commune update --recent 7d
 commune graph related src/content/notes/hello.md
 echo "a rough dump that mentions World" | commune graph related -
+commune render src/content/notes/hello.md
+echo '[[World]]' | commune render -
 commune gate
 ```
 
@@ -244,6 +246,7 @@ commune gate
 | --- | --- |
 | `graph query` | Every entry with its edges and dates. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`, `--unreferenced`, `--recent`. |
 | `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. Titles are matched across whitespace and case, so a dictated "noon tide" still finds `Noontide`. |
+| `render <path\|->` | The markdown as HTML, through the site's own pipeline: WikiLinks resolved, external links marked. Takes stdin, so you can see a draft before it is a page. |
 | `update` | Scaffold a dated update entry from what changed. Prints it; `--write` files it. |
 | `check` | Broken links, duplicate names, ambiguous targets, non-canonical titles. |
 | `gate` | Run after a build, against the built site. |
@@ -253,6 +256,8 @@ commune gate
 `--recent` takes `7d`, `2w` or a date, and reports the day it resolved to in the summary — which is what a weekly update job needs, since `7d` means a different day tomorrow. Entries with no date at all are not returned: "unchanged since Monday" and "nobody knows" are different answers.
 
 Every verb takes `--json` and emits one document on stdout with everything else on stderr. The human-readable text is the fallback rendering; the JSON is the contract.
+
+`render` is the site's own markdown processor with no Astro process around it — the same `communeMarkdown()` the config hands to `markdown.processor`, so the HTML is the page's HTML rather than a lookalike. It needs the site's origin to decide which links are external: `--site` says it, and without one the Astro config is read for a `site` declaration, falling back to `https://example.com` with a line on stderr saying so. `--json` adds the document's links and the names among them that resolve to nothing, which the HTML cannot tell you — an unresolved WikiLink renders as plain text, exactly as it does on the site.
 
 `update` is the only verb that can write, and it only does so when asked: without `--write` the entry goes to stdout, and with it the command refuses to overwrite an update that already exists. `summary` comes out empty — summarizing a week is a judgement, and the CLI has none.
 

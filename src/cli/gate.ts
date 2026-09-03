@@ -36,7 +36,7 @@ import {
 	type ContentEntry,
 } from '../lib/graph.ts';
 import { EXIT_FAILED, EXIT_OK, failure } from './errors.ts';
-import { SCHEMA, writeJson } from './render.ts';
+import { SCHEMA, writeJson } from './output.ts';
 
 /** Which assertion failed, and what it saw. */
 export interface GateFailure {
