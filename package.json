@@ -2,7 +2,7 @@
   "name": "commune-publish",
   "type": "module",
   "version": "1.0.0",
-  "description": "Commune public wiki - build in public documentation",
+  "description": "An Astro wiki engine with WikiLinks, sliding panes, backlinks and static search, plus a commune CLI that queries the content graph and checks links",
   "license": "MIT",
   "bin": {
     "commune": "bin/commune.mjs"

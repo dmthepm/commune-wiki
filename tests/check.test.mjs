@@ -73,10 +73,10 @@ test('a piped wikilink is non-canonical even though it renders', async () => {
 	assert.match(finding.message, /\[\[Beta\|the beta note\]\]/);
 });
 
-test('the engine has 32 broken links and no errors', async () => {
+test('the engine has 30 broken links and no errors', async () => {
 	const list = await findings();
 
-	assert.equal(byRule(list, 'broken-link').length, 32);
+	assert.equal(byRule(list, 'broken-link').length, 30);
 	assert.equal(list.filter((finding) => finding.severity === 'error').length, 0);
 });
 
@@ -99,14 +99,14 @@ test('check --json reports counts by rule and exits 0 despite findings', async (
 	assert.equal(payload.findings.length, 5);
 });
 
-test('check on the engine reports 32 warnings and 0 errors', async () => {
+test('check on the engine reports 30 warnings and 0 errors', async () => {
 	const { code, stdout } = await commune('check', '--json');
 	const { summary } = JSON.parse(stdout);
 
 	assert.equal(code, 0);
-	assert.equal(summary.warnings, 32);
+	assert.equal(summary.warnings, 30);
 	assert.equal(summary.errors, 0);
-	assert.equal(summary.byRule['broken-link'], 32);
+	assert.equal(summary.byRule['broken-link'], 30);
 	assert.equal(summary.entries, 11);
 	assert.equal(summary.edges, 41);
 });

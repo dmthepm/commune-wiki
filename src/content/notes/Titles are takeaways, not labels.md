@@ -17,4 +17,4 @@ Good titles let the agent draft better suggestions in [[AI shapes voice dumps in
 
 [[Evergreen Notes]] need atomic titles. Clear titles make individual notes more discoverable and linkable ([[Notes beat posts for showing progress]]). Descriptive titles create natural connection points ([[Associative linking over hierarchies]]).
 
-Strong titles improve [[I hope people will pay for a working mind]] because readers can quickly scan the [[Ledger replaces feeds]] and understand what changed without opening every note.
+Strong titles let readers quickly scan the [[Ledger replaces feeds]] and understand what changed without opening every note.

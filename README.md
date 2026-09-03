@@ -1,10 +1,8 @@
-# Commune Wiki - Personal Knowledge Management Static Site Generator
+# Commune Wiki
 
-**Open-source Astro-based wiki** with Andy Matuschak-style sliding panes, WikiLinks, backlinks, and semantic search.
+An Astro wiki engine — WikiLinks, sliding panes, backlinks, static search — and a `commune` CLI that queries the content graph and checks links.
 
-**License**: MIT  
-**Status**: Active Development  
-**Live Example**: [devonmeadows.com](https://devonmeadows.com)
+**License**: MIT · **Live example**: [devonmeadows.com](https://devonmeadows.com)
 
 ---
 
@@ -44,7 +42,7 @@
 
 ### Prerequisites
 
-- Node.js 20+ and pnpm
+- Node.js 22.18+ and pnpm
 
 ### Install & Run
 
@@ -292,14 +290,12 @@ pnpm preview       # Preview production build
 
 ### Testing
 
-No automated tests yet. Validate with:
-
 ```bash
-# Build and check for errors
-pnpm build 2>&1 | grep -E "(error|warning)"
+# Run the test suite
+pnpm test
 
-# Check WikiLink resolution
-pnpm build 2>&1 | grep "Broken link"
+# Check the content graph (broken links, duplicate names, ambiguous targets)
+node bin/commune.mjs check --json
 
 # Preview before deploying
 pnpm preview
@@ -397,16 +393,11 @@ MIT - See [LICENSE](LICENSE) file.
 - Commercial use allowed, with no obligation to open-source your changes
 - Keep the copyright notice; that's the whole obligation
 
-**Business model**:
-- OSS core (static site generator) - MIT
-- Future cloud hosting service - Paid (like Ghost, Plausible)
-
 ---
 
 ## 🔗 Related Projects
 
 **Commune Ecosystem**:
-- **Commune Agent** - AI agent stack for wiki automation (private repo, build in public)
 - **Devon's Homelab** - Personal infrastructure (private, showcase only)
 
 **Inspired by**:

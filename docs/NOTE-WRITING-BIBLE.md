@@ -113,21 +113,6 @@ This document codifies the principles for writing notes in Devon's wiki. As we e
 - Knows projects: Commune, Ads Lab, Awake Happy
 - Respects: "Voice in, approvals out" - nothing public without approval
 
-## Depth Gating (Future)
-
-### What gets gated
-- AI summaries of commit history
-- RAG search across all notes
-- Evolution story of a note over time
-- Voice clips in tooltips
-- "Ask My Brain" Q&A feature
-
-### Why gate
-- Computation costs money
-- Super users want unlimited, so they buy the box
-- Free tier gets you in, paid tier unblocks
-- Box = self-host, own data, use Ollama
-
 ## The Vision
 
 This wiki is:
