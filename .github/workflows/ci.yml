@@ -63,9 +63,21 @@ jobs:
           tmp=$(mktemp -d)
           git clone --bare "$GITHUB_WORKSPACE" "$tmp/bare.git"
           git -C "$tmp/bare.git" update-ref refs/heads/ci-install "$GITHUB_SHA"
+          name=$(node -p "require('$GITHUB_WORKSPACE/package.json').name")
+          spec="git+file://$tmp/bare.git#$GITHUB_SHA"
           mkdir "$tmp/consumer" && cd "$tmp/consumer"
-          pnpm init >/dev/null
-          pnpm add "git+file://$tmp/bare.git#$GITHUB_SHA"
+          # pnpm 10 will not run a git dependency's `prepare` unless the
+          # consumer allowlists the package, and `prepare` is what compiles
+          # `lib/`. The entry is `name@spec`: a bare name approves a registry
+          # package, never a git one. Written here rather than assumed, because
+          # it is what a real consumer has to write — see README, "Installing
+          # from git".
+          node -e 'const fs = require("fs");
+            fs.writeFileSync("package.json", JSON.stringify({
+              name: "ci-install-consumer", version: "0.0.0", private: true,
+              pnpm: { onlyBuiltDependencies: [process.argv[1] + "@" + process.argv[2]] },
+            }, null, 2) + "\n");' "$name" "$spec"
+          pnpm add "$spec"
           ./node_modules/.bin/commune --help
           ls node_modules/*/lib/cli/main.js
 

@@ -64,6 +64,49 @@ pnpm build
 pnpm preview
 ```
 
+### Installing from git
+
+This package is not on npm yet, so it is installed from a git ref:
+
+```bash
+pnpm add github:dmthepm/commune-wiki#<tag>
+```
+
+**pnpm consumers need one extra line.** The Node-side code ships compiled, and
+the compile runs in the package's `prepare` script. pnpm 10 refuses to run a
+git-hosted dependency's build scripts unless your project names the package, so
+without this the install fails with `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`:
+
+```jsonc
+// your package.json
+{
+  "dependencies": {
+    "commune-publish": "github:dmthepm/commune-wiki#<tag>"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["commune-publish@github:dmthepm/commune-wiki#<tag>"]
+  }
+}
+```
+
+Note the entry is `name@spec`, not the bare name — a bare name approves a
+package from the registry, and for a git dependency pnpm matches the whole
+specifier, so a name on its own is silently not a match. It has to be the same
+specifier you wrote in `dependencies`, which means it changes when you bump the
+tag. The same entry works in `pnpm-workspace.yaml` if you keep pnpm settings
+there.
+
+**Older pnpm 10 wants the other spelling.** Around 10.19 the `name@spec` form is
+rejected with `ERR_PNPM_INVALID_VERSION_UNION` ("Use exact versions only") and
+the bare `"commune-publish"` is what works — those releases also approve a git
+dependency's build scripts on their own, so you may need nothing at all. Do not
+guess which side of the line you are on: run the install and read the error.
+pnpm prints the exact entry your version expects.
+
+npm and yarn need nothing extra — they run a git dependency's `prepare` without
+asking. All of this goes away once the package is published to npm: a published
+tarball ships `lib/` already built, so there is no `prepare` to approve.
+
 ### Create Your First Note
 
 ```bash

@@ -12,8 +12,11 @@
  *     invisible from any checkout.
  *
  * `git+file://` is the same code path a `github:` dependency takes, so this is
- * the real thing rather than a simulation of it. It is also the slowest test
- * here by a wide margin: pnpm clones, installs dev dependencies and compiles.
+ * the real thing rather than a simulation of it — including pnpm 10's rule that
+ * a git dependency may not run build scripts unless the consumer allowlists it,
+ * which this package needs because `prepare` is what compiles `lib/`. It is
+ * also the slowest test here by a wide margin: pnpm clones, installs dev
+ * dependencies and compiles.
  *
  * It installs from a **bare clone this test makes**, not from the working
  * checkout, because the checkout's shape is not ours to control. On a pull
@@ -36,7 +39,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -125,15 +128,58 @@ test('a git install builds and packs lib/, so the bin runs', async (t) => {
 		// ordinary repository rather than against whatever HEAD happens to be.
 		await sh('git', ['update-ref', `refs/heads/${REF}`, sha], { cwd: bare });
 
+		// The package name is read rather than spelled out, here and below, so
+		// #7's rename does not quietly turn this into a test of nothing.
+		const { name } = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'));
+
+		// `onlyBuiltDependencies` is not optional and not ours to skip. pnpm 10
+		// refuses to run a git-hosted dependency's `prepare` unless the consumer
+		// names it — `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` — and this package's
+		// `prepare` is what compiles `lib/`, so without this line the install
+		// fails outright. Every pnpm consumer needs it until we publish to npm;
+		// README says so under "Installing from git".
+		//
+		// The spelling of that entry is not settled across pnpm 10, so this tries
+		// both rather than pinning one. Measured with an isolated store per
+		// attempt:
+		//
+		//   10.34.5  `name@spec` works; a bare name is silently not a match for
+		//            a git dependency and the install is refused.
+		//   10.19.0  a bare name works; `name@spec` is rejected outright with
+		//            `ERR_PNPM_INVALID_VERSION_UNION` ("Use exact versions only").
+		//
+		// Trying the current spelling first and falling back needs no table of
+		// which pnpm changed when, and a consumer does not have to care either:
+		// pnpm's own error prints the exact line their version wants.
+		const spec = `git+file://${bare}#${sha}`;
 		await mkdir(consumer, { recursive: true });
-		await sh('pnpm', ['init'], { cwd: consumer });
-		await sh('pnpm', ['add', `git+file://${bare}#${sha}`], { cwd: consumer });
+
+		const allow = async (entry) =>
+			writeFile(
+				path.join(consumer, 'package.json'),
+				JSON.stringify(
+					{
+						name: 'commune-install-consumer',
+						version: '0.0.0',
+						private: true,
+						pnpm: { onlyBuiltDependencies: [entry] },
+					},
+					null,
+					2
+				) + '\n'
+			);
+
+		await allow(`${name}@${spec}`);
+		try {
+			await sh('pnpm', ['add', spec], { cwd: consumer });
+		} catch (error) {
+			if (!/ERR_PNPM_INVALID_VERSION_UNION/.test(error.message)) throw error;
+			await allow(name);
+			await sh('pnpm', ['add', spec], { cwd: consumer });
+		}
 
 		// `files` packed the compiled output. Checked by path rather than by
 		// running the bin, because a missing `lib/` is the specific regression.
-		// The directory is named for the package, read rather than spelled out
-		// so #7's rename does not quietly turn this into a test of nothing.
-		const { name } = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'));
 		const installed = path.join(consumer, 'node_modules', name, 'lib/cli/main.js');
 		assert.ok((await stat(installed)).isFile(), `${installed} was not packed`);
 
