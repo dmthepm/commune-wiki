@@ -81,10 +81,10 @@ without this the install fails with `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`:
 // your package.json
 {
   "dependencies": {
-    "commune-publish": "github:dmthepm/commune-wiki#<tag>"
+    "@dmthepm/commune": "github:dmthepm/commune-wiki#<tag>"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["commune-publish@github:dmthepm/commune-wiki#<tag>"]
+    "onlyBuiltDependencies": ["@dmthepm/commune@github:dmthepm/commune-wiki#<tag>"]
   }
 }
 ```
@@ -98,7 +98,7 @@ there.
 
 **Older pnpm 10 wants the other spelling.** Around 10.19 the `name@spec` form is
 rejected with `ERR_PNPM_INVALID_VERSION_UNION` ("Use exact versions only") and
-the bare `"commune-publish"` is what works — those releases also approve a git
+the bare `"@dmthepm/commune"` is what works — those releases also approve a git
 dependency's build scripts on their own, so you may need nothing at all. Do not
 guess which side of the line you are on: run the install and read the error.
 pnpm prints the exact entry your version expects.

@@ -12,14 +12,23 @@
 
 import { visit } from 'unist-util-visit';
 import type { Root } from 'mdast';
-import { getLinkLookup } from './lib/graph.ts';
+import { getLinkLookup, type GraphOptions } from './lib/graph.ts';
+
+export type WikiLinksOptions = GraphOptions;
 
 /**
- * Remark plugin function
+ * Remark plugin function.
+ *
+ * Takes the project root rather than assuming one, because the plugin resolves
+ * links against the content tree of whichever project is being built — which,
+ * once this is a package in somebody else's `node_modules`, is not the
+ * directory this file lives in. Omitting it falls back to `process.cwd()`,
+ * which is also Astro's own default for `root`, so a consumer who does not
+ * pass one gets the project they ran `astro build` in.
  */
-export default function remarkWikiLinks() {
+export default function remarkWikiLinks({ root }: WikiLinksOptions = {}) {
 	return async function transformer(tree: Root) {
-		const lookup = await getLinkLookup();
+		const lookup = await getLinkLookup({ root });
 
 		visit(tree, 'text', (node, index, parent) => {
 			if (!parent || index === undefined) return;

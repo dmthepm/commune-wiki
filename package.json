@@ -1,11 +1,44 @@
 {
-  "name": "commune-publish",
+  "name": "@dmthepm/commune",
   "type": "module",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "An Astro wiki engine with WikiLinks, sliding panes, backlinks and static search, plus a commune CLI that queries the content graph and checks links",
   "license": "MIT",
+  "keywords": [
+    "astro",
+    "astro-integration",
+    "withastro",
+    "wiki",
+    "wikilinks",
+    "backlinks"
+  ],
   "bin": {
     "commune": "bin/commune.mjs"
+  },
+  "exports": {
+    "./graph": {
+      "types": "./lib/lib/graph.d.ts",
+      "default": "./lib/lib/graph.js"
+    },
+    "./astro": {
+      "types": "./lib/integration.d.ts",
+      "default": "./lib/integration.js"
+    },
+    "./markdown": {
+      "types": "./lib/markdown.d.ts",
+      "default": "./lib/markdown.js"
+    },
+    "./remark": {
+      "types": "./lib/remark-wikilinks.d.ts",
+      "default": "./lib/remark-wikilinks.js"
+    },
+    "./rehype": {
+      "types": "./lib/rehype-external-links.d.ts",
+      "default": "./lib/rehype-external-links.js"
+    },
+    "./components/*": "./src/components/*",
+    "./styles/*": "./src/styles/*",
+    "./package.json": "./package.json"
   },
   "files": [
     "bin",
@@ -34,27 +67,32 @@
     "start": "astro dev",
     "build": "pnpm build:lib && astro build && node bin/commune.mjs gate",
     "test": "node --test \"tests/**/*.test.mjs\"",
+    "test:consumer": "pnpm --dir tests/fixtures/consumer install && pnpm --dir tests/fixtures/consumer build",
     "preview": "astro preview",
     "astro": "astro"
   },
+  "peerDependencies": {
+    "@astrojs/markdown-remark": "^7.3.0",
+    "astro": "^7.0.0"
+  },
   "dependencies": {
+    "github-slugger": "^2.0.0",
+    "globby": "^14.0.0",
+    "gray-matter": "^4.0.3",
+    "unist-util-visit": "^5.0.0"
+  },
+  "devDependencies": {
     "@astrojs/check": "^0.9.0",
     "@astrojs/markdown-remark": "^7.3.0",
     "@astrojs/sitemap": "^3.7.4",
     "@tailwindcss/typography": "^0.5.10",
-    "astro": "^7.2.10",
-    "autoprefixer": "^10.4.16",
-    "github-slugger": "^2.0.0",
-    "globby": "^14.0.0",
-    "gray-matter": "^4.0.3",
-    "tailwindcss": "^3.4.0",
-    "unist-util-visit": "^5.0.0"
-  },
-  "devDependencies": {
     "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4",
     "@types/node": "^22.20.1",
+    "astro": "^7.2.10",
+    "autoprefixer": "^10.4.16",
     "puppeteer": "^24.25.0",
+    "tailwindcss": "^3.4.0",
     "typescript": "^5.6.0"
   }
 }
