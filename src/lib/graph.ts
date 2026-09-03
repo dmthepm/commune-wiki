@@ -107,6 +107,30 @@ export function toUrlPath(
 	return { slug, urlPath: `/${collection}/${slug}/` };
 }
 
+/**
+ * Convert a canonical URL path to the path of its markdown twin.
+ *
+ * Every note is served twice at one URL: `/notes/cake/` renders the page,
+ * `/notes/cake.md` returns the source file. The mapping is pure string work —
+ * drop the trailing slash, append `.md` — so the build writer, the page
+ * templates and any future route can all agree on it without touching disk.
+ * The home page (`/`) has no name to hang the suffix on, so it gets `index.md`.
+ *
+ * The result is always relative, with no leading slash: callers join it onto
+ * `dist/` or prefix it with `/` for a URL. Traversal segments are rejected
+ * rather than normalized, since a `url` frontmatter is author-controlled and a
+ * `..` in it would otherwise let a build write outside its output directory.
+ */
+export function toMarkdownPath(urlPath: string): string {
+	const segments = urlPath.split('/').filter((segment) => segment.length > 0);
+
+	if (segments.some((segment) => segment === '.' || segment === '..')) {
+		throw new Error(`Cannot map a URL path with a relative segment: ${urlPath}`);
+	}
+
+	return segments.length === 0 ? 'index.md' : `${segments.join('/')}.md`;
+}
+
 /** Coerce a frontmatter date to `yyyy-mm-dd`, so build output has no timestamp drift. */
 export function normalizeDate(value: unknown): string | undefined {
 	if (!value) return undefined;
