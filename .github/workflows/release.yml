@@ -1,0 +1,158 @@
+name: Release
+
+# Two jobs, one trigger. release-please watches `main` and keeps a release pull
+# request open with the next version and the changelog in it; merging that PR is
+# the release. On the run that sees the merge, release-please tags `vX.Y.Z`,
+# cuts the GitHub Release, and reports `release_created: true` — which is what
+# starts the publish job below. Nothing here fires on a hand-cut tag: the tag is
+# an output of this workflow, not an input to it.
+#
+# The workflow *filename* is load-bearing. npm's trusted publisher entry for
+# `@dmthepm/commune` names `release.yml`, and npm matches it exactly: "Verify
+# that the workflow filename matches exactly what you configured on npmjs.com,
+# including the `.yml` extension. All fields are case-sensitive and must be
+# exact." (docs.npmjs.com/trusted-publishers, fetched 2026-09-03.) Renaming this
+# file breaks publishing until the entry on npmjs.com is edited to match. See
+# RELEASE-SETUP.md.
+
+on:
+  push:
+    branches: [main]
+
+# Default to nothing; each job asks for what it needs.
+permissions: {}
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # The release PR, the tag, the GitHub Release.
+      contents: write
+      pull-requests: write
+
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      # v4 is the current major (googleapis/release-please-action, read
+      # 2026-09-03). Manifest mode rather than the `release-type` input, so the
+      # release configuration is a reviewable file in the repo rather than a
+      # line of YAML: `release-please-config.json` and
+      # `.release-please-manifest.json`, both at the root and both the action's
+      # defaults — named here anyway so they are greppable from the workflow.
+      #
+      # `secrets.GITHUB_TOKEN` is the default and is what this uses. It needs
+      # the repository setting "Allow GitHub Actions to create and approve pull
+      # requests", which is off by default on personal-account repositories;
+      # without it the first run fails on the PR create. RELEASE-SETUP.md has
+      # the clicks.
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    # A push to `main` that only opens or updates the release PR produces
+    # nothing to publish. This is true exactly on the run that merged it.
+    if: needs.release-please.outputs.release_created == 'true'
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # The OIDC token npm exchanges for a short-lived publish credential, and
+      # the one provenance is signed against. Without it, trusted publishing
+      # cannot authenticate and `--provenance` cannot attest.
+      id-token: write
+
+    steps:
+      # The tag, not `main`. `main` has already moved on by the time this runs
+      # in a busy week, and what gets published has to be the commit the
+      # release notes describe.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # `.nvmrc` is `22`, which resolves to the latest 22.x — comfortably past
+      # the 22.14.0 floor trusted publishing requires. Kept in step with
+      # `ci.yml` on purpose: the release is meant to run the same toolchain the
+      # pull request was green on.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # "Trusted publishing requires npm CLI version 11.5.1 or later and Node
+      # version 22.14.0 or higher." (docs.npmjs.com/trusted-publishers, fetched
+      # 2026-09-03.) Node 22 ships npm 10.9.x, so the npm that publishes has to
+      # be upgraded here — the Node version is fine, the npm bundled with it is
+      # not.
+      - run: npm install --global npm@latest
+
+      - run: pnpm install --frozen-lockfile
+
+      # The tag was green when it was a pull request, and this is not a
+      # substitute for that. It is the guard against publishing a tarball whose
+      # `lib/` does not match its source: `pretest` runs `build:lib`, the tests
+      # run against the result, and only then does anything reach the registry.
+      - run: pnpm test
+
+      # Redundant after `pretest`, and kept because it is the step whose failure
+      # is unambiguous. A tarball ships `lib/`; if `tsc` cannot produce it, the
+      # publish must not happen, and reading that from a `pretest` failure buried
+      # in test output is worse than reading it from here.
+      - run: pnpm build:lib
+
+      # `npm publish`, not `pnpm publish`. pnpm does not implement publishing —
+      # it shells out to whatever `npm` is on PATH ("`pnpm publish` runs `npm
+      # publish` under the hood", zkochan, pnpm/pnpm#9812, closed 2025-07-30) —
+      # and the last word on that thread (2026-01-14) is a report of trusted
+      # publishing failing under `pnpm publish` on a GitHub runner with npm 11.6
+      # while plain `npm publish` succeeded on the same setup. Installing,
+      # testing and building stay pnpm's; only this one call is npm's, so the
+      # OIDC exchange happens in the client that implements it.
+      #
+      # `--access public` because the package is scoped and scoped packages
+      # default to restricted. It is also in `publishConfig`; the flag is here
+      # too because npm's own guide spells the first publish that way.
+      #
+      # `--provenance` is redundant under trusted publishing, which generates
+      # provenance by default, and is not redundant under the token fallback
+      # below — so it is written once and covers both.
+      #
+      # THE FALLBACK, and the reason it exists: npm cannot publish a package's
+      # *first* version over OIDC. A trusted publisher is configured in a
+      # package's settings on npmjs.com, and there are no settings for a package
+      # that does not exist yet; npm/cli#8544 ("Allow publishing initial version
+      # with OIDC") has been open since 2025-09-01 and was last updated
+      # 2026-08-05, still open. So `v0.1.0` publishes with a token, and every
+      # release after it publishes with none. The switch is automatic in both
+      # directions and needs no edit here: "The npm CLI automatically detects
+      # OIDC environments and uses them for authentication before falling back
+      # to traditional tokens" (docs.npmjs.com/trusted-publishers, fetched
+      # 2026-09-03) — so once the trusted publisher exists, OIDC wins even if
+      # the secret is still around, and deleting the secret is hygiene rather
+      # than a cutover. `secrets.NPM_TOKEN` reads as the empty string when the
+      # secret does not exist, which is the steady state and the intended one.
+      #
+      # No `set -x` in this step, ever: it would print the token.
+      - name: publish to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "NPM_TOKEN is set — publishing with the token fallback (see RELEASE-SETUP.md)."
+            npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
+          else
+            echo "No NPM_TOKEN — publishing over OIDC as the trusted publisher."
+          fi
+          npm publish --provenance --access public
