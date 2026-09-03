@@ -32,6 +32,12 @@ dist/
 npm-debug.log*
 pnpm-debug.log*
 
+# The site-wide summary the build writes beside `backlinks.json`. Generated,
+# not committed: its `lastUpdated` is derived from git history, so it changes
+# on the very commit that changes it and a committed copy would be stale
+# exactly when it mattered.
+public/site.json
+
 # The fixture consumer's generated artifacts. The integration writes
 # `backlinks.json` into the public directory as well as into `dist/`, for dev
 # server parity; in the fixture that directory holds nothing else, so it is

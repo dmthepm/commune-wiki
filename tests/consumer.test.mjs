@@ -25,6 +25,7 @@
  *     `updates` collection as much as for notes;
  *   - `Updates.astro` rendered the changelog card into the HTML, with no
  *     client script behind it;
+ *   - `site.json` landed beside `backlinks.json` with the site's newest date;
  *   - and the search modal's semantic tier stays absent unless a page asks for
  *     it — the one assertion here that reads a second route, because proving
  *     the opt-in is a seam takes a project on both sides of it.
@@ -140,6 +141,18 @@ test('a consumer project installs this package and builds a wiki with it', async
 		'/notes/hello/',
 		'/notes/world/',
 	]);
+
+	// The site-wide answer to "what changed", beside the graph and not inside
+	// it. The fixture's one update is its newest dated entry.
+	// Not a fixed date: the fixture lives in this repository, so its notes are
+	// dated from history and every commit here moves the number. What is fixed
+	// is that the file exists, counts every entry, and is at least as new as the
+	// one date the fixture writes down.
+	const site = JSON.parse(await readFile(path.join(DIST, 'site.json'), 'utf8'));
+	assert.equal(site.entries, 3);
+	assert.match(site.lastUpdated, /^\d{4}-\d{2}-\d{2}$/);
+	assert.ok(site.lastUpdated >= '2026-01-05', site.lastUpdated);
+	assert.match(site.lastModifiedInGit, /^\d{4}-\d{2}-\d{2}$/);
 
 	// The card is markup by the time the page is served: no fetch, no client
 	// script, the newest updates already in the HTML.

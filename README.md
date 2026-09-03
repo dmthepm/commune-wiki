@@ -100,7 +100,38 @@ That route is a starting point, not an interface. The package ships the mechanis
 - **External links.** Anything off your `site` origin gets `target="_blank" rel="noopener noreferrer"` without you marking it up.
 - **The graph as a library.** `@dmthepm/commune/graph` exports the content loader, the link resolver and the graph builder. The Astro build and the CLI both call it. That is the point: one resolver, not two that drift.
 - **Updates.** A fourth collection, `src/content/updates/`, for the dated entries that say what changed. `Updates.astro` renders the newest few as a card. See [Updates](#updates) below.
+- **Honest dates.** `updated:` in frontmatter wins where you wrote one; where you did not, the date comes from the file's last commit, and from its mtime in a tree with no history. Every entry says which, so a page can show the honest one. See [Dates](#dates) below.
+- **A site-wide last-updated.** The build writes `site.json` beside `backlinks.json`: the newest date across the whole wiki, which entry it belongs to, and the newest commit date whatever the entries claim.
 - **Components and stylesheets.** `@dmthepm/commune/components/*.astro` and `@dmthepm/commune/styles/*.css`, shipped as source. These are the components off my own site rather than a theme system — take them as a starting point, not an API.
+
+## Dates
+
+Two frontmatter fields decide a page's dates, and neither is required:
+
+```markdown
+---
+created: 2025-10-09
+updated: 2026-01-21
+---
+```
+
+Where they are absent the engine reads the repository instead — `updated` is the file's last commit date, `created` its first — from one `git log` walk per build. A tree with no history at all (a tarball, a `COPY` in a Dockerfile, a host with no `git`) falls back to file mtimes rather than failing the build.
+
+Every entry carries `updatedSource`, one of `frontmatter`, `git`, `mtime` or `none`, and `modifiedInGit`, which is the commit date whatever `updated` ended up being. The pair is the point: a note whose `updated:` says January and whose last commit was September changed on a day nobody wrote down, and a page that shows both says so.
+
+`commune graph query --json` carries all four fields. The build writes the site-wide version to `site.json`:
+
+```json
+{
+  "lastUpdated": "2026-09-02",
+  "lastUpdatedPath": "/about-this-wiki/",
+  "lastUpdatedSource": "frontmatter",
+  "lastModifiedInGit": "2026-09-03",
+  "entries": 12
+}
+```
+
+It is a sibling of `backlinks.json` rather than a key inside it, because every top-level key of `backlinks.json` is a urlPath and its readers walk it as one. Generated, not committed: a date derived from history changes on the same commit that changes it, so a committed copy would be stale exactly when it mattered. Add `public/site.json` to your `.gitignore`.
 
 ## Updates
 

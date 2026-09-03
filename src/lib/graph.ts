@@ -1039,6 +1039,72 @@ export function formatDiagnostic(diagnostic: Diagnostic): string {
 }
 
 /**
+ * What the whole site says about itself, as one small object.
+ *
+ * Written to `site.json` beside `backlinks.json`, and deliberately not *into*
+ * it. Two reasons, and either alone would settle it:
+ *
+ *   - Every top-level key of `backlinks.json` is a urlPath. Two of its readers
+ *     walk it with `Object.entries` and treat what they find as a node, so a
+ *     `lastUpdated` string at the top level is not a new field — it is a
+ *     malformed entry in a runtime contract.
+ *   - `backlinks.json` is committed, and this value moves with history: it
+ *     changes on the commit that changes it, so a committed copy is stale the
+ *     moment it is right. `site.json` is generated and ignored, like `dist/`.
+ */
+export interface SiteSummary {
+	/** The newest `updated` across every public entry. Absent if nothing has a date. */
+	lastUpdated?: string;
+	/** The entry that date belongs to, so a page can link to what changed. */
+	lastUpdatedPath?: string;
+	/** Where that date came from — an author's claim, git, or an mtime. */
+	lastUpdatedSource?: DateSource;
+	/**
+	 * The newest commit date across every entry, whatever the entries claim.
+	 *
+	 * `lastUpdated` obeys frontmatter, because an author who writes a date down
+	 * means it. This does not, and the pair is the point: when they disagree,
+	 * the wiki changed on a day nobody wrote down, and a site can say so
+	 * instead of quietly showing the older number.
+	 */
+	lastModifiedInGit?: string;
+	/** How many public entries the site has. */
+	entries: number;
+}
+
+/**
+ * The newest change across the whole site, and which entry it was.
+ *
+ * "When did this wiki last change" is not the same question as "when did this
+ * page last change", and a home page that answers the second while appearing
+ * to answer the first is the bug this ticket opened on. Ties go to the entry
+ * scanned first, which is stable because the scan is.
+ */
+export function summarizeSite(entries: ContentEntry[]): SiteSummary {
+	let newest: ContentEntry | undefined;
+	let newestInGit: string | undefined;
+
+	for (const entry of entries) {
+		if (entry.updated && (!newest || entry.updated > newest.updated!)) newest = entry;
+		if (entry.modifiedInGit && (!newestInGit || entry.modifiedInGit > newestInGit)) {
+			newestInGit = entry.modifiedInGit;
+		}
+	}
+
+	return {
+		...(newest
+			? {
+					lastUpdated: newest.updated,
+					lastUpdatedPath: newest.urlPath,
+					lastUpdatedSource: newest.updatedSource,
+				}
+			: {}),
+		...(newestInGit ? { lastModifiedInGit: newestInGit } : {}),
+		entries: entries.length,
+	};
+}
+
+/**
  * The public artifact, exactly as `public/backlinks.json` stores it.
  *
  * Separate from `Graph` because the file is a runtime contract with four
