@@ -9,6 +9,7 @@ import StarredLinksScript from '../../components/StarredLinksScript.astro';
 import HeaderStarScript from '../../components/HeaderStarScript.astro';
 import HomeFooterCards from '../../components/HomeFooterCards.astro';
 import Footer from '../../components/Footer.astro';
+import MarkdownLink from '../../components/MarkdownLink.astro';
 import PlausibleScript from '../../components/PlausibleScript.astro';
 import '../../styles/design-system.css';
 import '../../styles/notes.css';
@@ -168,6 +169,7 @@ function getRelativeDate(dateString: string): string {
 
                             <Content />
                         </article>
+                        <MarkdownLink href={`/notes/${slug}.md`} />
                         <Backlinks slug={`/notes/${slug}/`} title={title} />
                         <HomeFooterCards slug={`/notes/${slug}/`} backlinks={backlinksData} />
                         <Footer />
