@@ -82,6 +82,12 @@ refuses to feature it — "Noon Tide is the company, and I do not want to
 highlight it" — tag it `negative`, because the refusal is the half that changes
 the draft.
 
+A candidate the human already refused in the dump — "I do not want to highlight
+either" — is tagged `negative` and said so in the body, in their words. That tag
+is where the refusal is recorded, and `commune-write` reads it as answered:
+a `negative` candidate never becomes a grill question, because re-asking what
+the dump already settled is the round's most common failure.
+
 `at_risk` is every **resolved** outbound link of the target, each with that
 entry's own inbound count and whether dropping this link would leave it at zero.
 The counts come from one `graph query --json`, never from counting by hand.
