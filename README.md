@@ -1,468 +1,118 @@
-# Commune Wiki
+# Commune
 
-An Astro wiki engine — WikiLinks, sliding panes, backlinks, static search — and a `commune` CLI that queries the content graph and checks links.
+A wiki engine for Astro, and a CLI that queries the wiki's link graph without running a build.
 
-**License**: MIT · **Live example**: [devonmeadows.com](https://devonmeadows.com)
+Write markdown. Link notes with `[[double brackets]]`. Get a static site where every link resolves both ways, every page has a plain-markdown twin, and the whole graph is one JSON file you can also query from a terminal.
 
----
+MIT. It runs [devon.md](https://devon.md).
 
-## ✨ Features
+## Install
 
-- 🔗 **WikiLinks**: `[[Note Title]]` automatically converts to links
-- 📑 **Sliding Panes**: Andy Matuschak-style cascading note navigation
-- 👁️ **Hover Previews**: See note content on hover before clicking
-- 🔄 **Backlinks**: Auto-generated bidirectional link graph
-- 🎨 **Design System**: Custom CSS variables with light/dark mode
-- 🔍 **Search**: Cmd-K palette with Pagefind static search
-- 📝 **Markdown-First**: Git-backed content, version controlled
-- 🚀 **Fast**: Static site generation (no runtime database)
-- 🎯 **Zero Config**: Works out of the box, customize as needed
-
----
-
-## 🎯 Who Is This For?
-
-**Personal Knowledge Management**:
-- Researchers building interconnected notes (Zettelkasten/Evergreen Notes)
-- Writers managing drafts, research, and published content
-- Developers documenting code, decisions, and learnings
-- Anyone tired of silo'd notes in proprietary apps
-
-**vs. Other Tools**:
-| Tool | Approach | Commune Wiki |
-|------|----------|--------------|
-| Obsidian | Desktop app, proprietary sync | Web-first, self-hosted, MIT |
-| Notion | Cloud SaaS, vendor lock-in | Git-backed, own your data |
-| Roam | SaaS, $15/mo | Free, open source, MIT |
-| Logseq | Local-first, complex setup | Simple Astro build, deploy anywhere |
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 22.18+ and pnpm
-
-### Install & Run
+You need an Astro 7 project on Node 22.12 or newer.
 
 ```bash
-# Clone repository
-git clone git@github.com:dmthepm/commune-wiki.git
-cd commune-wiki
-
-# Install dependencies
-pnpm install
-
-# Start dev server (http://localhost:4321)
-pnpm dev
-
-# Build for production
-pnpm build
-
-# Preview production build
-pnpm preview
+pnpm add @dmthepm/commune @astrojs/markdown-remark
 ```
 
-### Install
+That is the whole install. `astro.config.mjs`, in full:
 
-The engine is a package. Add it to an Astro 7 project:
+```js
+import { defineConfig } from 'astro/config';
+import commune from '@dmthepm/commune/astro';
+import { communeMarkdown } from '@dmthepm/commune/markdown';
 
-```bash
-pnpm add @dmthepm/commune
+const site = 'https://example.com';
+
+export default defineConfig({
+  site,
+  markdown: { processor: communeMarkdown({ site }) },
+  integrations: [commune()],
+});
 ```
 
-npm and yarn take the same line. The published tarball ships `lib/` already
-compiled, so nothing builds on install, no build script needs approving, and a
-consumer needs only Node 22.12+ — Astro's own floor.[^git]
+Astro 7 renders markdown with Sätteri and no longer installs the unified pipeline, so `markdown.processor` is where the wikilink plugins have to go. `site` is a parameter because the engine has no host of its own — it decides what counts as an external link against your origin, which you already declare once.
 
-[^git]: **Before `v0.1.0` reaches npm, install from a git ref instead** —
-    `pnpm add github:dmthepm/commune-wiki#<tag>` — and pnpm consumers need one
-    extra line for it, because a git dependency arrives as source and compiles
-    itself in its `prepare` script. pnpm 10 refuses to run that unless your
-    project names the package, and without the entry the install fails with
-    `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`. The details are folded below; all
-    of it goes away on the first npm publish, which is what this footnote is
-    counting down to.
+Notes go in `src/content/notes/`. Two frontmatter fields are load-bearing:
 
-<details>
-<summary>Installing from a git ref, in full</summary>
-
-```jsonc
-// your package.json
-{
-  "dependencies": {
-    "@dmthepm/commune": "github:dmthepm/commune-wiki#<tag>"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["@dmthepm/commune@github:dmthepm/commune-wiki#<tag>"]
-  }
-}
-```
-
-Note the entry is `name@spec`, not the bare name — a bare name approves a
-package from the registry, and for a git dependency pnpm matches the whole
-specifier, so a name on its own is silently not a match. It has to be the same
-specifier you wrote in `dependencies`, which means it changes when you bump the
-tag. The same entry works in `pnpm-workspace.yaml` if you keep pnpm settings
-there.
-
-**Older pnpm 10 wants the other spelling.** Around 10.19 the `name@spec` form is
-rejected with `ERR_PNPM_INVALID_VERSION_UNION` ("Use exact versions only") and
-the bare `"@dmthepm/commune"` is what works — those releases also approve a git
-dependency's build scripts on their own, so you may need nothing at all. Do not
-guess which side of the line you are on: run the install and read the error.
-pnpm prints the exact entry your version expects.
-
-npm and yarn need nothing extra — they run a git dependency's `prepare` without
-asking.
-
-</details>
-
-### Create Your First Note
-
-```bash
-# Create a note in src/content/notes/
-cat > src/content/notes/hello-world.md << 'MDEOF'
+```markdown
 ---
-title: "Hello World"
+title: "Hello"
 visibility: "public"
-status: "evergreen"
-summary: "My first note"
-tags: [getting-started]
 ---
 
-Welcome to your personal wiki!
-
-Link to other notes with [[Note Title]] syntax.
-MDEOF
-
-# Start dev server and visit http://localhost:4321
-pnpm dev
+A link to [[World]], and one to [Astro](https://astro.build).
 ```
 
----
+`title` is what `[[Hello]]` matches on. `visibility` defaults to private, so only `public` is published. Build that, and the paragraph renders as:
 
-## 📁 Project Structure
-
-```
-commune-wiki/
-├── src/
-│   ├── content/
-│   │   ├── config.ts       # Content collection schemas
-│   │   └── notes/          # Your markdown notes
-│   ├── components/
-│   │   ├── Header.astro    # Site header
-│   │   ├── SearchModal.astro
-│   │   └── Backlinks.astro
-│   ├── pages/
-│   │   ├── index.astro     # Homepage
-│   │   └── notes/
-│   │       └── [...slug].astro   # Note pages + pane logic
-│   └── styles/
-│       ├── design-system.css  # Custom CSS variables
-│       └── notes.css          # Note typography
-├── public/
-│   └── backlinks.json      # Auto-generated backlinks graph
-├── astro.config.mjs        # Astro config + remark plugins
-└── package.json
+```html
+A link to <a href="/notes/world/" class="wikilink">World</a>, and one to
+<a href="https://astro.build" target="_blank" rel="noopener noreferrer">Astro</a>.
 ```
 
----
+Routes stay yours. The package ships the mechanism, not `src/pages/` — you write the `[...slug].astro` that renders a note, and Commune makes the links inside it work.
 
-## ✍️ Writing Notes
+## What ships
 
-### Note Schema
+- **WikiLinks.** `[[Title]]` and `[[Title|Display text]]` become real hrefs at build time, matched against titles and aliases. A link that resolves to nothing stays plain text instead of rendering a dead anchor.
+- **Backlinks.** The build writes `backlinks.json` — every entry with its inbound and outbound edges — to `dist/` and `public/`. `Backlinks.astro` renders it on a page.
+- **Markdown twins.** Every published page gets its source written beside it, so `/notes/hello/` also answers at `/notes/hello.md`. Agents and readers get the same document without scraping HTML.
+- **External links.** Anything off your `site` origin gets `target="_blank" rel="noopener noreferrer"` without you marking it up.
+- **The graph as a library.** `@dmthepm/commune/graph` exports the content loader, the link resolver and the graph builder. The Astro build and the CLI both call it. That is the point: one resolver, not two that drift.
+- **Components and stylesheets.** `@dmthepm/commune/components/*.astro` and `@dmthepm/commune/styles/*.css`, shipped as source. These are the components off my own site rather than a theme system — take them as a starting point, not an API.
 
-Every note requires frontmatter:
+## The CLI
 
-```markdown
----
-title: "Note Title"
-visibility: "public"        # public | private | draft
-status: "evergreen"         # seed | growing | evergreen
-summary: "Brief description for previews"
-tags: [tag1, tag2]
-aliases: ["Short Name"]
-updated: 2025-10-21
----
-
-Your note content here with [[WikiLinks]] to other notes.
-```
-
-**Visibility**:
-- `public` - Published to site (default: only public notes shown)
-- `private` - Not published
-- `draft` - Work in progress, not indexed
-
-**Status**:
-- `seed` - Early idea, needs development
-- `growing` - Actively being refined
-- `evergreen` - Well-developed, stable
-
-### WikiLinks Syntax
-
-```markdown
-[[Note Title]]                    → Links to note
-[[Note Title|Display Text]]       → Custom text
-[[Multi-word Note]]               → Normalized matching
-```
-
-**How it works**:
-1. Build-time plugin scans all notes
-2. Creates title → slug lookup index
-3. Transforms `[[Title]]` to `<a href="/notes/slug/">`
-4. Broken links render as plain text (not clickable)
-
----
-
-## 🎨 Customization
-
-### Design System
-
-Edit `src/styles/design-system.css`:
-
-```css
-:root {
-  --c-bg: #0a0a0b;
-  --c-accent: #8b7bff;
-  --c-text: #e8e6e3;
-  /* ... customize colors ... */
-}
-
-[data-theme="light"] {
-  --c-bg: #fafaf9;
-  /* ... light mode overrides ... */
-}
-```
-
-### Typography
-
-Edit `src/styles/notes.css` for note-specific styling (headings, lists, code blocks).
-
-### Pane Behavior
-
-Pane logic in `src/pages/notes/[...slug].astro`:
-
-```javascript
-// Customize pane behavior:
-setupPanes()        // Initialize
-openPane(url)       // Open new pane
-closePane(pane)     // Remove pane
-```
-
----
-
-## 🔍 Search
-
-**Pagefind** generates a static search index at build time:
-
-- No server required
-- Instant client-side search
-- Automatically indexes all public notes
-- Cmd-K hotkey to open search modal
-
-**Dev mode**: Falls back to backlinks.json when Pagefind not available.
-
----
-
-## 📊 Backlinks
-
-Backlinks are auto-generated at build time via the `src/integration.ts` integration:
-
-1. Scans all notes for WikiLinks
-2. Creates bidirectional graph
-3. Outputs to `public/backlinks.json` and `<outDir>/backlinks.json`
-4. Displayed in `Backlinks.astro` component ("Links to this note")
-
----
-
-## 🚀 Deployment
-
-### Static Hosting (Recommended)
-
-**Cloudflare Pages / Vercel / Netlify**:
+`commune` installs as a bin. It reads markdown off disk and answers without an Astro process running, which is what makes it useful while you are still writing.
 
 ```bash
-# Build command
-pnpm build
-
-# Output directory
-dist/
-
-# Deploy
-# Connect GitHub repo, auto-deploy on push
+commune check
+commune graph query --collection notes --orphans
+commune graph related src/content/notes/hello.md
+echo "a rough dump that mentions World" | commune graph related -
+commune gate
 ```
 
-### Self-Hosted (Caddy)
+| Verb | What it answers |
+| --- | --- |
+| `graph query` | Every entry with its edges. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`. |
+| `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. |
+| `check` | Broken links, duplicate names, ambiguous targets. |
+| `gate` | Run after a build, against the built site. |
 
-```yaml
-# docker-compose.yml
-caddy:
-  image: caddy:alpine
-  volumes:
-    - ./dist:/srv:ro
-    - ./Caddyfile:/etc/caddy/Caddyfile
-  ports:
-    - "80:80"
-    - "443:443"
-```
+Every verb takes `--json` and emits one document on stdout with everything else on stderr. The human-readable text is the fallback rendering; the JSON is the contract.
 
-```Caddyfile
-# Caddyfile
-yourdomain.com {
-    root * /srv
-    file_server
-    try_files {path} {path}/ /index.html
-    encode gzip
-}
-```
+Exit codes report whether the command finished, never what it found — `0` finished, `1` could not finish, `2` invalid invocation. Findings live in the payload. A command that exits non-zero because it *found* something is indistinguishable, to a shell, from one that crashed. `gate` is the one deliberate exception: a gate's entire job is a yes/no and a build has to stop on it, so `gate` exits `1` when the build it checked is wrong.
 
-### Self-Hosted (Railway)
+`commune --help` prints the full surface. `commune --version` prints the installed version, which is the honest way to know what you have.
+
+## What it is not
+
+It is not a note-taking app and it is not trying to replace one. I write in Obsidian; Commune is what turns the vault into a site. There is no editor here, no sync, no account, no server. The graph is computed from files on disk at build time, and the files are yours whether or not you ever run this.
+
+## Where this is going
+
+Commune is the engine under a larger idea: own your canon. The wiki is one output surface, not the product. What I am building toward is an authoring loop — dictate a dump, have agents find what it already connects to, grill it, draft it, ship it — where the graph is what makes connection-finding possible *before* a draft exists. That is why the graph is a queryable library with a CLI on top instead of a build artifact, and why `graph related` reads stdin.
+
+None of that loop is in this package. `pnpm add @dmthepm/commune` gives you the engine and the CLI above, and nothing else. The authoring skills and the email destination are tracked in [the issues](https://github.com/dmthepm/commune-wiki/issues); when they ship, this section shrinks and the one above it grows.
+
+## Deploy
+
+The build output is `dist/`, a static directory with no runtime, so any static host serves it — see [docs/hosting.md](docs/hosting.md).
+
+## Working on Commune itself
 
 ```bash
-# Install Railway CLI
-npm install -g railway
-
-# Deploy
-railway init
-railway up
+pnpm install
+pnpm dev        # the engine's own wiki, for developing against
+pnpm build      # compile lib/, build the site, then gate it
+pnpm test       # node --test
 ```
 
-Railway auto-detects Astro and builds with `pnpm build`.
+`pnpm test:consumer` installs `tests/fixtures/consumer` against the working tree and builds it. That fixture is a stranger's project in miniature, and it is the check that catches a package boundary this README describes wrongly.
 
----
+[CONTRIBUTING.md](CONTRIBUTING.md) has the rest. Issues and questions go to [the tracker](https://github.com/dmthepm/commune-wiki/issues).
 
-## 🛠️ Development
+## License
 
-### Commands
-
-```bash
-pnpm dev           # Start dev server (port 4321)
-pnpm build         # Build production site
-pnpm preview       # Preview production build
-```
-
-### Testing
-
-```bash
-# Run the test suite
-pnpm test
-
-# Check the content graph (broken links, duplicate names, ambiguous targets)
-node bin/commune.mjs check --json
-
-# Preview before deploying
-pnpm preview
-```
-
-### Debugging WikiLinks
-
-**Issue**: Links not working?
-
-```bash
-# Check cache consistency (should show same count each time)
-pnpm build 2>&1 | grep "Lookup built with"
-
-# Find broken links
-pnpm build 2>&1 | grep "Broken link"
-```
-
----
-
-## 📦 Tech Stack
-
-- **Astro** - Static site generator
-- **Tailwind CSS** - Utility-first styling
-- **Pagefind** - Static search index
-- **remark-wikilinks** - WikiLink transformation plugin (custom, `src/remark-wikilinks.ts`)
-- **No framework dependencies** - Vanilla JS for interactivity
-
----
-
-## 📖 Documentation
-
-**For Contributors**:
-- Architecture details in original README (check git history)
-- Pane system implementation in `src/pages/notes/[...slug].astro`
-- WikiLink plugin in `src/remark-wikilinks.ts`
-- Backlinks integration in `src/integration.ts`
-
-**For Users**:
-- This README covers installation and usage
-- See [devonmeadows.com](https://devonmeadows.com) for live example
-- Issues/questions: [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)
-
----
-
-## 🤝 Contributing
-
-This is an open-source project under the MIT License. Contributions welcome!
-
-**How to contribute**:
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Make changes and test locally (`pnpm dev`)
-4. Build to verify (`pnpm build`)
-5. Commit with clear message
-6. Push and create Pull Request
-
-**Areas for contribution**:
-- [ ] Automated tests (Puppeteer or Playwright)
-- [ ] Additional themes/design systems
-- [ ] Search improvements (fuzzy matching, ranking)
-- [ ] Graph visualization of backlinks
-- [ ] Mobile responsiveness improvements
-- [ ] Performance optimizations
-
----
-
-## 🐛 Known Issues
-
-### WikiLink Cache Bug (FIXED)
-
-**Symptom**: Links only work on last note built.
-
-**Fix**: Ensure cache size check in `src/remark-wikilinks.ts`:
-
-```typescript
-if (notesCache && notesCache.size > 0) {  // MUST check .size!
-  return buildFromCache();
-}
-```
-
-### Pane Styling Not Applied
-
-**Symptom**: Panes don't stack correctly.
-
-**Fix**: Use `<style is:global>` in `[...slug].astro` for dynamic panes.
-
----
-
-## 📄 License
-
-MIT - See [LICENSE](LICENSE) file.
-
-**What this means**:
-- Free to use, modify, distribute, and sell
-- Commercial use allowed, with no obligation to open-source your changes
-- Keep the copyright notice; that's the whole obligation
-
----
-
-## 🔗 Related Projects
-
-**Commune Ecosystem**:
-- **Devon's Homelab** - Personal infrastructure (private, showcase only)
-
-**Inspired by**:
-- [Andy Matuschak's Notes](https://notes.andymatuschak.org/)
-- [Maggie Appleton's Digital Garden](https://maggieappleton.com/garden)
-- [Obsidian](https://obsidian.md/) (proprietary alternative)
-- [Logseq](https://logseq.com/) (local-first alternative)
-
----
-
-**Created by**: [Devon Meadows](https://devonmeadows.com)  
-**Repository**: [dmthepm/commune-wiki](https://github.com/dmthepm/commune-wiki)  
-**Support**: [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)
+MIT — see [LICENSE](LICENSE). Use it, change it, sell it. Keep the copyright notice; that is the whole obligation.
