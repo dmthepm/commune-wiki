@@ -17,11 +17,13 @@ import {
 	buildGraph,
 	formatDiagnostic,
 	loadContentEntries,
+	summarizeSite,
 	toBacklinksJson,
 	toMarkdownPath,
 	type ContentEntry,
 	type Graph,
 	type NoteMetadata,
+	type SiteSummary,
 } from './lib/graph.ts';
 
 function buildBacklinksGraph(
@@ -44,9 +46,26 @@ function buildBacklinksGraph(
 	return graph;
 }
 
-async function writeBacklinksFile(filePath: string, graph: Record<string, NoteMetadata>) {
+async function writeJsonFile(filePath: string, value: unknown) {
 	await mkdir(path.dirname(filePath), { recursive: true });
-	await writeFile(filePath, JSON.stringify(graph, null, 2) + '\n');
+	await writeFile(filePath, JSON.stringify(value, null, 2) + '\n');
+}
+
+async function writeBacklinksFile(filePath: string, graph: Record<string, NoteMetadata>) {
+	await writeJsonFile(filePath, graph);
+}
+
+/**
+ * The site-wide summary, beside the graph rather than inside it.
+ *
+ * `backlinks.json` is keyed by urlPath and two of its readers walk it with
+ * `Object.entries`, so a top-level `lastUpdated` there would be a malformed
+ * node rather than a new field. It is also committed, and this value changes
+ * on the same commit that changes it — a committed copy is stale exactly when
+ * it matters. So: a sibling file, generated, gitignored.
+ */
+async function writeSiteFile(filePath: string, summary: SiteSummary) {
+	await writeJsonFile(filePath, summary);
 }
 
 /**
@@ -100,6 +119,7 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 	// one process do not overwrite each other's roots.
 	let root: string;
 	let publicBacklinks: string;
+	let publicSite: string;
 
 	return {
 		name: 'commune-backlinks',
@@ -116,10 +136,13 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 				// `fileURLToPath` is what Astro's own docs use.
 				root = fileURLToPath(config.root);
 				publicBacklinks = fileURLToPath(new URL('./backlinks.json', config.publicDir));
+				publicSite = fileURLToPath(new URL('./site.json', config.publicDir));
 
 				try {
-					const graph = buildBacklinksGraph(await loadContentEntries({ root }), logger);
+					const entries = await loadContentEntries({ root });
+					const graph = buildBacklinksGraph(entries, logger);
 					await writeBacklinksFile(publicBacklinks, toBacklinksJson(graph));
+					await writeSiteFile(publicSite, summarizeSite(entries));
 					logger.info(`✅ Backlinks index written to ${path.relative(root, publicBacklinks)}`);
 					logger.info(summarize(graph));
 				} catch (error) {
@@ -141,11 +164,20 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 					// Also written to the public directory, for dev server parity.
 					await writeBacklinksFile(publicBacklinks, json);
 
+					const site = summarizeSite(entries);
+					await writeSiteFile(fileURLToPath(new URL('./site.json', dir)), site);
+					await writeSiteFile(publicSite, site);
+
 					const written = await writeMarkdownFiles(entries, root, fileURLToPath(dir));
 
 					logger.info(`✅ Backlinks index written to /backlinks.json (dist + public)`);
 					logger.info(`📄 ${written} source files written as .md alongside their pages`);
 					logger.info(summarize(graph));
+					logger.info(
+						site.lastUpdated
+							? `🕒 Site last updated ${site.lastUpdated} (${site.lastUpdatedPath}, from ${site.lastUpdatedSource})`
+							: '🕒 No entry carries a date, so site.json has no lastUpdated'
+					);
 
 				} catch (error) {
 					logger.error('❌ Failed to build backlinks index:');

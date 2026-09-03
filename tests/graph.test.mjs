@@ -237,6 +237,39 @@ test('a frontmatter subpath is stripped like any other', () => {
 	]);
 });
 
+// `links:` is how an update names the pages it rolls up. Everywhere else in
+// frontmatter a link has to be spelled `[[like this]]`; here a bare string is
+// the target, because the field means nothing else.
+
+test('bare strings under links: are targets, by title or by path', () => {
+	assert.deepEqual(extractLinks('', { links: ['Atomic Notes', '/notes/commune/'] }), [
+		{ kind: 'name', target: 'Atomic Notes' },
+		{ kind: 'url', target: '/notes/commune/' },
+	]);
+});
+
+test('a links: entry can still be spelled as a wikilink', () => {
+	assert.deepEqual(extractLinks('', { links: ['[[Atomic Notes]]'] }), [
+		{ kind: 'name', target: 'Atomic Notes' },
+	]);
+});
+
+test('an external URL under links: is not an edge', () => {
+	assert.deepEqual(extractLinks('', { links: ['https://example.com/x', '//example.com/y'] }), []);
+});
+
+test('a bare string outside links: is prose, not a target', () => {
+	// The rule that keeps a page's own `url:` from becoming a self-edge, and
+	// every summary from becoming a link to a note that shares its first words.
+	assert.deepEqual(extractLinks('', { url: '/about/', summary: 'Atomic Notes' }), []);
+});
+
+test('links: and the body naming the same page is one edge', () => {
+	assert.deepEqual(extractLinks('[[Atomic Notes]] got a rewrite.', { links: ['Atomic Notes'] }), [
+		{ kind: 'name', target: 'Atomic Notes' },
+	]);
+});
+
 test('loaded entries carry their frontmatter, so the caller can pass it', async () => {
 	const entries = await loadContentEntries();
 	assert.ok(entries.length > 0);

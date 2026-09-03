@@ -1,0 +1,25 @@
+---
+// One page per update, so the card's links resolve to something.
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+	const updates = await getCollection('updates');
+	return updates.map((update) => ({ params: { slug: update.id }, props: { update } }));
+}
+
+const { update } = Astro.props;
+const { Content } = await render(update);
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>{update.data.title}</title>
+	</head>
+	<body>
+		<main>
+			<h1>{update.data.title}</h1>
+			<Content />
+		</main>
+	</body>
+</html>

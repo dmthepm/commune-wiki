@@ -5,6 +5,7 @@ export const USAGE = `commune — query the content graph without an Astro proce
 Usage:
   commune [--root <dir>] graph query   [filters] [--json]
   commune [--root <dir>] graph related <path|text|-> [--json]
+  commune [--root <dir>] update        [--recent <duration|date>] [--write] [--json]
   commune [--root <dir>] check         [--json]
   commune [--root <dir>] gate          [--dist <dir>] [--json]
   commune --version
@@ -16,11 +17,18 @@ Global options:
   --version      Print the version of the installed package and exit.
 
 graph query filters (any-of within a flag, all-of across flags):
-  --collection <notes|research|pages>   Repeatable.
-  --tag <tag>                           Repeatable.
+  --collection <notes|research|pages|updates>   Repeatable.
+  --tag <tag>                                   Repeatable.
   --status <status>
-  --orphans                             Zero inbound and zero outbound.
-  --deadends                            Zero outbound.
+  --orphans                                     Zero inbound and zero outbound.
+  --deadends                                    Zero outbound.
+  --recent <7d|2w|2026-09-01>                   Updated on or since then. Entries
+                                                with no date are not returned.
+
+update options:
+  --recent <7d|2w|2026-09-01>   What to roll up. Default: 7d.
+  --write                       Write src/content/updates/<today>.md. Without it,
+                                the entry is printed on stdout. Never overwrites.
 
 gate options:
   --dist <dir>   The built site to check, relative to --root. Default: dist.
@@ -37,9 +45,15 @@ Exit codes:
 
 export const COMMAND_USAGE: Record<string, string> = {
 	'graph query':
-		'Usage: commune [--root <dir>] graph query [--collection <c>]... [--tag <t>]... [--status <s>] [--orphans] [--deadends] [--json]',
+		'Usage: commune [--root <dir>] graph query [--collection <c>]... [--tag <t>]... [--status <s>] [--orphans] [--deadends] [--recent <duration|date>] [--json]',
 	'graph related':
 		'Usage: commune [--root <dir>] graph related <path|text|-> [--json]',
+	update: `Usage: commune [--root <dir>] update [--recent <duration|date>] [--write] [--json]
+
+Scaffold a dated update entry from the pages that changed. The draft is
+printed on stdout unless --write is given, and --write refuses to overwrite an
+update that already exists. \`summary\` is left empty on purpose: summarizing a
+week is a judgement, and this command has none.`,
 	check: 'Usage: commune [--root <dir>] check [--json]',
 	gate: `Usage: commune [--root <dir>] gate [--dist <dir>] [--json]
 

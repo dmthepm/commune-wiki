@@ -8,9 +8,9 @@
  * rules, and three subtly different opinions about trailing slashes.
  *
  * The rules this module owns:
- *   - which collections participate (notes, research, pages)
- *   - visibility (notes opt in with `visibility: public`; research and pages
- *     are always public)
+ *   - which collections participate (notes, research, pages, updates)
+ *   - visibility (notes opt in with `visibility: public`; research, pages and
+ *     updates are always public)
  *   - canonical URLs, always with a trailing slash, matching Astro's
  *     directory build format
  *   - the title/alias lookup used to resolve `[[WikiLinks]]`
@@ -22,18 +22,34 @@ import { slug as githubSlug } from 'github-slugger';
 import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import {
+	readContentHistory,
+	readMtimeDate,
+	type ContentHistory,
+	type DateSource,
+} from './dates.ts';
 
-export type CollectionName = 'notes' | 'research' | 'pages';
+export type { ContentHistory, DateSource, HistoryKind } from './dates.ts';
+export { SHALLOW_WARNING, toIsoDay } from './dates.ts';
+
+export type CollectionName = 'notes' | 'research' | 'pages' | 'updates';
 
 /** Where each collection's markdown lives, relative to the project root. */
 export const CONTENT_DIRS: Record<CollectionName, string> = {
 	notes: 'src/content/notes',
 	research: 'src/content/research',
 	pages: 'src/content/pages',
+	updates: 'src/content/updates',
 };
 
-/** Collection scan order. Stable so derived artifacts are deterministic. */
-export const COLLECTIONS: CollectionName[] = ['notes', 'research', 'pages'];
+/**
+ * Collection scan order. Stable so derived artifacts are deterministic.
+ *
+ * `updates` is last because it was added last, and the order is the order
+ * `backlinks.json` is keyed in: putting it anywhere else would rewrite the
+ * whole committed artifact to say the same thing.
+ */
+export const COLLECTIONS: CollectionName[] = ['notes', 'research', 'pages', 'updates'];
 
 /** One piece of public content, as the graph sees it. */
 export interface ContentEntry {
@@ -47,7 +63,28 @@ export interface ContentEntry {
 	tags: string[];
 	status: string;
 	summary?: string;
+	/**
+	 * When this entry last changed, by the best answer available.
+	 *
+	 * Frontmatter wins when an author wrote one down; otherwise the file's
+	 * last commit date, and in a tree with no history its mtime. `updatedSource`
+	 * says which of those this is, so a site can decide whether to show it.
+	 */
 	updated?: string;
+	/** Which of the three answers `updated` is. */
+	updatedSource: DateSource;
+	/** When this entry first appeared, by the same precedence as `updated`. */
+	created?: string;
+	/**
+	 * The date of the file's last commit, whatever `updated` ended up being.
+	 *
+	 * Carried separately so a site can show both — "updated 2026-01-21, last
+	 * touched 2026-09-03" is the sentence that catches a stale `updated:` field,
+	 * and it cannot be written if the two dates have already been collapsed
+	 * into one. Absent when the project is not a git checkout, or when the file
+	 * has never been committed.
+	 */
+	modifiedInGit?: string;
 	/** Markdown body with frontmatter stripped. */
 	body: string;
 	/** Parsed frontmatter. Kept because links can live in it. */
@@ -161,7 +198,76 @@ export function normalizeDate(value: unknown): string | undefined {
 	return undefined;
 }
 
-/** Is this entry publicly visible? Notes opt in; research and pages are always public. */
+/**
+ * The date an author wrote down, if they wrote one down.
+ *
+ * `updated` first, then `date` — the key the changelog-shaped collections use,
+ * where the entry *is* a dated thing rather than a page that happens to have
+ * been edited. Kept as one function so the graph, `--recent` and the site-wide
+ * last-updated value can never disagree about what an author claimed.
+ */
+export function claimedDate(data: Record<string, unknown>): string | undefined {
+	return normalizeDate(data.updated) ?? normalizeDate(data.date);
+}
+
+/**
+ * Decide an entry's dates, and say where the answer came from.
+ *
+ * Precedence, for both `created` and `updated`: what the author wrote, then
+ * what the repository records, then — only outside a repository — the file's
+ * mtime. The first is a claim and can be years stale; the second is a fact
+ * about the file and is what the ticket asked for; the third exists so a
+ * developer's unversioned folder produces dates instead of blanks.
+ *
+ * What is deliberately *not* here is a fourth fallback. Inside a shallow
+ * checkout there is no honest date to be had — every file's only commit is the
+ * one the CI runner fetched, and every file's mtime is the moment it was
+ * written to disk — so both are refused and `updatedSource` says `none`. A
+ * missing date a site can decline to render; a wrong one it renders
+ * confidently. The same goes for a file that has never been committed.
+ *
+ * `updatedSource` is reported and `createdSource` is not, deliberately: the
+ * date a site displays and a reader judges is `updated`, and one honest label
+ * beside it is worth more than two labels nobody reads. `created` follows the
+ * same precedence, and `modifiedInGit` is carried whenever git knew the file,
+ * so anything that needs to audit the pair has both halves.
+ */
+async function resolveDates(
+	root: string,
+	file: string,
+	data: Record<string, unknown>,
+	history: ContentHistory
+): Promise<Pick<ContentEntry, 'updated' | 'updatedSource' | 'created' | 'modifiedInGit'>> {
+	const claimed = claimedDate(data);
+	const createdClaim = normalizeDate(data.created);
+	const committed = history.files.get(file);
+
+	// Read once, and only where an mtime is an answer at all: a versioned tree
+	// never stats a file, and a complete vault outside one never stats twice.
+	let mtime: string | undefined;
+	const fileMtime = async () =>
+		history.kind === 'unversioned' ? (mtime ??= await readMtimeDate(root, file)) : undefined;
+
+	const updated = claimed ?? committed?.updated ?? (await fileMtime());
+	const created = createdClaim ?? committed?.created ?? (await fileMtime());
+
+	const updatedSource: DateSource = claimed
+		? 'frontmatter'
+		: committed
+			? 'git'
+			: updated
+				? 'mtime'
+				: 'none';
+
+	return {
+		...(updated ? { updated } : {}),
+		updatedSource,
+		...(created ? { created } : {}),
+		...(committed ? { modifiedInGit: committed.updated } : {}),
+	};
+}
+
+/** Is this entry publicly visible? Notes opt in; every other collection is public. */
 function isPublic(collection: CollectionName, data: Record<string, unknown>): boolean {
 	if (collection !== 'notes') return true;
 	return data.visibility === 'public';
@@ -195,6 +301,10 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 	const root = options.root ?? process.cwd();
 	const entries: ContentEntry[] = [];
 
+	// One walk for the whole vault, before the scan rather than inside it: the
+	// alternative is a `git log` per file, which is a child process per note.
+	const history = await readContentHistory(root, Object.values(CONTENT_DIRS));
+
 	for (const collection of COLLECTIONS) {
 		// `cwd` keeps globby's results root-relative, which is exactly the
 		// spelling `ContentEntry.file` promises; only the read needs the join.
@@ -209,7 +319,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 
 			const { slug, urlPath } = toUrlPath(file, collection, data);
 			const summary = typeof data.summary === 'string' ? data.summary : undefined;
-			const updated = normalizeDate(data.updated);
+			const dates = await resolveDates(root, file, data, history);
 
 			entries.push({
 				slug,
@@ -220,7 +330,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 				tags: (data.tags as string[]) || [],
 				status: (data.status as string) || 'seed',
 				...(summary ? { summary } : {}),
-				...(updated ? { updated } : {}),
+				...dates,
 				body: content,
 				frontmatter: data,
 				file,
@@ -403,6 +513,18 @@ export interface ExtractedLink {
 const NON_LINK_KEYS = new Set(['aliases', 'tags']);
 
 /**
+ * Frontmatter keys whose strings are link targets in their own right.
+ *
+ * Everywhere else in frontmatter a link has to be spelled `[[like this]]`,
+ * because a bare string is usually prose and guessing otherwise would turn a
+ * page's own `url:` into a self-edge. Under `links:` the guess is the whole
+ * point: an update declares the pages it rolls up, and writing them as
+ * `[[double brackets]]` inside a YAML list is ceremony for a field that means
+ * nothing else.
+ */
+const LINK_KEYS = new Set(['links']);
+
+/**
  * Extract every outbound link target from a markdown body and its frontmatter.
  *
  * Returns the edges Obsidian's `resolvedLinks` would record: wikilinks, embeds,
@@ -444,23 +566,28 @@ export function extractLinks(
 function extractFrontmatterLinks(frontmatter: Record<string, unknown>): ExtractedLink[] {
 	const links: ExtractedLink[] = [];
 
-	const walk = (value: unknown): void => {
+	const walk = (value: unknown, bare: boolean): void => {
 		if (typeof value === 'string') {
 			for (const match of value.matchAll(WIKILINK)) {
 				const target = stripSubpath(match[1]);
 				if (target) links.push({ kind: 'name', target });
 			}
+			// A string that already spelled its link is not also a bare target.
+			if (bare && !value.includes('[[')) {
+				const link = classifyFrontmatterTarget(value);
+				if (link) links.push(link);
+			}
 		} else if (Array.isArray(value)) {
-			value.forEach(walk);
+			for (const nested of value) walk(nested, bare);
 		} else if (value && typeof value === 'object') {
 			for (const [key, nested] of Object.entries(value)) {
-				if (!NON_LINK_KEYS.has(key)) walk(nested);
+				if (!NON_LINK_KEYS.has(key)) walk(nested, bare || LINK_KEYS.has(key));
 			}
 		}
 	};
 
 	for (const [key, value] of Object.entries(frontmatter)) {
-		if (!NON_LINK_KEYS.has(key)) walk(value);
+		if (!NON_LINK_KEYS.has(key)) walk(value, LINK_KEYS.has(key));
 	}
 
 	return links;
@@ -487,6 +614,26 @@ const MARKDOWN_LINK = /!?\[[^\]]*\]\(\s*(<[^>]*>|[^()\s]+)(?:\s+"[^"]*")?\s*\)/g
  * handed to the title lookup, where it only ever resolved by the coincidence of
  * a note listing its own slug as an alias.
  */
+/**
+ * Classify one bare string from a `links:` list.
+ *
+ * A site path is a `url` link, a filename is the file's title, and anything
+ * else is read as a title — the same two namespaces every other edge resolves
+ * through, so `check` reports an unresolvable entry here exactly as it reports
+ * a broken `[[WikiLink]]`. External URLs are not edges, as everywhere else.
+ */
+function classifyFrontmatterTarget(raw: string): ExtractedLink | null {
+	const value = raw.trim();
+	if (!value) return null;
+	if (/^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith('//')) return null;
+
+	const classified = classifyMarkdownTarget(value);
+	if (classified) return classified;
+
+	const title = stripSubpath(value);
+	return title ? { kind: 'name', target: title } : null;
+}
+
 function classifyMarkdownTarget(raw: string): ExtractedLink | null {
 	const destination = raw.replace(/^<|>$/g, '').trim();
 
@@ -618,6 +765,7 @@ export interface NoteMetadata {
 	tags: string[];
 	status: string;
 	summary?: string;
+	/** The author's claimed date. Not the resolved one — see `buildGraph`. */
 	updated?: string;
 	isStarred?: boolean; // ⭐ indicator
 }
@@ -672,8 +820,12 @@ export interface Graph {
 export function calculateStars(notes: Map<string, NoteMetadata>): Set<string> {
 	const starredSlugs = new Set<string>();
 
-	// Standalone pages belong in search and WikiLinks, not note rankings.
-	const notesArray = Array.from(notes.values()).filter((note) => note.collection !== 'pages');
+	// Standalone pages and changelog updates belong in search and WikiLinks, not
+	// note rankings. An update links to everything it rolled up, so ranking it
+	// alongside notes would let the changelog crowd out the writing it describes.
+	const notesArray = Array.from(notes.values()).filter(
+		(note) => note.collection !== 'pages' && note.collection !== 'updates'
+	);
 
 	// Skip if too few notes
 	if (notesArray.length < STAR_CONFIG.minNotesForStars) {
@@ -776,6 +928,14 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 	for (const entry of entries) {
 		extracted.set(entry.urlPath, extractLinks(entry.body, entry.frontmatter));
 		files.set(entry.urlPath, entry.file);
+		// `updated` here is the author's claim, not the resolved date on the
+		// entry, and it stays that way on purpose. `backlinks.json` is committed,
+		// and a git-derived date cannot be committed alongside the commit that
+		// changes it: the file's new date does not exist until that commit does,
+		// so every content commit would land with the artifact already stale.
+		// The resolved date is on `ContentEntry`, in `graph query --json`, and in
+		// the build-time `site.json` — all of which are computed, not stored.
+		const claimed = claimedDate(entry.frontmatter);
 		notes.set(entry.urlPath, {
 			slug: entry.urlPath,
 			title: entry.title,
@@ -786,7 +946,7 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 			tags: entry.tags,
 			status: entry.status,
 			...(entry.summary ? { summary: entry.summary } : {}),
-			...(entry.updated ? { updated: entry.updated } : {}),
+			...(claimed ? { updated: claimed } : {}),
 		});
 	}
 
@@ -820,7 +980,13 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 			}
 
 			if (resolved && notes.has(resolved)) {
-				resolvedOutbound.push(resolved);
+				// One edge per target, not one per spelling. `[[World]]` in the body
+				// and `/notes/world/` under `links:` are the same edge written two
+				// ways, and an update names both — the prose says it and the
+				// frontmatter lists it. `inbound` has always been deduplicated;
+				// `outbound` reaching the same page twice was the same fact
+				// counted twice.
+				if (!resolvedOutbound.includes(resolved)) resolvedOutbound.push(resolved);
 				const target = notes.get(resolved)!;
 				if (!target.inbound.includes(fromUrl)) {
 					target.inbound.push(fromUrl);
@@ -884,6 +1050,72 @@ export function formatDiagnostic(diagnostic: Diagnostic): string {
 		})}`;
 	}
 	return `⚠️  ${diagnostic.rule} in ${diagnostic.file}: ${diagnostic.message}`;
+}
+
+/**
+ * What the whole site says about itself, as one small object.
+ *
+ * Written to `site.json` beside `backlinks.json`, and deliberately not *into*
+ * it. Two reasons, and either alone would settle it:
+ *
+ *   - Every top-level key of `backlinks.json` is a urlPath. Two of its readers
+ *     walk it with `Object.entries` and treat what they find as a node, so a
+ *     `lastUpdated` string at the top level is not a new field — it is a
+ *     malformed entry in a runtime contract.
+ *   - `backlinks.json` is committed, and this value moves with history: it
+ *     changes on the commit that changes it, so a committed copy is stale the
+ *     moment it is right. `site.json` is generated and ignored, like `dist/`.
+ */
+export interface SiteSummary {
+	/** The newest `updated` across every public entry. Absent if nothing has a date. */
+	lastUpdated?: string;
+	/** The entry that date belongs to, so a page can link to what changed. */
+	lastUpdatedPath?: string;
+	/** Where that date came from — an author's claim, git, or an mtime. */
+	lastUpdatedSource?: DateSource;
+	/**
+	 * The newest commit date across every entry, whatever the entries claim.
+	 *
+	 * `lastUpdated` obeys frontmatter, because an author who writes a date down
+	 * means it. This does not, and the pair is the point: when they disagree,
+	 * the wiki changed on a day nobody wrote down, and a site can say so
+	 * instead of quietly showing the older number.
+	 */
+	lastModifiedInGit?: string;
+	/** How many public entries the site has. */
+	entries: number;
+}
+
+/**
+ * The newest change across the whole site, and which entry it was.
+ *
+ * "When did this wiki last change" is not the same question as "when did this
+ * page last change", and a home page that answers the second while appearing
+ * to answer the first is the bug this ticket opened on. Ties go to the entry
+ * scanned first, which is stable because the scan is.
+ */
+export function summarizeSite(entries: ContentEntry[]): SiteSummary {
+	let newest: ContentEntry | undefined;
+	let newestInGit: string | undefined;
+
+	for (const entry of entries) {
+		if (entry.updated && (!newest || entry.updated > newest.updated!)) newest = entry;
+		if (entry.modifiedInGit && (!newestInGit || entry.modifiedInGit > newestInGit)) {
+			newestInGit = entry.modifiedInGit;
+		}
+	}
+
+	return {
+		...(newest
+			? {
+					lastUpdated: newest.updated,
+					lastUpdatedPath: newest.urlPath,
+					lastUpdatedSource: newest.updatedSource,
+				}
+			: {}),
+		...(newestInGit ? { lastModifiedInGit: newestInGit } : {}),
+		entries: entries.length,
+	};
 }
 
 /**

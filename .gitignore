@@ -10,7 +10,9 @@ node_modules/
 # `dist/` is Astro's, and `astro build` empties it before every run; `lib/` is
 # the compiled package (tsc), which is why it is not written there.
 dist/
-lib/
+# Anchored: unanchored `lib/` also matches `src/lib/`, where the graph core
+# lives, so every new file there was silently untracked.
+/lib/
 .astro/
 
 # Environment
@@ -29,6 +31,12 @@ lib/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# The site-wide summary the build writes beside `backlinks.json`. Generated,
+# not committed: its `lastUpdated` is derived from git history, so it changes
+# on the very commit that changes it and a committed copy would be stale
+# exactly when it mattered.
+public/site.json
 
 # The fixture consumer's generated artifacts. The integration writes
 # `backlinks.json` into the public directory as well as into `dist/`, for dev

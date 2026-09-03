@@ -1,0 +1,17 @@
+---
+// The changelog card, off the package. A consumer writes the route; the
+// component is what the engine ships.
+import Updates from '@dmthepm/commune/components/Updates.astro';
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Updates</title>
+	</head>
+	<body>
+		<main>
+			<Updates limit={3} heading="What changed" />
+		</main>
+	</body>
+</html>

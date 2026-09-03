@@ -21,7 +21,11 @@
  *     external — and left the consumer's own host alone;
  *   - the integration wrote `backlinks.json` into the consumer's `dist`, with
  *     both directions of the edge;
- *   - the `.md` beside the page is the source file, byte for byte;
+ *   - the `.md` beside the page is the source file, byte for byte, for the
+ *     `updates` collection as much as for notes;
+ *   - `Updates.astro` rendered the changelog card into the HTML, with no
+ *     client script behind it;
+ *   - `site.json` landed beside `backlinks.json` with the site's newest date;
  *   - and the search modal's semantic tier stays absent unless a page asks for
  *     it — the one assertion here that reads a second route, because proving
  *     the opt-in is a seam takes a project on both sides of it.
@@ -97,7 +101,7 @@ test('a consumer project installs this package and builds a wiki with it', async
 	await sh('pnpm', ['install']);
 	const { stdout: build, stderr: buildErr } = await sh('pnpm', ['build']);
 
-	assert.match(build, /2 total backlinks across 2 entries/, build);
+	assert.match(build, /4 total backlinks across 3 entries/, build);
 
 	// A stylesheet this package ships has to be CSS in a build that has never
 	// heard of Tailwind (#8). `@tailwind utilities` in `design-system.css` used
@@ -121,9 +125,49 @@ test('a consumer project installs this package and builds a wiki with it', async
 	assert.match(hello, /<a href="https:\/\/example\.com\/notes\/world\/">/);
 
 	const backlinks = JSON.parse(await readFile(path.join(DIST, 'backlinks.json'), 'utf8'));
-	assert.deepEqual(Object.keys(backlinks).sort(), ['/notes/hello/', '/notes/world/']);
-	assert.deepEqual(backlinks['/notes/hello/'].inbound, ['/notes/world/']);
-	assert.deepEqual(backlinks['/notes/world/'].inbound, ['/notes/hello/']);
+	assert.deepEqual(Object.keys(backlinks).sort(), [
+		'/notes/hello/',
+		'/notes/world/',
+		'/updates/2026-01-05/',
+	]);
+	assert.deepEqual(backlinks['/notes/hello/'].inbound, ['/notes/world/', '/updates/2026-01-05/']);
+	assert.deepEqual(backlinks['/notes/world/'].inbound, ['/notes/hello/', '/updates/2026-01-05/']);
+
+	// An update rolls up the pages it names, and `links:` is how it names them
+	// without writing prose about each one. Both spellings resolve — a title and
+	// a site path — and both are edges, so the changelog is part of the graph
+	// rather than a list of strings beside it.
+	assert.deepEqual(backlinks['/updates/2026-01-05/'].outbound, [
+		'/notes/hello/',
+		'/notes/world/',
+	]);
+
+	// The site-wide answer to "what changed", beside the graph and not inside
+	// it. The fixture's one update is its newest dated entry.
+	// Not a fixed date: the fixture lives in this repository, so its notes are
+	// dated from history and every commit here moves the number. What is fixed
+	// is that the file exists, counts every entry, and is at least as new as the
+	// one date the fixture writes down.
+	const site = JSON.parse(await readFile(path.join(DIST, 'site.json'), 'utf8'));
+	assert.equal(site.entries, 3);
+	assert.match(site.lastUpdated, /^\d{4}-\d{2}-\d{2}$/);
+	assert.ok(site.lastUpdated >= '2026-01-05', site.lastUpdated);
+	assert.match(site.lastModifiedInGit, /^\d{4}-\d{2}-\d{2}$/);
+
+	// The card is markup by the time the page is served: no fetch, no client
+	// script, the newest updates already in the HTML.
+	const updates = await readFile(path.join(DIST, 'updates/index.html'), 'utf8');
+	assert.match(updates, /What changed/);
+	assert.match(updates, /<a href="\/updates\/2026-01-05\/"[^>]*>\s*First week/);
+	assert.match(updates, /<time[^>]*datetime="2026-01-05"/);
+
+	// And `updates` is a graph collection like any other, so the twin writer
+	// covers it without the consumer owning a second integration for it.
+	const updateTwin = await readFile(path.join(DIST, 'updates/2026-01-05.md'), 'utf8');
+	assert.equal(
+		updateTwin,
+		await readFile(path.join(FIXTURE, 'src/content/updates/2026-01-05.md'), 'utf8')
+	);
 
 	// The `.md` URL returns the file, not a re-serialization of it.
 	const published = await readFile(path.join(DIST, 'notes/hello.md'), 'utf8');

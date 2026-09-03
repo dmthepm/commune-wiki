@@ -17,10 +17,12 @@ import type { ParseArgsOptionsConfig } from 'node:util';
 import { CliError, EXIT_OK, EXIT_USAGE, isParseArgsError, usageError } from './errors.ts';
 import { writeError } from './render.ts';
 import { resolveRoot } from './root.ts';
-import { queryCommand, type QueryFilters } from './query.ts';
+import { toIsoDay } from '../lib/graph.ts';
+import { parseRecent, queryCommand, type QueryFilters } from './query.ts';
 import { checkCommand } from './check.ts';
 import { gateCommand } from './gate.ts';
 import { relatedCommand } from './related.ts';
+import { updateCommand } from './update.ts';
 import { COMMAND_USAGE, USAGE } from './usage.ts';
 import { readVersion } from './version.ts';
 
@@ -38,6 +40,13 @@ const QUERY_OPTIONS: ParseArgsOptionsConfig = {
 	status: { type: 'string' },
 	orphans: { type: 'boolean', default: false },
 	deadends: { type: 'boolean', default: false },
+	recent: { type: 'string' },
+};
+
+const UPDATE_OPTIONS: ParseArgsOptionsConfig = {
+	...GLOBAL,
+	recent: { type: 'string', default: '7d' },
+	write: { type: 'boolean', default: false },
 };
 
 const GATE_OPTIONS: ParseArgsOptionsConfig = {
@@ -46,7 +55,7 @@ const GATE_OPTIONS: ParseArgsOptionsConfig = {
 };
 
 /** Every route, longest first, so `graph query` is matched before a bare `graph`. */
-const ROUTES = ['graph query', 'graph related', 'check', 'gate'];
+const ROUTES = ['graph query', 'graph related', 'check', 'gate', 'update'];
 
 interface Route {
 	name: string;
@@ -86,6 +95,31 @@ function route(args: string[]): Route {
 	throw usageError(`unknown command: ${positionals.slice(0, 2).join(' ')}`, USAGE);
 }
 
+/**
+ * Resolve `--recent` to a day, or fail the invocation.
+ *
+ * Resolved here rather than inside a command so an unparseable duration is
+ * exit 2 beside every other bad flag, instead of an empty result set that
+ * looks like an answer.
+ */
+function resolveRecent(value: string | undefined, usage: string): string | undefined {
+	if (value === undefined) return undefined;
+
+	const since = parseRecent(value);
+	if (since === undefined) {
+		throw usageError(
+			`--recent takes a number of days or weeks (7d, 2w) or a date (2026-09-01), not ${value}`,
+			usage
+		);
+	}
+	return since;
+}
+
+/** Today, as a local calendar day: the date a scaffolded update is filed under. */
+function today(): string {
+	return toIsoDay(new Date());
+}
+
 /** Turn `parseArgs`'s typed failures into the CLI's usage error. */
 function parseStrict(
 	args: string[],
@@ -112,12 +146,14 @@ async function dispatch(args: string[]): Promise<number> {
 				process.stdout.write(`${usage}\n`);
 				return EXIT_OK;
 			}
+			const since = resolveRecent(values.recent as string | undefined, usage);
 			const filters: QueryFilters = {
 				collections: values.collection as string[],
 				tags: values.tag as string[],
 				status: values.status as string | undefined,
 				orphans: values.orphans as boolean,
 				deadends: values.deadends as boolean,
+				...(since !== undefined ? { since } : {}),
 			};
 			return queryCommand(await resolveRoot(values.root as string | undefined), filters, values.json as boolean);
 		}
@@ -149,6 +185,20 @@ async function dispatch(args: string[]): Promise<number> {
 			}
 			return checkCommand(
 				await resolveRoot(values.root as string | undefined),
+				values.json as boolean
+			);
+		}
+		case 'update': {
+			const { values } = parseStrict(rest, UPDATE_OPTIONS, false, usage);
+			if (values.help) {
+				process.stdout.write(`${usage}\n`);
+				return EXIT_OK;
+			}
+			return updateCommand(
+				await resolveRoot(values.root as string | undefined),
+				resolveRecent(values.recent as string, usage)!,
+				today(),
+				values.write as boolean,
 				values.json as boolean
 			);
 		}

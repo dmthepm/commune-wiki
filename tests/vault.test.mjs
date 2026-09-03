@@ -21,7 +21,7 @@ test('a root loads content from another project without changing the process cwd
 	const entries = await loadContentEntries({ root: VAULT });
 
 	assert.equal(process.cwd(), before);
-	assert.equal(entries.length, 11);
+	assert.equal(entries.length, 12);
 });
 
 test('file paths stay relative to the given root, in POSIX spelling', async () => {
@@ -70,7 +70,7 @@ test('collections keep their scan order across roots', async () => {
 
 	assert.deepEqual(
 		[...new Set(entries.map((entry) => entry.collection))],
-		['notes', 'research', 'pages']
+		['notes', 'research', 'pages', 'updates']
 	);
 });
 

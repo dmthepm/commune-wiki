@@ -95,7 +95,7 @@ test('check --json reports counts by rule and exits 0 despite findings', async (
 	});
 	assert.equal(payload.summary.errors, 4);
 	assert.equal(payload.summary.warnings, 1);
-	assert.equal(payload.summary.entries, 11);
+	assert.equal(payload.summary.entries, 12);
 	assert.equal(payload.findings.length, 5);
 });
 
@@ -107,6 +107,6 @@ test('check on the engine reports 30 warnings and 0 errors', async () => {
 	assert.equal(summary.warnings, 30);
 	assert.equal(summary.errors, 0);
 	assert.equal(summary.byRule['broken-link'], 30);
-	assert.equal(summary.entries, 11);
-	assert.equal(summary.edges, 41);
+	assert.equal(summary.entries, 12);
+	assert.equal(summary.edges, 45);
 });
