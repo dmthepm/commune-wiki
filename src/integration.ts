@@ -22,7 +22,7 @@ import {
 	type ContentEntry,
 	type Graph,
 	type NoteMetadata,
-} from './src/lib/graph.ts';
+} from './lib/graph.ts';
 
 function buildBacklinksGraph(
 	entries: ContentEntry[],

@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import rehypeExternalLinks from '../rehype-external-links.ts';
+import rehypeExternalLinks from '../src/rehype-external-links.ts';
 
 const SITE = 'https://devonmeadows.com';
 

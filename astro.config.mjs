@@ -3,11 +3,11 @@ import { unified } from '@astrojs/markdown-remark';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 import sitemap from '@astrojs/sitemap';
-import backlinks from './astro.backlinks.ts';
-import remarkWikiLinks from './remark-wikilinks.ts';
-import rehypeExternalLinks from './rehype-external-links.ts';
+import backlinks from './src/integration.ts';
+import remarkWikiLinks from './src/remark-wikilinks.ts';
+import rehypeExternalLinks from './src/rehype-external-links.ts';
 
-// The deployed origin, declared once. `rehype-external-links.ts` decides what
+// The deployed origin, declared once. `src/rehype-external-links.ts` decides what
 // counts as external by comparing hosts against it, so the site's own host is
 // configuration here rather than a constant baked into the engine.
 const site = 'https://devonmeadows.com';
@@ -16,7 +16,7 @@ const site = 'https://devonmeadows.com';
 export default defineConfig({
 	site,
 	// Astro 7 renders markdown with Sätteri and no longer installs
-	// `@astrojs/markdown-remark`. `remark-wikilinks.ts` is the mechanism this
+	// `@astrojs/markdown-remark`. `src/remark-wikilinks.ts` is the mechanism this
 	// whole project exists for, so the unified pipeline is reinstalled and kept
 	// rather than ported: a Sätteri port is a rewrite of the product's core, not
 	// a step in an engine upgrade, and it gets its own ticket.

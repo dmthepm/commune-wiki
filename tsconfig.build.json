@@ -1,0 +1,38 @@
+{
+	// The type gate, and the build that produces `dist/`.
+	//
+	// Deliberately not extending `tsconfig.json`: that one is Astro's
+	// `strict` preset, which is tuned for the *site* — JSX, DOM libs, `.astro`
+	// files, and `noEmit`. This one describes the Node-side package only, the
+	// files a consumer runs outside an Astro process: the graph core, the CLI,
+	// the two unified plugins and the integration.
+	//
+	// `rootDir: src` is what keeps the emitted tree flat (`dist/lib/graph.js`,
+	// `dist/cli/main.js`), so `exports` can point at short paths rather than
+	// `dist/src/...`. `rewriteRelativeImportExtensions` is what lets the source
+	// keep its explicit `./x.ts` specifiers — which Node's type stripping
+	// requires when it runs these files straight from the repo — while the
+	// emitted JavaScript imports `./x.js`.
+	"compilerOptions": {
+		"target": "ES2022",
+		"lib": ["ES2022"],
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"rootDir": "src",
+		"outDir": "dist",
+		"declaration": true,
+		"declarationMap": true,
+		"sourceMap": true,
+		"rewriteRelativeImportExtensions": true,
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"strict": true,
+		"skipLibCheck": true,
+		"types": ["node"]
+	},
+	// Never `src/components`, `src/pages`, `src/content` or
+	// `src/content.config.ts`: those are the site's, they are `.astro` or they
+	// import `astro:*` virtual modules, and none of them ship compiled.
+	"include": ["src/lib", "src/cli", "src/*.ts"],
+	"exclude": ["src/env.d.ts", "src/content.config.ts"]
+}

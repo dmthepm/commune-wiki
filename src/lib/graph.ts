@@ -91,7 +91,16 @@ export function toUrlPath(
 
 	// Astro slugifies each path segment separately, so nested content keeps its
 	// directory structure. Match that exactly.
-	const derived = relative.split('/').map(githubSlug).join('/');
+	//
+	// The lambda is not ceremony: `githubSlug`'s second parameter is
+	// `maintainCase`, and passing the function straight to `map` would hand it
+	// the array index there — every segment after the first slugified with
+	// `maintainCase: 1`, which is truthy. Naming the one argument is what stops
+	// that.
+	const derived = relative
+		.split('/')
+		.map((segment) => githubSlug(segment))
+		.join('/');
 	const slug = typeof data.slug === 'string' && data.slug ? data.slug : derived;
 
 	if (collection === 'pages') {
@@ -512,33 +521,54 @@ function dedupe(links: ExtractedLink[]): ExtractedLink[] {
 // =============================================================================
 
 /**
+ * The shape of the star calculation strategy.
+ *
+ * Declared as an interface rather than inferred from the value, because the
+ * value picks one member of each union and `calculateStars` switches over all
+ * of them. With `as const` on the fields, TypeScript narrows `strategy` to the
+ * literal `'top-percent'` and every other arm of that switch becomes an error
+ * — the config would be untunable without editing the code that reads it,
+ * which is the opposite of what a config is for.
+ */
+export interface StarConfig {
+	strategy: 'top-percent' | 'top-absolute' | 'threshold';
+	/** For 'top-percent': what percentage gets stars. */
+	topPercent: number;
+	/** For 'top-absolute': how many notes get stars. */
+	topAbsolute: number;
+	/** For 'threshold': minimum backlinks to get a star. */
+	threshold: number;
+	/** Below this many notes, nobody is starred. */
+	minNotesForStars: number;
+	rankBy: 'backlinks' | 'revisions' | 'cross-theme' | 'weighted';
+	/** For 'weighted' ranking (future). */
+	weights: {
+		backlinks: number;
+		revisions: number;
+		crossTheme: number;
+	};
+}
+
+/**
  * Star calculation strategy.
  *
  * Lives in the core rather than the Astro integration because `isStarred` is a
  * field of the public artifact, and the CLI has to be able to produce the same
  * artifact without loading Astro.
  */
-export const STAR_CONFIG = {
-	// Strategy: 'top-percent' | 'top-absolute' | 'threshold'
-	strategy: 'top-percent' as const,
+export const STAR_CONFIG: StarConfig = {
+	strategy: 'top-percent',
 
-	// For 'top-percent': What percentage gets stars?
 	topPercent: 5, // Top 5%
 
-	// For 'top-absolute': How many notes get stars?
 	topAbsolute: 3, // Top 3 notes
 
-	// For 'threshold': Minimum backlinks to get a star
 	threshold: 10, // 10+ backlinks
 
-	// Minimum notes required before stars are enabled
 	minNotesForStars: 20,
 
-	// What metric to rank by?
-	// 'backlinks' | 'revisions' | 'cross-theme' | 'weighted'
-	rankBy: 'backlinks' as const,
+	rankBy: 'backlinks',
 
-	// For weighted ranking (future):
 	weights: {
 		backlinks: 0.5,
 		revisions: 0.3,

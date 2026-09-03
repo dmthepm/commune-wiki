@@ -26,6 +26,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # The type gate. Node strips types when it runs these files and never
+      # checks them, and `astro check` never sees them either — so without this
+      # step a type error in the graph core, the CLI or the plugins reaches a
+      # consumer as a failed `prepare` on their install. It runs before the
+      # tests because a compile error is cheaper to read than a test failure
+      # caused by one.
+      - run: pnpm build:lib
+
       - run: pnpm test
 
       - run: pnpm build
