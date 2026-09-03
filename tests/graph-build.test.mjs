@@ -40,13 +40,13 @@ test('inbound and outbound stay resolved urlPaths only', async () => {
 			assert.ok(urls.has(url), `${url} is not a node`);
 		}
 	}
-	assert.equal(graph.totalBacklinks, 41);
+	assert.equal(graph.totalBacklinks, 45);
 });
 
 test('the fixture vault resolves its links and reports its one broken edge', async () => {
 	const graph = buildGraph(await loadContentEntries({ root: VAULT }));
 
-	assert.equal(Object.keys(graph.nodes).length, 11);
+	assert.equal(Object.keys(graph.nodes).length, 12);
 	assert.deepEqual(
 		graph.diagnostics.filter((d) => d.rule === 'broken-link').map((d) => d.target),
 		['Nonexistent Note']

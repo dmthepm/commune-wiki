@@ -8,9 +8,9 @@
  * rules, and three subtly different opinions about trailing slashes.
  *
  * The rules this module owns:
- *   - which collections participate (notes, research, pages)
- *   - visibility (notes opt in with `visibility: public`; research and pages
- *     are always public)
+ *   - which collections participate (notes, research, pages, updates)
+ *   - visibility (notes opt in with `visibility: public`; research, pages and
+ *     updates are always public)
  *   - canonical URLs, always with a trailing slash, matching Astro's
  *     directory build format
  *   - the title/alias lookup used to resolve `[[WikiLinks]]`
@@ -26,17 +26,24 @@ import { readGitHistory, readMtimeDate, type DateSource } from './dates.ts';
 
 export type { DateSource } from './dates.ts';
 
-export type CollectionName = 'notes' | 'research' | 'pages';
+export type CollectionName = 'notes' | 'research' | 'pages' | 'updates';
 
 /** Where each collection's markdown lives, relative to the project root. */
 export const CONTENT_DIRS: Record<CollectionName, string> = {
 	notes: 'src/content/notes',
 	research: 'src/content/research',
 	pages: 'src/content/pages',
+	updates: 'src/content/updates',
 };
 
-/** Collection scan order. Stable so derived artifacts are deterministic. */
-export const COLLECTIONS: CollectionName[] = ['notes', 'research', 'pages'];
+/**
+ * Collection scan order. Stable so derived artifacts are deterministic.
+ *
+ * `updates` is last because it was added last, and the order is the order
+ * `backlinks.json` is keyed in: putting it anywhere else would rewrite the
+ * whole committed artifact to say the same thing.
+ */
+export const COLLECTIONS: CollectionName[] = ['notes', 'research', 'pages', 'updates'];
 
 /** One piece of public content, as the graph sees it. */
 export interface ContentEntry {
@@ -246,7 +253,7 @@ async function resolveDates(
 	};
 }
 
-/** Is this entry publicly visible? Notes opt in; research and pages are always public. */
+/** Is this entry publicly visible? Notes opt in; every other collection is public. */
 function isPublic(collection: CollectionName, data: Record<string, unknown>): boolean {
 	if (collection !== 'notes') return true;
 	return data.visibility === 'public';
@@ -492,6 +499,18 @@ export interface ExtractedLink {
 const NON_LINK_KEYS = new Set(['aliases', 'tags']);
 
 /**
+ * Frontmatter keys whose strings are link targets in their own right.
+ *
+ * Everywhere else in frontmatter a link has to be spelled `[[like this]]`,
+ * because a bare string is usually prose and guessing otherwise would turn a
+ * page's own `url:` into a self-edge. Under `links:` the guess is the whole
+ * point: an update declares the pages it rolls up, and writing them as
+ * `[[double brackets]]` inside a YAML list is ceremony for a field that means
+ * nothing else.
+ */
+const LINK_KEYS = new Set(['links']);
+
+/**
  * Extract every outbound link target from a markdown body and its frontmatter.
  *
  * Returns the edges Obsidian's `resolvedLinks` would record: wikilinks, embeds,
@@ -533,23 +552,28 @@ export function extractLinks(
 function extractFrontmatterLinks(frontmatter: Record<string, unknown>): ExtractedLink[] {
 	const links: ExtractedLink[] = [];
 
-	const walk = (value: unknown): void => {
+	const walk = (value: unknown, bare: boolean): void => {
 		if (typeof value === 'string') {
 			for (const match of value.matchAll(WIKILINK)) {
 				const target = stripSubpath(match[1]);
 				if (target) links.push({ kind: 'name', target });
 			}
+			// A string that already spelled its link is not also a bare target.
+			if (bare && !value.includes('[[')) {
+				const link = classifyFrontmatterTarget(value);
+				if (link) links.push(link);
+			}
 		} else if (Array.isArray(value)) {
-			value.forEach(walk);
+			for (const nested of value) walk(nested, bare);
 		} else if (value && typeof value === 'object') {
 			for (const [key, nested] of Object.entries(value)) {
-				if (!NON_LINK_KEYS.has(key)) walk(nested);
+				if (!NON_LINK_KEYS.has(key)) walk(nested, bare || LINK_KEYS.has(key));
 			}
 		}
 	};
 
 	for (const [key, value] of Object.entries(frontmatter)) {
-		if (!NON_LINK_KEYS.has(key)) walk(value);
+		if (!NON_LINK_KEYS.has(key)) walk(value, LINK_KEYS.has(key));
 	}
 
 	return links;
@@ -576,6 +600,26 @@ const MARKDOWN_LINK = /!?\[[^\]]*\]\(\s*(<[^>]*>|[^()\s]+)(?:\s+"[^"]*")?\s*\)/g
  * handed to the title lookup, where it only ever resolved by the coincidence of
  * a note listing its own slug as an alias.
  */
+/**
+ * Classify one bare string from a `links:` list.
+ *
+ * A site path is a `url` link, a filename is the file's title, and anything
+ * else is read as a title — the same two namespaces every other edge resolves
+ * through, so `check` reports an unresolvable entry here exactly as it reports
+ * a broken `[[WikiLink]]`. External URLs are not edges, as everywhere else.
+ */
+function classifyFrontmatterTarget(raw: string): ExtractedLink | null {
+	const value = raw.trim();
+	if (!value) return null;
+	if (/^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith('//')) return null;
+
+	const classified = classifyMarkdownTarget(value);
+	if (classified) return classified;
+
+	const title = stripSubpath(value);
+	return title ? { kind: 'name', target: title } : null;
+}
+
 function classifyMarkdownTarget(raw: string): ExtractedLink | null {
 	const destination = raw.replace(/^<|>$/g, '').trim();
 
@@ -762,8 +806,12 @@ export interface Graph {
 export function calculateStars(notes: Map<string, NoteMetadata>): Set<string> {
 	const starredSlugs = new Set<string>();
 
-	// Standalone pages belong in search and WikiLinks, not note rankings.
-	const notesArray = Array.from(notes.values()).filter((note) => note.collection !== 'pages');
+	// Standalone pages and changelog updates belong in search and WikiLinks, not
+	// note rankings. An update links to everything it rolled up, so ranking it
+	// alongside notes would let the changelog crowd out the writing it describes.
+	const notesArray = Array.from(notes.values()).filter(
+		(note) => note.collection !== 'pages' && note.collection !== 'updates'
+	);
 
 	// Skip if too few notes
 	if (notesArray.length < STAR_CONFIG.minNotesForStars) {
@@ -918,7 +966,13 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 			}
 
 			if (resolved && notes.has(resolved)) {
-				resolvedOutbound.push(resolved);
+				// One edge per target, not one per spelling. `[[World]]` in the body
+				// and `/notes/world/` under `links:` are the same edge written two
+				// ways, and an update names both — the prose says it and the
+				// frontmatter lists it. `inbound` has always been deduplicated;
+				// `outbound` reaching the same page twice was the same fact
+				// counted twice.
+				if (!resolvedOutbound.includes(resolved)) resolvedOutbound.push(resolved);
 				const target = notes.get(resolved)!;
 				if (!target.inbound.includes(fromUrl)) {
 					target.inbound.push(fromUrl);

@@ -21,8 +21,8 @@ test('graph query returns the fixture vault as one JSON document', async () => {
 	assert.equal(stderr, '');
 	const payload = JSON.parse(stdout);
 	assert.equal(payload.schema, 1);
-	assert.equal(payload.count, 11);
-	assert.equal(payload.entries.length, 11);
+	assert.equal(payload.count, 12);
+	assert.equal(payload.entries.length, 12);
 	assert.match(payload.root, /tests\/fixtures\/vault$/);
 });
 
@@ -33,7 +33,11 @@ test('a root is a project root, so file and slug are spelled from it', async () 
 	assert.equal(alpha.file, 'src/content/notes/Alpha.md');
 	assert.equal(alpha.urlPath, '/notes/alpha/');
 	assert.deepEqual(alpha.outbound, ['/notes/beta/', '/notes/duplicate-two/']);
-	assert.deepEqual(alpha.inbound, ['/notes/beta/', '/research/vault-research/']);
+	assert.deepEqual(alpha.inbound, [
+		'/notes/beta/',
+		'/research/vault-research/',
+		'/updates/2026-02-14/',
+	]);
 });
 
 test('every entry says where its date came from', async () => {
@@ -93,6 +97,24 @@ test('filters are any-of within a flag and all-of across flags', async () => {
 	assert.equal(JSON.parse(tagged.stdout).count, 2);
 });
 
+test('updates are a collection like any other', async () => {
+	const { stdout } = await commune(
+		'--root', VAULT, 'graph', 'query', '--collection', 'updates', '--json'
+	);
+	const { count, entries } = JSON.parse(stdout);
+
+	assert.equal(count, 1);
+	const [update] = entries;
+	assert.equal(update.urlPath, '/updates/2026-02-14/');
+	assert.equal(update.file, 'src/content/updates/2026-02-14.md');
+	// One edge per page it rolls up: `Alpha` is named by title in `links:` and
+	// again as `[[Alpha]]` in the body, and the research report by path.
+	assert.deepEqual(update.outbound, ['/notes/alpha/', '/research/vault-research/']);
+	// `date` is the update's subject, so it dates the entry.
+	assert.equal(update.updated, '2026-02-14');
+	assert.equal(update.updatedSource, 'frontmatter');
+});
+
 test('orphans are isolated, not merely unlinked-to', async () => {
 	const orphans = await commune('--root', VAULT, 'graph', 'query', '--orphans', '--json');
 	assert.deepEqual(
@@ -128,7 +150,7 @@ test('query and check answer "what did I get" in the same place', async () => {
 	// deduplicated inbound on the other — which is what makes this worth pinning.
 	assert.equal(q.summary.entries, c.summary.entries);
 	assert.equal(q.summary.edges, c.summary.edges);
-	assert.deepEqual(q.summary, { entries: 11, edges: 5, orphans: 6, deadends: 8 });
+	assert.deepEqual(q.summary, { entries: 12, edges: 7, orphans: 6, deadends: 8 });
 });
 
 test('summary describes what was returned, not the whole corpus', async () => {
@@ -159,8 +181,8 @@ test('text mode is line-per-entry with a summary last', async () => {
 	const lines = stdout.trimEnd().split('\n');
 
 	assert.equal(code, 0);
-	assert.equal(lines.length, 12);
-	assert.match(lines.at(-1), /^11 entries/);
+	assert.equal(lines.length, 13);
+	assert.match(lines.at(-1), /^12 entries/);
 });
 
 test('an unknown flag is exit 2 with nothing on stdout', async () => {
@@ -233,5 +255,5 @@ test('no Astro module is loaded on the CLI path', async () => {
 		'--import', hook, BIN, '--root', VAULT, 'graph', 'query', '--json',
 	]);
 
-	assert.equal(JSON.parse(stdout).count, 11);
+	assert.equal(JSON.parse(stdout).count, 12);
 });

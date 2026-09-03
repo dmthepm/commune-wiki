@@ -99,7 +99,79 @@ That route is a starting point, not an interface. The package ships the mechanis
 - **Markdown twins.** Every published content entry gets its source written beside it, so `/notes/hello/` also answers at `/notes/hello.md`. Entries in the content directories only — a hand-written route under `src/pages/` has no source file to twin. Agents and readers get the same document without scraping HTML.
 - **External links.** Anything off your `site` origin gets `target="_blank" rel="noopener noreferrer"` without you marking it up.
 - **The graph as a library.** `@dmthepm/commune/graph` exports the content loader, the link resolver and the graph builder. The Astro build and the CLI both call it. That is the point: one resolver, not two that drift.
+- **Updates.** A fourth collection, `src/content/updates/`, for the dated entries that say what changed. `Updates.astro` renders the newest few as a card. See [Updates](#updates) below.
 - **Components and stylesheets.** `@dmthepm/commune/components/*.astro` and `@dmthepm/commune/styles/*.css`, shipped as source. These are the components off my own site rather than a theme system — take them as a starting point, not an API.
+
+## Updates
+
+A wiki's front door has to answer "what changed" before it answers anything else. Commune's answer is content: one dated entry per batch of work, in `src/content/updates/`, which the graph treats as a collection like any other — twins, backlinks, `check`, `graph query --collection updates`.
+
+```markdown
+---
+title: "New notes and a working loop"
+date: 2026-09-03
+summary: "Rewrote the home note and added two notes."
+links:
+  - Atomic Notes
+  - /notes/evergreen-notes/
+---
+
+I rewrote the home note. [[Atomic Notes]] and [[Evergreen Notes]] are new.
+```
+
+`links:` is the one place in frontmatter where a bare string is a link. Everywhere else a link has to be spelled `[[like this]]` — a page's own `url:` would otherwise become a self-edge — but `links:` means nothing else, so a title or a site path both resolve and both become real edges. Write it or don't: `[[wikilinks]]` in the body work the same way, and naming a page in both places is still one edge.
+
+Register the collection alongside your notes in `src/content.config.ts`:
+
+```ts
+updates: defineCollection({
+  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/updates' }),
+  schema: z.object({
+    title: z.string(),
+    date: z.string(),
+    summary: z.string(),
+    aiGenerated: z.boolean().default(false),
+    links: z.array(z.string()).default([]),
+  }),
+}),
+```
+
+Then render the card wherever it belongs — the home page, an index, a sidebar:
+
+```astro
+---
+import Updates from '@dmthepm/commune/components/Updates.astro';
+---
+<Updates limit={5} heading="Recent updates" />
+```
+
+It reads the collection at build time and emits markup. No fetch, no client script.
+
+### A feed
+
+The engine ships no routes, so it ships no RSS either — a feed is a route, and routes are yours. It is two lines with `@astrojs/rss`, in `src/pages/updates/rss.xml.ts`:
+
+```ts
+import rss from '@astrojs/rss';
+import { getCollection } from 'astro:content';
+
+export async function GET(context) {
+  const updates = await getCollection('updates');
+  return rss({
+    title: 'Updates',
+    description: 'What changed',
+    site: context.site,
+    items: updates
+      .sort((a, b) => b.data.date.localeCompare(a.data.date))
+      .map((update) => ({
+        title: update.data.title,
+        description: update.data.summary,
+        pubDate: new Date(`${update.data.date}T12:00:00Z`),
+        link: `/updates/${update.id}/`,
+      })),
+  });
+}
+```
 
 ## The CLI
 
@@ -115,7 +187,7 @@ commune gate
 
 | Verb | What it answers |
 | --- | --- |
-| `graph query` | Every entry with its edges. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`. |
+| `graph query` | Every entry with its edges and dates. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`. |
 | `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. |
 | `check` | Broken links, duplicate names, ambiguous targets, non-canonical titles. |
 | `gate` | Run after a build, against the built site. |

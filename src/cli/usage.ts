@@ -16,11 +16,11 @@ Global options:
   --version      Print the version of the installed package and exit.
 
 graph query filters (any-of within a flag, all-of across flags):
-  --collection <notes|research|pages>   Repeatable.
-  --tag <tag>                           Repeatable.
+  --collection <notes|research|pages|updates>   Repeatable.
+  --tag <tag>                                   Repeatable.
   --status <status>
-  --orphans                             Zero inbound and zero outbound.
-  --deadends                            Zero outbound.
+  --orphans                                     Zero inbound and zero outbound.
+  --deadends                                    Zero outbound.
 
 gate options:
   --dist <dir>   The built site to check, relative to --root. Default: dist.

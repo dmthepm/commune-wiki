@@ -1,0 +1,114 @@
+---
+/**
+ * The newest entries from the `updates` collection, as a card.
+ *
+ * A wiki's front door has to answer "what changed" before it answers anything
+ * else, and the answer is content the site already has: one dated entry per
+ * batch of work, in `src/content/updates/`. This renders the newest few.
+ *
+ * Everything happens at build time. There is no `fetch` here and no client
+ * script — unlike `Backlinks.astro`, which reads `/backlinks.json` in the
+ * browser because a note's inbound links depend on which note you are on. A
+ * changelog does not, so it is markup by the time the page is served, and it
+ * is in the HTML for a reader with no JavaScript and for anything that reads
+ * the page as a document.
+ *
+ * The collection has to be registered in the consumer's `src/content.config.ts`
+ * for `getCollection` to see it — the same requirement `notes` has. The schema
+ * this expects is in the README.
+ */
+
+import { getCollection } from 'astro:content';
+
+interface Props {
+	/** How many entries to show. */
+	limit?: number;
+	/** The card's heading. Passed rather than fixed, because a card that says
+	 *  "Recent updates" on the home page often wants to say nothing at all on
+	 *  the updates index itself. An empty string renders no heading. */
+	heading?: string;
+}
+
+const { limit = 5, heading = 'Recent updates' } = Astro.props;
+
+// `date` is the update's subject — the day the work happened — not a fact
+// about the file, so entries sort by it and not by their history. Descending,
+// and by id as the tiebreak so two updates dated the same day have a stable
+// order rather than the filesystem's.
+const updates = (await getCollection('updates'))
+	.sort((a, b) => b.data.date.localeCompare(a.data.date) || b.id.localeCompare(a.id))
+	.slice(0, limit);
+---
+
+<section class="commune-updates">
+	{heading && <h2 class="commune-updates-title">{heading}</h2>}
+
+	{updates.length === 0 ? (
+		<p class="commune-updates-empty">No updates yet.</p>
+	) : (
+		<ul class="commune-updates-list">
+			{updates.map((update) => (
+				<li class="commune-updates-item">
+					<a href={`/updates/${update.id}/`} class="commune-updates-link">
+						{update.data.title}
+					</a>
+					<time class="commune-updates-date" datetime={update.data.date}>
+						{update.data.date}
+					</time>
+					{update.data.summary && (
+						<p class="commune-updates-summary">{update.data.summary}</p>
+					)}
+				</li>
+			))}
+		</ul>
+	)}
+</section>
+
+<style>
+	.commune-updates-title {
+		font-size: 1.1rem;
+		font-weight: 600;
+		margin: 0 0 1rem 0;
+	}
+
+	.commune-updates-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+	}
+
+	.commune-updates-item {
+		margin-bottom: 1rem;
+	}
+
+	.commune-updates-item:last-child {
+		margin-bottom: 0;
+	}
+
+	.commune-updates-link {
+		font-weight: 500;
+		text-decoration: none;
+	}
+
+	.commune-updates-link:hover {
+		text-decoration: underline;
+	}
+
+	.commune-updates-date {
+		display: block;
+		font-size: 0.8rem;
+		opacity: 0.7;
+	}
+
+	.commune-updates-summary {
+		margin: 0.25rem 0 0 0;
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+
+	.commune-updates-empty {
+		margin: 0;
+		font-style: italic;
+		opacity: 0.7;
+	}
+</style>

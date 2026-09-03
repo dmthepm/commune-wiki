@@ -118,6 +118,27 @@ test('frontmatter wins, and the git date is still reported beside it', async () 
 	});
 });
 
+test('a changelog entry dates itself from its own date field', async () => {
+	await withProject(async (dir) => {
+		await initRepo(dir);
+		await mkdir(path.join(dir, 'src/content/updates'), { recursive: true });
+		await writeFile(
+			path.join(dir, 'src/content/updates/2026-02-14.md'),
+			'---\ntitle: "Valentine"\ndate: 2026-02-14\nsummary: "A day of updates."\n---\n\nWhat changed.\n'
+		);
+		await commitAll(dir, 'add an update', '2026-03-04T12:00:00+00:00');
+
+		const [entry] = await loadContentEntries({ root: dir });
+
+		// `date` is the update's subject, not a guess about the file: an update
+		// written on the 14th and committed on the 4th of March is still the
+		// 14th's update.
+		assert.equal(entry.collection, 'updates');
+		assert.equal(entry.updated, '2026-02-14');
+		assert.equal(entry.updatedSource, 'frontmatter');
+	});
+});
+
 test('a tree with no git history falls back to file mtimes rather than failing', async () => {
 	await withProject(async (dir) => {
 		// No `git init`: this is the consumer whose build runs from a tarball, a

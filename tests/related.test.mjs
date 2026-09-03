@@ -29,7 +29,7 @@ test('a file source returns its links, its mentions and its inbound entries', as
 		resolved: 2,
 		unresolved: 1,
 		mentions: 3,
-		inbound: 2,
+		inbound: 3,
 	});
 	assert.deepEqual(
 		payload.links.map((link) => [link.target, link.resolved?.urlPath ?? null]),
@@ -41,7 +41,7 @@ test('a file source returns its links, its mentions and its inbound entries', as
 	);
 	assert.deepEqual(
 		payload.inbound.map((entry) => entry.urlPath),
-		['/notes/beta/', '/research/vault-research/']
+		['/notes/beta/', '/research/vault-research/', '/updates/2026-02-14/']
 	);
 });
 
