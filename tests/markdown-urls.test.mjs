@@ -10,7 +10,7 @@
  * page at that URL actually links to it, which is the only assertion that
  * catches a template computing the suffix its own way.
  *
- * `dist/` is gitignored, so unlike `public/backlinks.json` there is no committed
+ * `dist-site/` is gitignored, so unlike `public/backlinks.json` there is no committed
  * artifact to read and the build has to be spawned here. It runs once, in a
  * `before` hook, straight from astro's own bin — `pnpm build` would also run the
  * search-index gate, which this file has no business asserting on.
@@ -26,7 +26,7 @@ import { loadContentEntries, toMarkdownHref, toMarkdownPath, toUrlPath } from '.
 import { run } from './helpers.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
-const DIST = path.join(ROOT, 'dist');
+const DIST = path.join(ROOT, 'dist-site');
 
 /** Quote a literal for use inside a RegExp — `.` in a path must not match anything. */
 const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

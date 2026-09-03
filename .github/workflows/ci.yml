@@ -16,9 +16,12 @@ jobs:
         with:
           version: 10
 
-      # Reads .nvmrc, so CI and a local checkout cannot drift apart. The floor
-      # is 22.18: it is the first release that strips TypeScript types by
-      # default, and every entry point here imports src/lib/graph.ts directly.
+      # Reads .nvmrc, so CI and a local checkout cannot drift apart. 22 is a
+      # *development* floor, not the package's: the bin now runs compiled
+      # JavaScript, so a consumer only needs Astro's own 22.12 (`engines`).
+      # What still needs 22.18 is this repo's own tests and `astro.config.mjs`,
+      # which import `src/**/*.ts` directly and rely on Node stripping types by
+      # default — first released in 22.18.
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc

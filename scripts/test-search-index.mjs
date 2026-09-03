@@ -78,7 +78,7 @@ for (const entry of entries) {
 	}
 	if (!expected.size) continue;
 
-	const html = await readFile(path.join('dist/notes', entry.slug, 'index.html'), 'utf8');
+	const html = await readFile(path.join('dist-site/notes', entry.slug, 'index.html'), 'utf8');
 	for (const url of expected) {
 		if (!html.includes(`href="${url}"`)) unresolved.push(`${entry.slug} -> ${url}`);
 	}

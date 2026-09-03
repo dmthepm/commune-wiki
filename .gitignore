@@ -4,7 +4,10 @@ node_modules/
 .pnp.js
 
 # Build output
+# `dist/` is the compiled package (tsc); `dist-site/` is this repo's own Astro
+# site. They are separate directories because `astro build` empties its own.
 dist/
+dist-site/
 .astro/
 
 # Environment

@@ -213,11 +213,11 @@ closePane(pane)     // Remove pane
 
 ## 📊 Backlinks
 
-Backlinks are auto-generated at build time via `astro.backlinks.ts` integration:
+Backlinks are auto-generated at build time via the `src/integration.ts` integration:
 
 1. Scans all notes for WikiLinks
 2. Creates bidirectional graph
-3. Outputs to `public/backlinks.json` and `dist/backlinks.json`
+3. Outputs to `public/backlinks.json` and `<outDir>/backlinks.json`
 4. Displayed in `Backlinks.astro` component ("Links to this note")
 
 ---
@@ -233,7 +233,7 @@ Backlinks are auto-generated at build time via `astro.backlinks.ts` integration:
 pnpm build
 
 # Output directory
-dist/
+dist-site/   # this repo's own site; `dist/` is the compiled package
 
 # Deploy
 # Connect GitHub repo, auto-deploy on push
@@ -246,7 +246,7 @@ dist/
 caddy:
   image: caddy:alpine
   volumes:
-    - ./dist:/srv:ro
+    - ./dist-site:/srv:ro
     - ./Caddyfile:/etc/caddy/Caddyfile
   ports:
     - "80:80"
@@ -320,7 +320,7 @@ pnpm build 2>&1 | grep "Broken link"
 - **Astro** - Static site generator
 - **Tailwind CSS** - Utility-first styling
 - **Pagefind** - Static search index
-- **remark-wikilinks** - WikiLink transformation plugin (custom)
+- **remark-wikilinks** - WikiLink transformation plugin (custom, `src/remark-wikilinks.ts`)
 - **No framework dependencies** - Vanilla JS for interactivity
 
 ---
@@ -330,8 +330,8 @@ pnpm build 2>&1 | grep "Broken link"
 **For Contributors**:
 - Architecture details in original README (check git history)
 - Pane system implementation in `src/pages/notes/[...slug].astro`
-- WikiLink plugin in `remark-wikilinks.ts`
-- Backlinks integration in `astro.backlinks.ts`
+- WikiLink plugin in `src/remark-wikilinks.ts`
+- Backlinks integration in `src/integration.ts`
 
 **For Users**:
 - This README covers installation and usage
@@ -368,7 +368,7 @@ This is an open-source project under the MIT License. Contributions welcome!
 
 **Symptom**: Links only work on last note built.
 
-**Fix**: Ensure cache size check in `remark-wikilinks.ts`:
+**Fix**: Ensure cache size check in `src/remark-wikilinks.ts`:
 
 ```typescript
 if (notesCache && notesCache.size > 0) {  // MUST check .size!

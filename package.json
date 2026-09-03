@@ -8,7 +8,7 @@
     "commune": "bin/commune.mjs"
   },
   "engines": {
-    "node": ">=22.18.0"
+    "node": ">=22.12.0"
   },
   "repository": {
     "type": "git",
@@ -20,6 +20,8 @@
   "homepage": "https://github.com/dmthepm/commune-wiki#readme",
   "scripts": {
     "build:lib": "tsc -p tsconfig.build.json",
+    "prepare": "pnpm build:lib",
+    "pretest": "pnpm build:lib",
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build && node scripts/test-search-index.mjs",
