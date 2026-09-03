@@ -1,0 +1,12 @@
+# Codex's mirror of `disable-model-invocation: true`.
+#
+# Codex reads only `name` and `description` from the frontmatter, and its
+# default is `allow_implicit_invocation: true` — so without this file the skill
+# that rewrites a wiki's writing rules could fire on its own in Codex while
+# being user-invoked in Claude Code. Invoke it explicitly: `$commune-setup`.
+interface:
+  display_name: "Commune setup"
+  short_description: "One-time setup of a Commune wiki: writes WRITING.md by interview"
+  default_prompt: "Use the commune-setup skill to write this wiki's WRITING.md, migrating any existing writing document into it."
+policy:
+  allow_implicit_invocation: false
