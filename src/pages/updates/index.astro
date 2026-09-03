@@ -26,7 +26,9 @@ function getRelativeDate(dateString: string): string {
   if (diffDays < 30) return `${diffDays}d`;
 
   // For 30+ days, show month and day
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-US', date.getFullYear() === now.getFullYear()
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' });
 }
 ---
 <html lang="en">

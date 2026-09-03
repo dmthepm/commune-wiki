@@ -71,7 +71,9 @@ function getRelativeDate(dateString: string): string {
   if (diffDays < 60) return '1 month ago';
 
   // For older dates, show month and day
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-US', date.getFullYear() === now.getFullYear()
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' });
 }
 ---
 <html lang="en">
@@ -222,7 +224,9 @@ function getRelativeDate(dateString: string): string {
           else if (diffDays < 14) relativeText = '1 week ago';
           else if (diffDays < 30) relativeText = `${Math.floor(diffDays / 7)} weeks ago`;
           else if (diffDays < 60) relativeText = '1 month ago';
-          else relativeText = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          else relativeText = date.toLocaleDateString('en-US', date.getFullYear() === now.getFullYear()
+            ? { month: 'short', day: 'numeric' }
+            : { month: 'short', day: 'numeric', year: 'numeric' });
 
           el.textContent = prefix + relativeText;
         });

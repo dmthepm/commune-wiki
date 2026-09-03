@@ -40,7 +40,9 @@ function getRelativeDate(dateString: string): string {
   if (diffDays < 30) return `${diffDays}d`;
 
   // For 30+ days, show month and day
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-US', date.getFullYear() === now.getFullYear()
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' });
 }
 ---
 <html lang="en">
@@ -200,7 +202,9 @@ function getRelativeDate(dateString: string): string {
         else if (diffDays < 14) relativeText = '1 week ago';
         else if (diffDays < 30) relativeText = `${Math.floor(diffDays / 7)} weeks ago`;
         else if (diffDays < 60) relativeText = '1 month ago';
-        else relativeText = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        else relativeText = date.toLocaleDateString('en-US', date.getFullYear() === now.getFullYear()
+          ? { month: 'short', day: 'numeric' }
+          : { month: 'short', day: 'numeric', year: 'numeric' });
 
         el.textContent = prefix + relativeText;
       });
@@ -224,7 +228,9 @@ function getRelativeDate(dateString: string): string {
         if (diffDays === 0) relativeText = 'today';
         else if (diffDays === 1) relativeText = '1d';
         else if (diffDays < 30) relativeText = `${diffDays}d`;
-        else relativeText = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        else relativeText = date.toLocaleDateString('en-US', date.getFullYear() === now.getFullYear()
+          ? { month: 'short', day: 'numeric' }
+          : { month: 'short', day: 'numeric', year: 'numeric' });
 
         el.textContent = relativeText;
       });
