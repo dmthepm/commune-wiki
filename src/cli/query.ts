@@ -24,6 +24,43 @@ export interface QueryFilters {
 	status?: string;
 	orphans: boolean;
 	deadends: boolean;
+	/** Inclusive `yyyy-mm-dd` cutoff from `--recent`. Entries older than it, and
+	 *  entries with no date at all, are not returned. */
+	since?: string;
+}
+
+/** A local calendar day as `yyyy-mm-dd` — the spelling every date in the graph uses. */
+function toIsoDay(date: Date): string {
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * Resolve `--recent` to the day it means.
+ *
+ * Two spellings, because the two questions are different: `7d` is "since I
+ * last looked", which a weekly update job asks relative to now, and
+ * `2026-09-01` is "since this happened", which a person asks about a date they
+ * remember. `w` is offered because "the last two weeks" is a thing people say;
+ * months are not, since `m` would read as minutes to half the people who type
+ * it.
+ *
+ * Returns `undefined` for anything it cannot parse, so the caller can render
+ * it as the usage error it is rather than silently querying the epoch. The day
+ * is local: `7d` should mean seven of the reader's days, and the dates in
+ * content are calendar days with no timezone of their own.
+ */
+export function parseRecent(value: string, today: Date = new Date()): string | undefined {
+	if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+	const duration = /^(\d+)([dw])$/.exec(value);
+	if (!duration) return undefined;
+
+	const days = Number(duration[1]) * (duration[2] === 'w' ? 7 : 1);
+	const cutoff = new Date(today);
+	cutoff.setDate(cutoff.getDate() - days);
+	return toIsoDay(cutoff);
 }
 
 export interface QueryEntry {
@@ -97,6 +134,11 @@ function matches(entry: QueryEntry, filters: QueryFilters): boolean {
 	if (filters.status !== undefined && entry.status !== filters.status) return false;
 	if (filters.orphans && !isOrphan(entry)) return false;
 	if (filters.deadends && !isDeadend(entry)) return false;
+	// An entry with no date is not "unchanged since the cutoff", it is unknown —
+	// and a list of what changed this week is worth less with unknowns in it.
+	if (filters.since !== undefined && !(entry.updated && entry.updated >= filters.since)) {
+		return false;
+	}
 	return true;
 }
 
@@ -112,12 +154,16 @@ function matches(entry: QueryEntry, filters: QueryFilters): boolean {
  * Free to compute: `outbound` and `inbound` are already materialized on every
  * node by the time a query can be filtered at all.
  */
-function summarize(results: QueryEntry[]) {
+function summarize(results: QueryEntry[], since?: string) {
 	return {
 		entries: results.length,
 		edges: results.reduce((total, entry) => total + entry.outbound.length, 0),
 		orphans: results.filter(isOrphan).length,
 		deadends: results.filter(isDeadend).length,
+		// The resolved cutoff, not the string the caller typed: `--recent 7d`
+		// means a different day tomorrow, and a job that records what it asked
+		// needs the day, not the duration.
+		...(since !== undefined ? { since } : {}),
 	};
 }
 
@@ -130,7 +176,7 @@ export async function queryCommand(
 	const graph = buildGraph(entries);
 	const results = entries.map((entry) => toQueryEntry(entry, graph)).filter((entry) => matches(entry, filters));
 
-	const summary = summarize(results);
+	const summary = summarize(results, filters.since);
 
 	if (json) {
 		// `count` predates `summary` and stays as its alias: the field shipped in
@@ -146,7 +192,9 @@ export async function queryCommand(
 				`${entry.urlPath}\t${entry.title}\t${entry.collection}\t${entry.status}\t` +
 				`→${entry.outbound.length} ←${entry.inbound.length}`
 		),
-		`${summary.entries} entries, ${summary.edges} edges, ${summary.orphans} orphans, ${summary.deadends} dead ends`,
+		`${summary.entries} entries, ${summary.edges} edges, ${summary.orphans} orphans, ` +
+			`${summary.deadends} dead ends` +
+			(summary.since !== undefined ? `, updated since ${summary.since}` : ''),
 	]);
 	return EXIT_OK;
 }

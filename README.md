@@ -211,6 +211,7 @@ export async function GET(context) {
 ```bash
 commune check
 commune graph query --collection notes --orphans
+commune graph query --recent 7d
 commune graph related src/content/notes/hello.md
 echo "a rough dump that mentions World" | commune graph related -
 commune gate
@@ -218,10 +219,12 @@ commune gate
 
 | Verb | What it answers |
 | --- | --- |
-| `graph query` | Every entry with its edges and dates. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`. |
+| `graph query` | Every entry with its edges and dates. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`, `--recent`. |
 | `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. |
 | `check` | Broken links, duplicate names, ambiguous targets, non-canonical titles. |
 | `gate` | Run after a build, against the built site. |
+
+`--recent` takes `7d`, `2w` or a date, and reports the day it resolved to in the summary — which is what a weekly update job needs, since `7d` means a different day tomorrow. Entries with no date at all are not returned: "unchanged since Monday" and "nobody knows" are different answers.
 
 Every verb takes `--json` and emits one document on stdout with everything else on stderr. The human-readable text is the fallback rendering; the JSON is the contract.
 

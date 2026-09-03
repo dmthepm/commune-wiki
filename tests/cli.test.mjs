@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { BIN, commune, run, VAULT } from './helpers.mjs';
+import { parseRecent } from '../src/cli/query.ts';
 
 test('graph query returns the fixture vault as one JSON document', async () => {
 	const { code, stdout, stderr } = await commune('--root', VAULT, 'graph', 'query', '--json');
@@ -113,6 +114,99 @@ test('updates are a collection like any other', async () => {
 	// `date` is the update's subject, so it dates the entry.
 	assert.equal(update.updated, '2026-02-14');
 	assert.equal(update.updatedSource, 'frontmatter');
+});
+
+// `--recent` is what a weekly update job runs: "what changed since I last
+// looked". The dates it filters on are mostly derived from this repository's
+// own history, so these assert relationships and the reported cutoff rather
+// than dates that would move with every commit here.
+
+test('--recent takes a date and reports the cutoff it used', async () => {
+	const all = await commune('--root', VAULT, 'graph', 'query', '--json');
+	const since = await commune(
+		'--root', VAULT, 'graph', 'query', '--recent', '2020-01-01', '--json'
+	);
+
+	const everything = JSON.parse(all.stdout);
+	const recent = JSON.parse(since.stdout);
+
+	assert.equal(recent.summary.since, '2020-01-01');
+	// Every fixture entry is dated one way or another, and all of them postdate
+	// 2020, so a cutoff that old returns the whole vault.
+	assert.equal(recent.count, everything.count);
+
+	// A summary without the flag does not invent a cutoff.
+	assert.equal(everything.summary.since, undefined);
+});
+
+test('--recent excludes what is older, and what has no date at all', async () => {
+	const { stdout } = await commune(
+		'--root', VAULT, 'graph', 'query', '--recent', '2099-01-01', '--json'
+	);
+	const payload = JSON.parse(stdout);
+
+	assert.equal(payload.count, 0);
+	assert.equal(payload.summary.since, '2099-01-01');
+});
+
+test('--recent takes a duration, resolved to the day it means', async () => {
+	const { code, stdout } = await commune(
+		'--root', VAULT, 'graph', 'query', '--recent', '7d', '--json'
+	);
+	const { summary, entries } = JSON.parse(stdout);
+
+	assert.equal(code, 0);
+
+	// The same arithmetic the CLI does, in local days: `7d` means seven of the
+	// reader's days, and the dates in content are calendar days.
+	const cutoff = new Date();
+	cutoff.setDate(cutoff.getDate() - 7);
+	const expected = [
+		cutoff.getFullYear(),
+		String(cutoff.getMonth() + 1).padStart(2, '0'),
+		String(cutoff.getDate()).padStart(2, '0'),
+	].join('-');
+
+	// The resolved day, not the string that was typed: a job that records what
+	// it asked needs the day, because `7d` means something else tomorrow.
+	assert.equal(summary.since, expected);
+	for (const entry of entries) {
+		assert.ok(entry.updated >= expected, `${entry.urlPath} is ${entry.updated}`);
+	}
+});
+
+test('--recent parses days, weeks and dates, and nothing else', () => {
+	// A fixed "today", so the arithmetic is asserted rather than recomputed.
+	const today = new Date(2026, 8, 3);
+
+	assert.equal(parseRecent('7d', today), '2026-08-27');
+	assert.equal(parseRecent('2w', today), '2026-08-20');
+	assert.equal(parseRecent('0d', today), '2026-09-03');
+	// Across a month boundary, and a year one.
+	assert.equal(parseRecent('10d', today), '2026-08-24');
+	assert.equal(parseRecent('300d', today), '2025-11-07');
+	// A date is taken as written; it is already the day it means.
+	assert.equal(parseRecent('2026-09-01', today), '2026-09-01');
+
+	for (const bad of ['lastweek', '7', 'd', '7m', '7 d', '', '2026-9-1', '-7d']) {
+		assert.equal(parseRecent(bad, today), undefined, bad);
+	}
+});
+
+test('a --recent that is neither a duration nor a date is exit 2', async () => {
+	const { code, stdout, stderr } = await commune(
+		'--root', VAULT, 'graph', 'query', '--recent', 'lastweek'
+	);
+
+	assert.equal(code, 2);
+	assert.equal(stdout, '');
+	assert.match(stderr, /--recent takes a number of days or weeks/);
+});
+
+test('--recent in text mode says which day it counted from', async () => {
+	const { stdout } = await commune('--root', VAULT, 'graph', 'query', '--recent', '2020-01-01');
+
+	assert.match(stdout.trimEnd().split('\n').at(-1), /updated since 2020-01-01$/);
 });
 
 test('orphans are isolated, not merely unlinked-to', async () => {

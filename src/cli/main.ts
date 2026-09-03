@@ -17,7 +17,7 @@ import type { ParseArgsOptionsConfig } from 'node:util';
 import { CliError, EXIT_OK, EXIT_USAGE, isParseArgsError, usageError } from './errors.ts';
 import { writeError } from './render.ts';
 import { resolveRoot } from './root.ts';
-import { queryCommand, type QueryFilters } from './query.ts';
+import { parseRecent, queryCommand, type QueryFilters } from './query.ts';
 import { checkCommand } from './check.ts';
 import { gateCommand } from './gate.ts';
 import { relatedCommand } from './related.ts';
@@ -38,6 +38,7 @@ const QUERY_OPTIONS: ParseArgsOptionsConfig = {
 	status: { type: 'string' },
 	orphans: { type: 'boolean', default: false },
 	deadends: { type: 'boolean', default: false },
+	recent: { type: 'string' },
 };
 
 const GATE_OPTIONS: ParseArgsOptionsConfig = {
@@ -112,12 +113,24 @@ async function dispatch(args: string[]): Promise<number> {
 				process.stdout.write(`${usage}\n`);
 				return EXIT_OK;
 			}
+			const recent = values.recent as string | undefined;
+			// Resolved here rather than in the command, so an unparseable duration
+			// is exit 2 beside every other bad flag instead of an empty result set
+			// that looks like an answer.
+			const since = recent === undefined ? undefined : parseRecent(recent);
+			if (recent !== undefined && since === undefined) {
+				throw usageError(
+					`--recent takes a number of days or weeks (7d, 2w) or a date (2026-09-01), not ${recent}`,
+					usage
+				);
+			}
 			const filters: QueryFilters = {
 				collections: values.collection as string[],
 				tags: values.tag as string[],
 				status: values.status as string | undefined,
 				orphans: values.orphans as boolean,
 				deadends: values.deadends as boolean,
+				...(since !== undefined ? { since } : {}),
 			};
 			return queryCommand(await resolveRoot(values.root as string | undefined), filters, values.json as boolean);
 		}
