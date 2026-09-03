@@ -12,7 +12,7 @@
 
 import { visit } from 'unist-util-visit';
 import type { Root } from 'mdast';
-import { getLinkLookup } from './src/lib/graph.ts';
+import { getLinkLookup } from './lib/graph.ts';
 
 /**
  * Remark plugin function

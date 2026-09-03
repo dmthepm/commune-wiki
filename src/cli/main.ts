@@ -19,6 +19,7 @@ import { writeError } from './render.ts';
 import { resolveRoot } from './root.ts';
 import { queryCommand, type QueryFilters } from './query.ts';
 import { checkCommand } from './check.ts';
+import { gateCommand } from './gate.ts';
 import { relatedCommand } from './related.ts';
 import { COMMAND_USAGE, USAGE } from './usage.ts';
 
@@ -38,8 +39,13 @@ const QUERY_OPTIONS: ParseArgsOptionsConfig = {
 	deadends: { type: 'boolean', default: false },
 };
 
+const GATE_OPTIONS: ParseArgsOptionsConfig = {
+	...GLOBAL,
+	dist: { type: 'string' },
+};
+
 /** Every route, longest first, so `graph query` is matched before a bare `graph`. */
-const ROUTES = ['graph query', 'graph related', 'check'];
+const ROUTES = ['graph query', 'graph related', 'check', 'gate'];
 
 interface Route {
 	name: string;
@@ -142,6 +148,18 @@ async function dispatch(args: string[]): Promise<number> {
 			}
 			return checkCommand(
 				await resolveRoot(values.root as string | undefined),
+				values.json as boolean
+			);
+		}
+		case 'gate': {
+			const { values } = parseStrict(rest, GATE_OPTIONS, false, usage);
+			if (values.help) {
+				process.stdout.write(`${usage}\n`);
+				return EXIT_OK;
+			}
+			return gateCommand(
+				await resolveRoot(values.root as string | undefined),
+				(values.dist as string | undefined) ?? 'dist',
 				values.json as boolean
 			);
 		}

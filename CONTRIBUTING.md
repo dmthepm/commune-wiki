@@ -137,12 +137,16 @@ commune-wiki/
 │   │   └── updates/        # Blog-style updates
 │   ├── components/         # Astro components
 │   ├── layouts/            # Page layouts
-│   └── styles/             # Global CSS
+│   ├── styles/             # Global CSS
+│   ├── lib/graph.ts        # The content graph core
+│   ├── cli/                # The `commune` CLI
+│   ├── remark-wikilinks.ts # WikiLinks plugin
+│   ├── rehype-external-links.ts
+│   └── integration.ts      # Backlinks / markdown-twin integration
+├── bin/commune.mjs         # CLI entry point (runs lib/)
 ├── public/                 # Static assets
 ├── scripts/                # Build scripts
-├── astro.config.mjs        # Astro configuration
-├── remark-wikilinks.ts     # WikiLinks plugin
-└── astro.backlinks.ts      # Backlinks plugin
+└── astro.config.mjs        # Astro configuration
 ```
 
 ### Testing Your Changes

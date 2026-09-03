@@ -4,8 +4,8 @@
  * Exits 0 whether or not it finds anything. The exit code answers "did the
  * command finish", not "is your content clean" — those are different questions
  * and an agent that cannot tell them apart has to parse stderr to find out
- * whether the tool crashed. The build gate in `scripts/test-search-index.mjs`
- * keeps its exit 1, because a gate's job *is* to fail.
+ * whether the tool crashed. `commune gate` is the documented exception — it keeps
+ * its exit 1, because a gate's job *is* to fail.
  *
  * v1 is scoped to link integrity so it does not block on #17's collection
  * collapse. Frontmatter drift is a follow-up.

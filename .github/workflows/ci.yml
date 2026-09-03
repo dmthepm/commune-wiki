@@ -10,15 +10,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Full history, not the default depth of 1. `tests/install.test.mjs` and
+      # the stranger-install step below both fetch this workspace as a git
+      # dependency, and on a pull request the checked-out commit is a synthetic
+      # merge commit that exists nowhere else — a shallow clone of it is not
+      # something another repository can reliably fetch from.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
           version: 10
 
-      # Reads .nvmrc, so CI and a local checkout cannot drift apart. The floor
-      # is 22.18: it is the first release that strips TypeScript types by
-      # default, and every entry point here imports src/lib/graph.ts directly.
+      # Reads .nvmrc, so CI and a local checkout cannot drift apart. 22 is a
+      # *development* floor, not the package's: the bin now runs compiled
+      # JavaScript, so a consumer only needs Astro's own 22.12 (`engines`).
+      # What still needs 22.18 is this repo's own tests and `astro.config.mjs`,
+      # which import `src/**/*.ts` directly and rely on Node stripping types by
+      # default — first released in 22.18.
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -26,7 +36,50 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # The type gate. Node strips types when it runs these files and never
+      # checks them, and `astro check` never sees them either — so without this
+      # step a type error in the graph core, the CLI or the plugins reaches a
+      # consumer as a failed `prepare` on their install. It runs before the
+      # tests because a compile error is cheaper to read than a test failure
+      # caused by one.
+      - run: pnpm build:lib
+
       - run: pnpm test
+
+      # The stranger test. Everything above runs from a checkout, where `lib/`
+      # is on disk because someone built it; none of it can see the two ways an
+      # install differs — `prepare` has to build `lib/`, and `files` has to pack
+      # it. A `git+file://` install takes the same path a `github:` user takes,
+      # including both. The `ls` is the assertion that matters: `commune --help`
+      # alone would also pass if pnpm had silently installed nothing.
+      # It installs from a bare clone rather than from the workspace directly,
+      # for the reason `tests/install.test.mjs` explains at length: on a pull
+      # request the workspace is detached on a merge commit with no branch
+      # pointing at it. `-x` so a failure names the command that failed instead
+      # of an exit code on its own.
+      - name: install from a git ref, the way a stranger would
+        run: |
+          set -euxo pipefail
+          tmp=$(mktemp -d)
+          git clone --bare "$GITHUB_WORKSPACE" "$tmp/bare.git"
+          git -C "$tmp/bare.git" update-ref refs/heads/ci-install "$GITHUB_SHA"
+          name=$(node -p "require('$GITHUB_WORKSPACE/package.json').name")
+          spec="git+file://$tmp/bare.git#$GITHUB_SHA"
+          mkdir "$tmp/consumer" && cd "$tmp/consumer"
+          # pnpm 10 will not run a git dependency's `prepare` unless the
+          # consumer allowlists the package, and `prepare` is what compiles
+          # `lib/`. The entry is `name@spec`: a bare name approves a registry
+          # package, never a git one. Written here rather than assumed, because
+          # it is what a real consumer has to write — see README, "Installing
+          # from git".
+          node -e 'const fs = require("fs");
+            fs.writeFileSync("package.json", JSON.stringify({
+              name: "ci-install-consumer", version: "0.0.0", private: true,
+              pnpm: { onlyBuiltDependencies: [process.argv[1] + "@" + process.argv[2]] },
+            }, null, 2) + "\n");' "$name" "$spec"
+          pnpm add "$spec"
+          ./node_modules/.bin/commune --help
+          ls node_modules/*/lib/cli/main.js
 
       - run: pnpm build
 

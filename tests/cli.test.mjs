@@ -20,8 +20,8 @@ test('graph query returns the fixture vault as one JSON document', async () => {
 	assert.equal(stderr, '');
 	const payload = JSON.parse(stdout);
 	assert.equal(payload.schema, 1);
-	assert.equal(payload.count, 10);
-	assert.equal(payload.entries.length, 10);
+	assert.equal(payload.count, 11);
+	assert.equal(payload.entries.length, 11);
 	assert.match(payload.root, /tests\/fixtures\/vault$/);
 });
 
@@ -45,7 +45,7 @@ test('--root is accepted after the subcommand too', async () => {
 
 test('filters are any-of within a flag and all-of across flags', async () => {
 	const notes = await commune('--root', VAULT, 'graph', 'query', '--collection', 'notes', '--json');
-	assert.equal(JSON.parse(notes.stdout).count, 7);
+	assert.equal(JSON.parse(notes.stdout).count, 8);
 
 	const both = await commune(
 		'--root', VAULT, 'graph', 'query',
@@ -74,6 +74,8 @@ test('orphans are isolated, not merely unlinked-to', async () => {
 			'/notes/duplicate-one/',
 			'/notes/index/',
 			'/notes/isolated/',
+			// Nested, isolated, and listed in scan order like any other note.
+			'/notes/sub-dir/nested-note/',
 			'/research/isolated/',
 			'/vault-page/',
 		]
@@ -81,7 +83,7 @@ test('orphans are isolated, not merely unlinked-to', async () => {
 
 	// A dead end has inbound links; an orphan has none. Obsidian conflates them.
 	const deadends = await commune('--root', VAULT, 'graph', 'query', '--deadends', '--json');
-	assert.equal(JSON.parse(deadends.stdout).count, 7);
+	assert.equal(JSON.parse(deadends.stdout).count, 8);
 });
 
 test('query and check answer "what did I get" in the same place', async () => {
@@ -99,7 +101,7 @@ test('query and check answer "what did I get" in the same place', async () => {
 	// deduplicated inbound on the other — which is what makes this worth pinning.
 	assert.equal(q.summary.entries, c.summary.entries);
 	assert.equal(q.summary.edges, c.summary.edges);
-	assert.deepEqual(q.summary, { entries: 10, edges: 5, orphans: 5, deadends: 7 });
+	assert.deepEqual(q.summary, { entries: 11, edges: 5, orphans: 6, deadends: 8 });
 });
 
 test('summary describes what was returned, not the whole corpus', async () => {
@@ -108,12 +110,12 @@ test('summary describes what was returned, not the whole corpus', async () => {
 	);
 	const { count, summary } = JSON.parse(stdout);
 
-	assert.equal(count, 7);
+	assert.equal(count, 8);
 	// Four, not five: the research entry's edge into /notes/alpha/ is not an
 	// edge *out of the notes collection*. Degrees on each entry stay
 	// whole-graph — Alpha still reports both its inbound links — but the
 	// summary counts only what was returned.
-	assert.deepEqual(summary, { entries: 7, edges: 4, orphans: 3, deadends: 5 });
+	assert.deepEqual(summary, { entries: 8, edges: 4, orphans: 4, deadends: 6 });
 });
 
 test('a filtered query reports itself consistently', async () => {
@@ -130,8 +132,8 @@ test('text mode is line-per-entry with a summary last', async () => {
 	const lines = stdout.trimEnd().split('\n');
 
 	assert.equal(code, 0);
-	assert.equal(lines.length, 11);
-	assert.match(lines.at(-1), /^10 entries/);
+	assert.equal(lines.length, 12);
+	assert.match(lines.at(-1), /^11 entries/);
 });
 
 test('an unknown flag is exit 2 with nothing on stdout', async () => {
@@ -172,5 +174,5 @@ test('no Astro module is loaded on the CLI path', async () => {
 		'--import', hook, BIN, '--root', VAULT, 'graph', 'query', '--json',
 	]);
 
-	assert.equal(JSON.parse(stdout).count, 10);
+	assert.equal(JSON.parse(stdout).count, 11);
 });
