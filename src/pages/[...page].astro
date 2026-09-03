@@ -16,6 +16,7 @@ import Header from '../components/Header.astro';
 import SearchModal from '../components/SearchModal.astro';
 import Footer from '../components/Footer.astro';
 import MarkdownLink from '../components/MarkdownLink.astro';
+import { toMarkdownHref } from '../lib/graph.ts';
 import PlausibleScript from '../components/PlausibleScript.astro';
 import StarredLinksScript from '../components/StarredLinksScript.astro';
 import '../styles/design-system.css';
@@ -65,7 +66,7 @@ const { data } = entry;
       <Content />
     </article>
 
-    <MarkdownLink href={`${data.url.replace(/\/$/, '')}.md`} />
+    <MarkdownLink href={toMarkdownHref(data.url)} />
 
     <Footer />
   </main>

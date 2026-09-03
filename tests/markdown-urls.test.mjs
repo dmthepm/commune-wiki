@@ -6,7 +6,9 @@
  * home page and a pinned `slug` can be exercised at all, since the engine's own
  * content has neither. The build half is the promise itself: the file served at
  * `/notes/atomic-notes.md` is byte-for-byte the file an author edits, so it is
- * checked by comparing bytes rather than parsed frontmatter.
+ * checked by comparing bytes rather than parsed frontmatter — and the rendered
+ * page at that URL actually links to it, which is the only assertion that
+ * catches a template computing the suffix its own way.
  *
  * `dist/` is gitignored, so unlike `public/backlinks.json` there is no committed
  * artifact to read and the build has to be spawned here. It runs once, in a
@@ -20,11 +22,14 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { loadContentEntries, toMarkdownPath, toUrlPath } from '../src/lib/graph.ts';
+import { loadContentEntries, toMarkdownHref, toMarkdownPath, toUrlPath } from '../src/lib/graph.ts';
 import { run } from './helpers.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const DIST = path.join(ROOT, 'dist');
+
+/** Quote a literal for use inside a RegExp — `.` in a path must not match anything. */
+const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 test('a note URL becomes a sibling .md file', () => {
 	assert.equal(toMarkdownPath('/notes/atomic-notes/'), 'notes/atomic-notes.md');
@@ -33,6 +38,12 @@ test('a note URL becomes a sibling .md file', () => {
 
 test('the home page has no name to suffix, so it becomes index.md', () => {
 	assert.equal(toMarkdownPath('/'), 'index.md');
+});
+
+test('the href a page links to is the file path with a leading slash', () => {
+	assert.equal(toMarkdownHref('/notes/atomic-notes/'), '/notes/atomic-notes.md');
+	assert.equal(toMarkdownHref('/about-this-wiki/'), '/about-this-wiki.md');
+	assert.equal(toMarkdownHref('/'), '/index.md');
 });
 
 test('a standalone page lands at the route it declares', () => {
@@ -76,6 +87,22 @@ describe('the built site', () => {
 		const source = await readFile(path.join(ROOT, 'src/content/notes/Atomic Notes.md'));
 
 		assert.deepEqual(built, source);
+	});
+
+	test('links every rendered page to its own markdown twin', async () => {
+		const entries = await loadContentEntries();
+
+		for (const entry of entries) {
+			// Directory build format: `/notes/x/` renders to `notes/x/index.html`.
+			const page = path.join(DIST, entry.urlPath, 'index.html');
+			const html = await readFile(page, 'utf8');
+
+			assert.match(
+				html,
+				new RegExp(`href="${escape(toMarkdownHref(entry.urlPath))}"`),
+				`${entry.urlPath} does not link to its .md`
+			);
+		}
 	});
 
 	test('serves every entry the graph sees as markdown too', async () => {

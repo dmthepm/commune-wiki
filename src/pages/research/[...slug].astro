@@ -5,6 +5,7 @@ import Header from '../../components/Header.astro';
 import SearchModal from '../../components/SearchModal.astro';
 import Footer from '../../components/Footer.astro';
 import MarkdownLink from '../../components/MarkdownLink.astro';
+import { toMarkdownHref } from '../../lib/graph.ts';
 import PlausibleScript from '../../components/PlausibleScript.astro';
 import StarredLinksScript from '../../components/StarredLinksScript.astro';
 import '../../styles/design-system.css';
@@ -125,7 +126,7 @@ const formattedWordCount = data.wordCount.toLocaleString();
       <Content />
     </article>
 
-    <MarkdownLink href={`/research/${entry.id}.md`} />
+    <MarkdownLink href={toMarkdownHref(`/research/${entry.id}/`)} />
 
     <!-- Research info box (will be moved via JS to appear after h1) -->
     <div class="research-info-box" id="research-info-box">
