@@ -10,10 +10,10 @@
  * three separate mistakes look identical to success.
  *
  * `tests/fixtures/consumer/` is that project, kept as small as a wiki can be:
- * two notes that link each other, one external link, one route. It depends on
+ * two notes that link each other, one external link, two routes. It depends on
  * the repository through `file:../../..`, which pnpm resolves to a symlink —
  * the same resolution a `github:` install lands on, minus the tarball. What it
- * asserts is the whole contract in four lines of output:
+ * asserts is the whole contract:
  *
  *   - the remark plugin resolved a wikilink against the *consumer's* content
  *     tree, not this repository's;
@@ -21,7 +21,10 @@
  *     external — and left the consumer's own host alone;
  *   - the integration wrote `backlinks.json` into the consumer's `dist`, with
  *     both directions of the edge;
- *   - the `.md` beside the page is the source file, byte for byte.
+ *   - the `.md` beside the page is the source file, byte for byte;
+ *   - and the search modal's semantic tier stays absent unless a page asks for
+ *     it — the one assertion here that reads a second route, because proving
+ *     the opt-in is a seam takes a project on both sides of it.
  *
  * It is the slowest test here after `install.test.mjs`: pnpm installs Astro
  * into the fixture and Astro builds it.
@@ -116,4 +119,19 @@ test('a consumer project installs this package and builds a wiki with it', async
 	const published = await readFile(path.join(DIST, 'notes/hello.md'), 'utf8');
 	const source = await readFile(path.join(FIXTURE, 'src/content/notes/hello.md'), 'utf8');
 	assert.equal(published, source);
+
+	// The search modal's semantic tier is opt-in (#56). This fixture is the
+	// stranger: it passes no `semanticEndpoint`, so its note page must carry no
+	// code for one — not a disabled fetch, no fetch. The only URL the modal
+	// reaches for is `/backlinks.json`, which this build wrote.
+	assert.doesNotMatch(hello, /\/api\/ask/);
+	assert.doesNotMatch(hello, /window\.CommuneSemanticSearch\s*=\s*async/);
+	assert.match(hello, /fetch\('\/backlinks\.json'/);
+
+	// And the half that proves the prop is a real seam rather than a deletion:
+	// a page that does serve an endpoint says so, and gets the tier pointed at
+	// its own URL.
+	const optIn = await readFile(path.join(DIST, 'opt-in-search/index.html'), 'utf8');
+	assert.match(optIn, /window\.CommuneSemanticSearch\s*=\s*async/);
+	assert.match(optIn, /const semanticEndpoint = "\/api\/ask"/);
 });

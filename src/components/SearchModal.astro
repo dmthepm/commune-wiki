@@ -1,5 +1,22 @@
 ---
-interface Result { url: string; title: string; excerpt?: string; score?: number; source?: 'pagefind'|'semantic'; }
+interface Result { url: string; title: string; excerpt?: string; score?: number; source?: 'substring'|'semantic'; }
+
+interface Props {
+  /**
+   * A URL this site serves that answers `GET <endpoint>?q=<query>` with
+   * `{ results: [{ url, title, snippet }] }`. Supplying it adds a second,
+   * semantic search tier, merged with the local substring tier by RRF.
+   *
+   * There is no default, deliberately. The engine ships no component that
+   * calls a URL a stranger does not have (#56): with this prop unset, the
+   * semantic tier is not rendered at all — no fetch, no code for one — and
+   * search is the static substring pass over `/backlinks.json`, which the
+   * build itself produces.
+   */
+  semanticEndpoint?: string;
+}
+
+const { semanticEndpoint } = Astro.props;
 ---
 <div id="commune-search" hidden>
   <div class="shade" onclick="window.CommuneSearch.close()"></div>
@@ -84,6 +101,22 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
   }
 </style>
 
+{semanticEndpoint && (
+  <script is:inline define:vars={{ semanticEndpoint }}>
+    // The semantic tier, rendered only because a page passed an endpoint.
+    // `semanticEndpoint` is that page's own URL; the engine never picks one.
+    window.CommuneSemanticSearch = async function (query) {
+      try {
+        const sep = semanticEndpoint.includes('?') ? '&' : '?';
+        const r = await fetch(`${semanticEndpoint}${sep}q=${encodeURIComponent(query)}`);
+        if (!r.ok) return [];
+        const j = await r.json();
+        return (j.results ?? []).slice(0, 10).map(x => ({ url: x.url, title: x.title, excerpt: x.snippet, source: 'semantic' }));
+      } catch { return []; }
+    };
+  </script>
+)}
+
 <script is:inline>
   // Lightweight RRF combiner
   const rrf = (lists) => {
@@ -96,18 +129,6 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
     }));
     return Array.from(map.values()).sort((a,b) => b.score - a.score);
   };
-
-  // Pagefind removed - semantic search will handle full-text needs
-  // If we ever need dedicated lexical full-text search, we can re-add it
-
-  async function doSemantic(query){
-    try{
-      const r = await fetch(`/api/ask?q=${encodeURIComponent(query)}`);
-      if (!r.ok) return [];
-      const j = await r.json();
-      return (j.results ?? []).slice(0,10).map(x => ({ url: x.url, title: x.title, excerpt: x.snippet, source:'semantic' }));
-    }catch{ return []; }
-  }
 
   // DEV fallback: use backlinks graph as minimal search index
   async function devIndex() {
@@ -135,7 +156,7 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
       const pos = hay.indexOf(norm);
       return pos === -1 ? null : { ...d, score: 1 / (1 + pos) };
     }).filter(Boolean).sort((a,b) => b.score - a.score);
-    return scored.slice(0, 20).map(d => ({ url: d.url, title: d.title, excerpt: d.excerpt, source: 'pagefind' }));
+    return scored.slice(0, 20).map(d => ({ url: d.url, title: d.title, excerpt: d.excerpt, source: 'substring' }));
   }
 
   // Wire up modal
@@ -159,16 +180,21 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
       list.querySelectorAll('a').forEach(a => a.onclick = () => window.CommuneSearch.close());
     }
 
-    // SEARCH STRATEGY (2-tier hybrid):
-    // 1. Substring (title/summary) - Fast exact matching on backlinks.json
-    // 2. Semantic (Qdrant) - Conceptual similarity, foundation for "Ask the Brain"
-    // RRF combines both for best results
+    // SEARCH STRATEGY:
+    // 1. Substring over `/backlinks.json` — always present, same-origin, built
+    //    by the engine. Exact matching on title, summary, aliases and tags.
+    // 2. Semantic — present only when the page passed `semanticEndpoint`, in
+    //    which case the block above defined `window.CommuneSemanticSearch`.
+    // With both, RRF merges them; with one, RRF preserves its order.
 
     let t;
     async function search(q) {
+      const semanticTier = typeof window.CommuneSemanticSearch === 'function'
+        ? window.CommuneSemanticSearch(q).catch(() => [])
+        : Promise.resolve([]);
       const [substring, semantic] = await Promise.all([
-        doDevSearch(q),                    // Tier 1: Exact phrase matching
-        doSemantic(q).catch(() => []),     // Tier 2: Conceptual (when API ready)
+        doDevSearch(q),
+        semanticTier,
       ]);
       let merged = rrf([substring, semantic]);
       render(merged);

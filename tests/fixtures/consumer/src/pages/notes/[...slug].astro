@@ -1,10 +1,11 @@
 ---
 // The one route. It imports every kind of thing the package exports — a
-// compiled function, two `.astro` components and a stylesheet — because the
+// compiled function, three `.astro` components and a stylesheet — because the
 // point of this fixture is the resolution, not the page.
 import { getCollection, render } from 'astro:content';
 import Header from '@dmthepm/commune/components/Header.astro';
 import Footer from '@dmthepm/commune/components/Footer.astro';
+import SearchModal from '@dmthepm/commune/components/SearchModal.astro';
 import { toMarkdownHref } from '@dmthepm/commune/graph';
 import '@dmthepm/commune/styles/design-system.css';
 
@@ -30,6 +31,9 @@ const urlPath = `/notes/${note.id}/`;
 			<Content />
 			<a href={toMarkdownHref(urlPath)}>source</a>
 		</main>
+		<!-- No `semanticEndpoint`: this project has no such route, and the
+		     component must not invent one for it. -->
+		<SearchModal />
 		<Footer />
 	</body>
 </html>
