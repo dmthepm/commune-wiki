@@ -1,10 +1,12 @@
 /**
  * Commune Design System
  * Clean, modern, with light/dark mode support
+ *
+ * Plain CSS, deliberately: this file ships with the package, so it must render
+ * correctly in a consumer build that has never heard of Tailwind or PostCSS.
+ * The engine site's own `@tailwind utilities` entry lives in `src/site.css`,
+ * which is not shipped (#8).
  */
-
-/* Only import Tailwind utilities - NOT base (which resets everything) */
-@tailwind utilities;
 
 :root {
   /* Light mode colors */
@@ -135,10 +137,12 @@ body.modal-open {
    This is a design-system invariant: one rule, globally, so no page or
    component has to remember to add its own. */
 
-/* The marker must never wrap onto its own line, orphaned from the label it
-   belongs to. `nowrap` has to come before the ::after rule that creates it. */
+/* Long link text has to wrap. The marker below is a ::after with no
+   whitespace before it, so there is no break opportunity between it and the
+   last word — it follows the wrap on its own, and does not need the whole
+   link held on one line to stay attached to its label. */
 a[target="_blank"] {
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 a[target="_blank"]::after {
@@ -155,3 +159,81 @@ a[target="_blank"]:hover::after {
   opacity: 1;
 }
 
+/* --- Print -------------------------------------------------------------
+ * Paper is always the light theme. Without this the dark tokens survive into
+ * the print stylesheet, the browser drops backgrounds, and a reader in dark
+ * mode gets #e4e4e4 body text on white paper.
+ */
+@page {
+  margin: 16mm;
+}
+
+@media print {
+  :root,
+  :root[data-theme="dark"],
+  :root[data-theme="light"] {
+    color-scheme: light;
+
+    --c-bg: #ffffff;
+    --c-bg-soft: #f5f5f5;
+    --c-bg-muted: #ebebeb;
+    --c-text: #111111;
+    --c-text-muted: #555555;
+    --c-text-accent: #333333;
+    --c-border: rgba(0, 0, 0, 0.25);
+    --c-border-focus: rgba(0, 0, 0, 0.4);
+
+    --c-accent: #16389c;
+    --c-accent-hover: #16389c;
+    --c-accent-soft: transparent;
+    --c-accent-border: rgba(0, 0, 0, 0.3);
+
+    --c-shadow-sm: none;
+    --c-shadow-md: none;
+    --c-shadow-lg: none;
+    --c-shadow-xl: none;
+  }
+
+  body {
+    background: #ffffff;
+    color: #111111;
+  }
+
+  /* The header keeps the byline on paper; its controls do nothing there. */
+  .commune-header {
+    position: static;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .commune-header .controls,
+  #commune-search {
+    display: none !important;
+  }
+
+  /* The external-link marker is the only cue left once nothing is clickable. */
+  a[target="_blank"]::after {
+    opacity: 1;
+  }
+}
+
+/* --- Reduced motion ----------------------------------------------------
+ * The panes slide, the header's theme button rotates, and the star modal runs
+ * a two-second infinite pulse. A reader who has asked their system for less
+ * movement gets the same interface with the movement removed, not a different
+ * one: transitions and animations collapse to instant, and smooth scrolling
+ * becomes a jump. The JavaScript callers of scrollIntoView and scrollTo check
+ * the same query, since `scroll-behavior` does not reach them.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

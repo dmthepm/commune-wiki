@@ -1,6 +1,5 @@
 import { defineConfig } from 'astro/config';
 import tailwindcss from 'tailwindcss';
-import autoprefixer from 'autoprefixer';
 import sitemap from '@astrojs/sitemap';
 import commune from './src/integration.ts';
 import { communeMarkdown } from './src/markdown.ts';
@@ -34,15 +33,20 @@ export default defineConfig({
 	},
 	// Tailwind runs as a plain PostCSS plugin rather than through
 	// `@astrojs/tailwind`, whose peer range stops at Astro 5. The integration
-	// only ever did two things here: register these two PostCSS plugins, and
-	// inject Tailwind's base styles — which this project turns off, because the
-	// design system in `src/styles/design-system.css` owns the reset. Declaring
-	// the plugins inline also stops PostCSS looking for a config file it will
-	// not find.
+	// only ever did two things here: register the PostCSS plugin, and inject
+	// Tailwind's base styles — which this project turns off, because the design
+	// system in `src/styles/design-system.css` owns the reset. Declaring the
+	// plugin inline also stops PostCSS looking for a config file it will not
+	// find.
+	//
+	// Autoprefixer is deliberately absent: under Vite 8 the CSS goes through
+	// Lightning CSS, whose own `targets` handling covers the prefixes this
+	// project needs (#52's audit measured the difference at one obsolete
+	// `-webkit-backdrop-filter` line Tailwind's preflight emits).
 	vite: {
 		css: {
 			postcss: {
-				plugins: [tailwindcss(), autoprefixer()],
+				plugins: [tailwindcss()],
 			},
 		},
 	},

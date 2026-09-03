@@ -5,13 +5,24 @@
 (function() {
   let backlinksData = null;
 
+  // Focus belongs to the dialog while it is open, and goes back to the star
+  // that opened it on close — otherwise a keyboard reader who opens the modal
+  // is dropped at the top of the document with no way back to where they were.
+  let starModalOpener = null;
+
+  const starModalFocusables = (modal) => Array.from(
+    modal.querySelectorAll('a[href], button, [tabindex]:not([tabindex="-1"])')
+  ).filter((el) => !el.hasAttribute('disabled'));
+
   // Show the star modal
   function showStarModal() {
     const modal = document.getElementById('star-modal');
     if (modal) {
+      starModalOpener = document.activeElement;
       modal.style.display = 'flex';
       // Prevent body scroll when modal is open
       document.body.style.overflow = 'hidden';
+      starModalFocusables(modal)[0]?.focus();
     }
   }
 
@@ -21,6 +32,10 @@
     if (modal) {
       modal.style.display = 'none';
       document.body.style.overflow = '';
+      if (starModalOpener instanceof HTMLElement && document.contains(starModalOpener)) {
+        starModalOpener.focus({ preventScroll: true });
+      }
+      starModalOpener = null;
     }
   }
 
@@ -31,6 +46,9 @@
     const modal = document.createElement('div');
     modal.id = 'star-modal';
     modal.className = 'star-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Top 5%');
     modal.innerHTML = `
       <div class="star-modal-backdrop"></div>
       <div class="star-modal-content">
@@ -60,10 +78,25 @@
       hideStarModal();
     });
 
-    // Close on Escape key
+    // Close on Escape, and keep Tab inside the dialog while it is open.
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modal.style.display === 'flex') {
+      if (modal.style.display !== 'flex') return;
+      if (e.key === 'Escape') {
         hideStarModal();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const items = starModalFocusables(modal);
+      if (!items.length) { e.preventDefault(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !modal.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !modal.contains(active))) {
+        e.preventDefault();
+        first.focus();
       }
     });
   }
@@ -110,9 +143,13 @@
             star.setAttribute('role', 'button');
             star.setAttribute('tabindex', '0');
 
-            // Click handler to open modal
+            // Click handler to open modal. stopPropagation matters: the pane
+            // container's delegated click handler treats any click that is not
+            // on a link or a real button as "focus this pane", and would pull
+            // focus straight back out of the modal we just opened.
             star.addEventListener('click', (e) => {
               e.preventDefault();
+              e.stopPropagation();
               showStarModal();
             });
 
@@ -120,6 +157,7 @@
             star.addEventListener('keydown', (e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
+                e.stopPropagation();
                 showStarModal();
               }
             });

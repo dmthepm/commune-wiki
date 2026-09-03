@@ -1,11 +1,32 @@
 ---
-interface Result { url: string; title: string; excerpt?: string; score?: number; source?: 'pagefind'|'semantic'; }
+interface Result { url: string; title: string; excerpt?: string; score?: number; source?: 'substring'|'semantic'; }
+
+interface Props {
+  /**
+   * A URL this site serves that answers `GET <endpoint>?q=<query>` with
+   * `{ results: [{ url, title, snippet }] }`. Supplying it adds a second,
+   * semantic search tier, merged with the local substring tier by RRF.
+   *
+   * There is no default, deliberately. The engine ships no component that
+   * calls a URL a stranger does not have (#56): with this prop unset, the
+   * semantic tier is not rendered at all — no fetch, no code for one — and
+   * search is the static substring pass over `/backlinks.json`, which the
+   * build itself produces.
+   */
+  semanticEndpoint?: string;
+}
+
+const { semanticEndpoint } = Astro.props;
 ---
 <div id="commune-search" hidden>
   <div class="shade" onclick="window.CommuneSearch.close()"></div>
-  <div class="modal" role="dialog" aria-modal="true">
-    <input id="q" placeholder="Search notes & docs… (Esc to close)" autofocus />
-    <ul id="results"></ul>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Search">
+    <label class="sr-only" for="q">Search notes and pages</label>
+    <input id="q" type="search" autocomplete="off" autocorrect="off" spellcheck="false"
+           placeholder="Search notes & docs… (Esc to close)"
+           aria-describedby="results-status" />
+    <p id="results-status" class="empty" role="status" aria-live="polite">Start typing to search.</p>
+    <ul id="results" aria-label="Search results"></ul>
   </div>
 </div>
 
@@ -48,12 +69,24 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
   #q:focus{
     border-color:var(--c-accent);
   }
+  /* type="search" earns the Search key on touch keyboards; its stock clear
+     button is an unthemed browser widget in the middle of a designed modal. */
+  #q::-webkit-search-cancel-button,
+  #q::-webkit-search-decoration{
+    -webkit-appearance:none;
+    appearance:none;
+  }
   #results{
     list-style:none;
     margin:1rem 0 .5rem;
     padding:0;
     max-height:60vh;
     overflow:auto;
+  }
+  /* The status line stands in for the list when it is empty; the list should
+     not also reserve its own margin underneath. */
+  #results:empty{
+    margin:0;
   }
   #results li{
     padding:.85rem .75rem;
@@ -78,11 +111,46 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
   }
   .empty{
     text-align:center;
-    padding:2rem;
+    padding:2rem 1rem;
+    margin:0;
     color:var(--c-text-muted);
     font-size:.95rem;
+    line-height:1.6;
+  }
+  .empty[hidden]{display:none}
+  .empty .term{
+    color:var(--c-text);
+    font-weight:600;
+    overflow-wrap:anywhere;
+  }
+  .sr-only{
+    position:absolute;
+    width:1px;
+    height:1px;
+    padding:0;
+    margin:-1px;
+    overflow:hidden;
+    clip:rect(0, 0, 0, 0);
+    white-space:nowrap;
+    border:0;
   }
 </style>
+
+{semanticEndpoint && (
+  <script is:inline define:vars={{ semanticEndpoint }}>
+    // The semantic tier, rendered only because a page passed an endpoint.
+    // `semanticEndpoint` is that page's own URL; the engine never picks one.
+    window.CommuneSemanticSearch = async function (query) {
+      try {
+        const sep = semanticEndpoint.includes('?') ? '&' : '?';
+        const r = await fetch(`${semanticEndpoint}${sep}q=${encodeURIComponent(query)}`);
+        if (!r.ok) return [];
+        const j = await r.json();
+        return (j.results ?? []).slice(0, 10).map(x => ({ url: x.url, title: x.title, excerpt: x.snippet, source: 'semantic' }));
+      } catch { return []; }
+    };
+  </script>
+)}
 
 <script is:inline>
   // Lightweight RRF combiner
@@ -96,18 +164,6 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
     }));
     return Array.from(map.values()).sort((a,b) => b.score - a.score);
   };
-
-  // Pagefind removed - semantic search will handle full-text needs
-  // If we ever need dedicated lexical full-text search, we can re-add it
-
-  async function doSemantic(query){
-    try{
-      const r = await fetch(`/api/ask?q=${encodeURIComponent(query)}`);
-      if (!r.ok) return [];
-      const j = await r.json();
-      return (j.results ?? []).slice(0,10).map(x => ({ url: x.url, title: x.title, excerpt: x.snippet, source:'semantic' }));
-    }catch{ return []; }
-  }
 
   // DEV fallback: use backlinks graph as minimal search index
   async function devIndex() {
@@ -135,70 +191,147 @@ interface Result { url: string; title: string; excerpt?: string; score?: number;
       const pos = hay.indexOf(norm);
       return pos === -1 ? null : { ...d, score: 1 / (1 + pos) };
     }).filter(Boolean).sort((a,b) => b.score - a.score);
-    return scored.slice(0, 20).map(d => ({ url: d.url, title: d.title, excerpt: d.excerpt, source: 'pagefind' }));
+    return scored.slice(0, 20).map(d => ({ url: d.url, title: d.title, excerpt: d.excerpt, source: 'substring' }));
   }
 
   // Wire up modal
   (function mountSearch(){
     const root = document.getElementById('commune-search');
+    const modal = root.querySelector('.modal');
     const input = root.querySelector('#q');
     const list  = root.querySelector('#results');
+    const status = root.querySelector('#results-status');
 
-    function render(results) {
-      if(!results.length){
-        list.innerHTML = '<div class="empty">No results found</div>';
+    const IDLE_MESSAGE = 'Start typing to search.';
+
+    // Titles and summaries are the vault author's prose. A stray <, & or " in
+    // one of them should read as that character, not break out of the markup
+    // being built here.
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    function showStatus(html) {
+      status.innerHTML = html;
+      status.hidden = false;
+      list.replaceChildren();
+    }
+
+    function render(results, query) {
+      // Before anything is typed there is no result set to be empty, so
+      // saying "no results" is a false negative. Only a query with no matches
+      // is one.
+      if (!query) {
+        showStatus(IDLE_MESSAGE);
         return;
       }
+      if (!results.length) {
+        showStatus(`No results for <span class="term">${escapeHtml(query)}</span>.<br />Try a shorter word, a tag, or an alias.`);
+        return;
+      }
+      status.hidden = true;
       list.innerHTML = results.map(r => (
         `<li>
-          <a href="${r.url}">${r.title}</a>
-          ${r.excerpt ? `<div class="excerpt">${r.excerpt}</div>` : ''}
+          <a href="${escapeHtml(r.url)}">${escapeHtml(r.title)}</a>
+          ${r.excerpt ? `<div class="excerpt">${escapeHtml(r.excerpt)}</div>` : ''}
         </li>`
       )).join('');
       // Wire close on click and enter-to-go
       list.querySelectorAll('a').forEach(a => a.onclick = () => window.CommuneSearch.close());
     }
 
-    // SEARCH STRATEGY (2-tier hybrid):
-    // 1. Substring (title/summary) - Fast exact matching on backlinks.json
-    // 2. Semantic (Qdrant) - Conceptual similarity, foundation for "Ask the Brain"
-    // RRF combines both for best results
+    // SEARCH STRATEGY:
+    // 1. Substring over `/backlinks.json` — always present, same-origin, built
+    //    by the engine. Exact matching on title, summary, aliases and tags.
+    // 2. Semantic — present only when the page passed `semanticEndpoint`, in
+    //    which case the block above defined `window.CommuneSemanticSearch`.
+    // With both, RRF merges them; with one, RRF preserves its order.
 
     let t;
+    let queryToken = 0;
     async function search(q) {
+      const token = ++queryToken;
+      const semanticTier = typeof window.CommuneSemanticSearch === 'function'
+        ? window.CommuneSemanticSearch(q).catch(() => [])
+        : Promise.resolve([]);
       const [substring, semantic] = await Promise.all([
-        doDevSearch(q),                    // Tier 1: Exact phrase matching
-        doSemantic(q).catch(() => []),     // Tier 2: Conceptual (when API ready)
+        doDevSearch(q),
+        semanticTier,
       ]);
+      // A slower earlier query must not overwrite a later one's results.
+      if (token !== queryToken) return;
       let merged = rrf([substring, semantic]);
-      render(merged);
+      render(merged, q);
+    }
+
+    // Focus belongs to the dialog while it is open: tabbing past the last
+    // control must not land on the page behind it, and closing must put focus
+    // back where the reader left it rather than at the top of the document.
+    let lastFocused = null;
+
+    const focusables = () => Array.from(
+      modal.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+
+    function trapTab(e) {
+      if (e.key !== 'Tab' || root.hidden) return;
+      const items = focusables();
+      if (!items.length) { e.preventDefault(); return; }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !modal.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !modal.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
     }
 
     function open() {
+      if (!root.hidden) return;
+      lastFocused = document.activeElement;
       root.hidden = false;
       document.body.classList.add('modal-open');
       input.value = '';
-      render([]);
+      queryToken++;
+      render([], '');
       input.focus();
     }
     function close() {
+      if (root.hidden) return;
       root.hidden = true;
       document.body.classList.remove('modal-open');
+      queryToken++;
+      if (lastFocused instanceof HTMLElement && document.contains(lastFocused)) {
+        lastFocused.focus({ preventScroll: true });
+      }
+      lastFocused = null;
     }
     window.CommuneSearch = { open, close };
 
     addEventListener('commune:openSearch', open);
     addEventListener('keydown', e => {
-      const mac = navigator.platform.toUpperCase().includes('MAC');
+      const mac = window.CommuneIsMac
+        ? window.CommuneIsMac()
+        : /mac/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '');
       if ((mac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault(); open();
       }
       if (e.key === 'Escape' && !root.hidden) close();
+      trapTab(e);
     });
 
     input.addEventListener('input', () => {
       clearTimeout(t);
       const q = input.value.trim();
+      // Clearing the box returns to the idle state at once rather than
+      // running an empty query 200ms later and calling it "no results".
+      if (!q) { queryToken++; render([], ''); return; }
       t = setTimeout(() => search(q), 200);
     });
 

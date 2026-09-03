@@ -17,8 +17,8 @@ import SearchModal from '../components/SearchModal.astro';
 import Footer from '../components/Footer.astro';
 import MarkdownLink from '../components/MarkdownLink.astro';
 import { toMarkdownHref } from '../lib/graph.ts';
-import PlausibleScript from '../components/PlausibleScript.astro';
 import StarredLinksScript from '../components/StarredLinksScript.astro';
+import '../site.css';
 import '../styles/design-system.css';
 import '../styles/notes.css';
 
@@ -54,13 +54,12 @@ const { data } = entry;
   <meta property="og:url" content={Astro.url} />
 
   <link rel="icon" type="image/png" href="/favicon-32x32.png" />
-  <PlausibleScript domain="devonmeadows.com" />
 </head>
 <body>
   <Header />
   <SearchModal />
 
-  <main style="max-width: 65ch; margin: 0 auto; padding: 2rem 1.5rem; min-height: calc(100vh - 200px);">
+  <main id="main" style="max-width: 65ch; margin: 0 auto; padding: 2rem 1.5rem; min-height: calc(100vh - 200px);">
     <article class="prose">
       <h1>{data.title}</h1>
       <Content />

@@ -2,7 +2,7 @@
 import { getCollection } from 'astro:content';
 import Header from '../../components/Header.astro';
 import SearchModal from '../../components/SearchModal.astro';
-import PlausibleScript from '../../components/PlausibleScript.astro';
+import '../../site.css';
 import '../../styles/design-system.css';
 
 const notes = await getCollection('notes');
@@ -18,12 +18,11 @@ const seed = list.filter((n:any) => n.data.status === 'seed' || !n.data.status);
   <meta charset="utf-8">
   <title>Notes • Commune</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <PlausibleScript domain="devonmeadows.com" />
 </head>
 <body>
   <Header />
   <SearchModal />
-  <main class="wrap">
+  <main id="main" class="wrap">
     <header class="page-header">
       <h1>All Notes</h1>
       <p class="hint">
@@ -31,6 +30,12 @@ const seed = list.filter((n:any) => n.data.status === 'seed' || !n.data.status);
         <span class="count">{list.length} notes published</span>
       </p>
     </header>
+
+    {list.length === 0 && (
+      <p class="empty-state">
+        No notes are published yet. The <a href="/updates/">updates</a> log records what changes here.
+      </p>
+    )}
 
     {evergreen.length > 0 && (
       <section class="section">
@@ -186,5 +191,18 @@ const seed = list.filter((n:any) => n.data.status === 'seed' || !n.data.status);
     font-size:.8rem;
     color:var(--c-accent);
     opacity:.8;
+  }
+  /* Nothing published in this collection yet: say so, and point somewhere that
+     is not also empty, rather than ending the page on a heading. */
+  .empty-state {
+    margin: 0;
+    padding: 2rem 0;
+    color: var(--c-text-muted);
+    line-height: 1.7;
+  }
+
+  .empty-state a {
+    color: var(--c-accent);
+    border-bottom: 1px solid var(--c-accent);
   }
 </style>

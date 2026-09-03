@@ -2,7 +2,11 @@
 export interface Props { slug: string; title?: string; hideCount?: boolean; }
 const { slug, hideCount = false } = Astro.props;
 ---
-<aside class="backlinks" data-backlinks-for={slug} data-hide-count={hideCount ? 'true' : undefined}>
+<!-- Starts hidden: the list is filled from `/backlinks.json` at runtime, so
+     without JavaScript, or on a note nothing links to, the heading would
+     otherwise stand over an empty list. `BacklinksScript` reveals it once it
+     has links to show. -->
+<aside class="backlinks hidden" data-backlinks-for={slug} data-hide-count={hideCount ? 'true' : undefined}>
   <h4>Links to this note</h4>
   <ul class="backlinks-list"></ul>
 </aside>

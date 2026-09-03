@@ -1,0 +1,17 @@
+---
+// The other half of the search modal's contract: a project that *does* serve a
+// semantic endpoint says so, and gets the second tier. Nothing here answers
+// `/api/ask` — the fixture never runs a server — but the built HTML is where
+// the opt-in is visible, and that is what the test reads.
+import SearchModal from '@dmthepm/commune/components/SearchModal.astro';
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Opt-in search</title>
+	</head>
+	<body>
+		<SearchModal semanticEndpoint="/api/ask" />
+	</body>
+</html>

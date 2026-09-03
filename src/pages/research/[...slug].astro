@@ -6,8 +6,8 @@ import SearchModal from '../../components/SearchModal.astro';
 import Footer from '../../components/Footer.astro';
 import MarkdownLink from '../../components/MarkdownLink.astro';
 import { toMarkdownHref } from '../../lib/graph.ts';
-import PlausibleScript from '../../components/PlausibleScript.astro';
 import StarredLinksScript from '../../components/StarredLinksScript.astro';
+import '../../site.css';
 import '../../styles/design-system.css';
 import '../../styles/notes.css';
 
@@ -61,7 +61,6 @@ const formattedWordCount = data.wordCount.toLocaleString();
 
   <meta name="author" content={data.author} />
   <link rel="icon" type="image/png" href="/favicon-32x32.png" />
-  <PlausibleScript domain="devonmeadows.com" />
 
   <!-- JSON-LD Structured Data: Article + BreadcrumbList -->
   <script type="application/ld+json" set:html={JSON.stringify({
@@ -115,7 +114,7 @@ const formattedWordCount = data.wordCount.toLocaleString();
   <Header />
   <SearchModal />
 
-  <main style="max-width: 65ch; margin: 0 auto; padding: 2rem 1.5rem; min-height: calc(100vh - 200px);">
+  <main id="main" style="max-width: 65ch; margin: 0 auto; padding: 2rem 1.5rem; min-height: calc(100vh - 200px);">
     <!-- Match atomic notes header exactly -->
     <div class="note-header">
       <div class="note-date">Created {new Date(data.created + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
@@ -377,9 +376,11 @@ const formattedWordCount = data.wordCount.toLocaleString();
 
         // Scroll to top on click
         backToTopBtn.addEventListener('click', () => {
+          // scroll-behavior in CSS does not reach scrollTo's options.
+          const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
           window.scrollTo({
             top: 0,
-            behavior: 'smooth'
+            behavior: reduced ? 'auto' : 'smooth'
           });
         });
       }

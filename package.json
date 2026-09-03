@@ -85,15 +85,12 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
     "@astrojs/markdown-remark": "^7.3.0",
     "@astrojs/sitemap": "^3.7.4",
-    "@tailwindcss/typography": "^0.5.20",
     "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4",
     "@types/node": "^22.20.1",
     "astro": "^7.2.10",
-    "autoprefixer": "^10.5.4",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.6.0"
   }

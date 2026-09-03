@@ -10,10 +10,10 @@
  * three separate mistakes look identical to success.
  *
  * `tests/fixtures/consumer/` is that project, kept as small as a wiki can be:
- * two notes that link each other, one external link, one route. It depends on
+ * two notes that link each other, one external link, two routes. It depends on
  * the repository through `file:../../..`, which pnpm resolves to a symlink —
  * the same resolution a `github:` install lands on, minus the tarball. What it
- * asserts is the whole contract in four lines of output:
+ * asserts is the whole contract:
  *
  *   - the remark plugin resolved a wikilink against the *consumer's* content
  *     tree, not this repository's;
@@ -21,13 +21,19 @@
  *     external — and left the consumer's own host alone;
  *   - the integration wrote `backlinks.json` into the consumer's `dist`, with
  *     both directions of the edge;
- *   - the `.md` beside the page is the source file, byte for byte.
+ *   - the `.md` beside the page is the source file, byte for byte;
+ *   - and the search modal's semantic tier stays absent unless a page asks for
+ *     it — the one assertion here that reads a second route, because proving
+ *     the opt-in is a seam takes a project on both sides of it.
  *
  * It is the slowest test here after `install.test.mjs`: pnpm installs Astro
  * into the fixture and Astro builds it.
  *
- * `dist/404.html` is deliberately not asserted. The engine has no 404 route
- * to give a consumer yet; that is #36.
+ * `dist/404.html` is deliberately not asserted. The engine now has a 404 route
+ * (#36), but a route is a page, and pages are the consumer's own — the package
+ * ships components and styles, not `src/pages/**`. A consumer who wants one
+ * writes it, the way this fixture writes its note route. What the engine's own
+ * 404 guarantees is asserted in `tests/rendered-site.test.mjs` instead.
  */
 
 import { test } from 'node:test';
@@ -89,9 +95,16 @@ test('a consumer project installs this package and builds a wiki with it', async
 	// changing either here without regenerating it fails right there, which is
 	// the earliest anyone could be told.
 	await sh('pnpm', ['install']);
-	const { stdout: build } = await sh('pnpm', ['build']);
+	const { stdout: build, stderr: buildErr } = await sh('pnpm', ['build']);
 
 	assert.match(build, /2 total backlinks across 2 entries/, build);
+
+	// A stylesheet this package ships has to be CSS in a build that has never
+	// heard of Tailwind (#8). `@tailwind utilities` in `design-system.css` used
+	// to reach Lightning CSS unprocessed here: a warning, and a rule that did
+	// nothing. The build still succeeded, which is exactly why this is asserted
+	// on the output rather than on the exit code.
+	assert.doesNotMatch(build + buildErr, /Unknown at rule/, build + buildErr);
 
 	const hello = await readFile(path.join(DIST, 'notes/hello/index.html'), 'utf8');
 
@@ -116,4 +129,19 @@ test('a consumer project installs this package and builds a wiki with it', async
 	const published = await readFile(path.join(DIST, 'notes/hello.md'), 'utf8');
 	const source = await readFile(path.join(FIXTURE, 'src/content/notes/hello.md'), 'utf8');
 	assert.equal(published, source);
+
+	// The search modal's semantic tier is opt-in (#56). This fixture is the
+	// stranger: it passes no `semanticEndpoint`, so its note page must carry no
+	// code for one — not a disabled fetch, no fetch. The only URL the modal
+	// reaches for is `/backlinks.json`, which this build wrote.
+	assert.doesNotMatch(hello, /\/api\/ask/);
+	assert.doesNotMatch(hello, /window\.CommuneSemanticSearch\s*=\s*async/);
+	assert.match(hello, /fetch\('\/backlinks\.json'/);
+
+	// And the half that proves the prop is a real seam rather than a deletion:
+	// a page that does serve an endpoint says so, and gets the tier pointed at
+	// its own URL.
+	const optIn = await readFile(path.join(DIST, 'opt-in-search/index.html'), 'utf8');
+	assert.match(optIn, /window\.CommuneSemanticSearch\s*=\s*async/);
+	assert.match(optIn, /const semanticEndpoint = "\/api\/ask"/);
 });
