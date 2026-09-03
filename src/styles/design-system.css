@@ -216,3 +216,24 @@ a[target="_blank"]:hover::after {
     opacity: 1;
   }
 }
+
+/* --- Reduced motion ----------------------------------------------------
+ * The panes slide, the header's theme button rotates, and the star modal runs
+ * a two-second infinite pulse. A reader who has asked their system for less
+ * movement gets the same interface with the movement removed, not a different
+ * one: transitions and animations collapse to instant, and smooth scrolling
+ * becomes a jump. The JavaScript callers of scrollIntoView and scrollTo check
+ * the same query, since `scroll-behavior` does not reach them.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

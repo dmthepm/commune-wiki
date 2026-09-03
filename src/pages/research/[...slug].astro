@@ -376,9 +376,11 @@ const formattedWordCount = data.wordCount.toLocaleString();
 
         // Scroll to top on click
         backToTopBtn.addEventListener('click', () => {
+          // scroll-behavior in CSS does not reach scrollTo's options.
+          const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
           window.scrollTo({
             top: 0,
-            behavior: 'smooth'
+            behavior: reduced ? 'auto' : 'smooth'
           });
         });
       }

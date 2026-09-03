@@ -38,6 +38,8 @@ if (window.wikiInitialized) {
 
   // --- Utility Functions ---
   const normalizeUrl = (url) => new URL(url, window.location.origin).pathname;
+  // scroll-behavior in CSS does not reach scrollIntoView/scrollTo options.
+  const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const showPreview = (el, html, x, y) => {
     try {
@@ -290,7 +292,7 @@ if (window.wikiInitialized) {
       // On mobile, panes fill the viewport so scrollIntoView is not needed
       if (window.innerWidth >= 1024) {
         requestAnimationFrame(() => {
-          pane.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+          pane.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });
         });
       }
     });

@@ -223,6 +223,16 @@
     border-radius:var(--c-radius-sm);
   }
 
+  /* A hover state whose whole content is movement loses the movement. The
+     rule lives here rather than in `design-system.css` because Astro scopes
+     this block's selectors, and a global `.theme-btn:hover` would lose the
+     specificity contest to the scoped rule above. */
+  @media (prefers-reduced-motion: reduce) {
+    .theme-btn:hover {
+      transform: none;
+    }
+  }
+
   /* Mobile: hide Command-K text and search text, show only icon */
   @media (max-width: 768px) {
     .search-btn kbd,
