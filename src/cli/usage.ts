@@ -22,6 +22,10 @@ graph query filters (any-of within a flag, all-of across flags):
   --status <status>
   --orphans                                     Zero inbound and zero outbound.
   --deadends                                    Zero outbound.
+  --unreferenced                                Zero inbound, any outbound. Skips
+                                                updates, which are expected to have
+                                                none, unless --collection updates
+                                                asks for them.
   --recent <7d|2w|2026-09-01>                   Updated on or since then. Entries
                                                 with no date are not returned.
 
@@ -45,7 +49,7 @@ Exit codes:
 
 export const COMMAND_USAGE: Record<string, string> = {
 	'graph query':
-		'Usage: commune [--root <dir>] graph query [--collection <c>]... [--tag <t>]... [--status <s>] [--orphans] [--deadends] [--recent <duration|date>] [--json]',
+		'Usage: commune [--root <dir>] graph query [--collection <c>]... [--tag <t>]... [--status <s>] [--orphans] [--deadends] [--unreferenced] [--recent <duration|date>] [--json]',
 	'graph related':
 		'Usage: commune [--root <dir>] graph related <path|text|-> [--json]',
 	update: `Usage: commune [--root <dir>] update [--recent <duration|date>] [--write] [--json]

@@ -40,6 +40,7 @@ const QUERY_OPTIONS: ParseArgsOptionsConfig = {
 	status: { type: 'string' },
 	orphans: { type: 'boolean', default: false },
 	deadends: { type: 'boolean', default: false },
+	unreferenced: { type: 'boolean', default: false },
 	recent: { type: 'string' },
 };
 
@@ -153,6 +154,7 @@ async function dispatch(args: string[]): Promise<number> {
 				status: values.status as string | undefined,
 				orphans: values.orphans as boolean,
 				deadends: values.deadends as boolean,
+				unreferenced: values.unreferenced as boolean,
 				...(since !== undefined ? { since } : {}),
 			};
 			return queryCommand(await resolveRoot(values.root as string | undefined), filters, values.json as boolean);

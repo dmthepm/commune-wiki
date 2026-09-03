@@ -242,11 +242,13 @@ commune gate
 
 | Verb | What it answers |
 | --- | --- |
-| `graph query` | Every entry with its edges and dates. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`, `--recent`. |
+| `graph query` | Every entry with its edges and dates. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`, `--unreferenced`, `--recent`. |
 | `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. Titles are matched across whitespace and case, so a dictated "noon tide" still finds `Noontide`. |
 | `update` | Scaffold a dated update entry from what changed. Prints it; `--write` files it. |
 | `check` | Broken links, duplicate names, ambiguous targets, non-canonical titles. |
 | `gate` | Run after a build, against the built site. |
+
+`--orphans` and `--unreferenced` are different questions and it is worth knowing which one you are asking. An orphan is *isolated* — nothing links to it and it links nowhere — which on a wiki where most notes link out returns almost nothing. `--unreferenced` is zero inbound with any outbound: the note you wrote, cited three others from, and never linked back to from anywhere. `updates` entries are left out of it, since a dated changelog entry is expected to have nothing pointing at it; `--collection updates` is how you say you meant them.
 
 `--recent` takes `7d`, `2w` or a date, and reports the day it resolved to in the summary — which is what a weekly update job needs, since `7d` means a different day tomorrow. Entries with no date at all are not returned: "unchanged since Monday" and "nobody knows" are different answers.
 
