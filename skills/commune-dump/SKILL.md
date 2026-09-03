@@ -11,7 +11,10 @@ metadata:
 Intake and connect. Two files out, no note written, no edit to `src/content/`.
 
 Run every command from the wiki root — the directory holding `src/content` and
-`node_modules`. Pass no `--root`. `$COMMUNE` below is the path step 1 prints.
+`node_modules`. Pass no `--root`. `$COMMUNE` is the executable path step 1
+prints; run it directly, with no `node` in front. `<slug>` below always means
+`<yyyy-mm-dd>-<target-slug>`, the dump file's own stem. Create `dumps/` if the
+wiki has none.
 
 ## Rules
 
@@ -26,17 +29,19 @@ Run every command from the wiki root — the directory holding `src/content` and
 
 ## Steps
 
-1. **Preflight.** Run `node scripts/preflight.mjs`. It prints the CLI path to
-   use; call it `$COMMUNE`. On exit 1, stop and show its line — do not continue
-   and do not install. Every `--json` payload you read is piped through
-   `node scripts/preflight.mjs --schema` first.
+1. **Preflight.** Run `node scripts/preflight.mjs` → `$COMMUNE`. On exit 1, stop
+   and show its line — do not continue and do not install. Read every `--json`
+   payload through `... --json | node scripts/preflight.mjs --schema`, which
+   passes the document straight through and stops the skill on any other schema.
 
 2. **Write the dump file.** Input: the text the user gave. If it is a Monologue
-   note id rather than text, read `references/monologue.md` first. Ask exactly
-   one question, and only if the text does not answer it: which note is this
-   for — an existing file, or a new one in which collection? Output:
-   `dumps/<yyyy-mm-dd>-<target-slug>.md`, frontmatter per
-   `references/handoffs.md`, body verbatim. Slug the target, not the date.
+   note id rather than text, read `references/monologue.md` first. Ask one
+   question, covering only what the text does not answer: which note is this for
+   — an existing file, or a new one in which collection — and, for a new one,
+   what it is called. **Never invent the title.** It is the string step 3
+   compares findings against and the stem every later file is named from.
+   Output: `dumps/<slug>.md`, frontmatter per `references/handoffs.md`, body
+   verbatim.
 
 3. **Baseline, and the duplicate-name stop.** Run `$COMMUNE check --json`. Keep
    `summary` as `baseline`. If any `duplicate-name` finding names the target
@@ -48,22 +53,25 @@ Run every command from the wiki root — the directory holding `src/content` and
 4. **Connect.** Input: the dump file. In order:
    - `$COMMUNE graph related - --json < dumps/<slug>.md` → `mentions`.
    - If the target file already exists, `$COMMUNE graph related <target> --json`
-     → `target.inbound`, `target.outbound`, and `at_risk` from its resolved
-     outbound links.
+     → `target.inbound` and `target.outbound`; then `$COMMUNE graph query --json`
+     for the inbound count of each resolved outbound link → `at_risk`.
    - List the dump's subjects yourself — the proper nouns, projects and claims a
-     reader would expect a note for. Feed that list to
-     `$COMMUNE graph related - --json` and subtract the mentions it returns. What
-     is left is `unmatched`: subjects with no note.
+     reader would expect a note for. Write them one per line and pipe that list
+     to `$COMMUNE graph related - --json`. A subject is matched when it equals a
+     returned mention's `matched` or `title`, ignoring case and spacing; what is
+     left over is `unmatched`.
    - `$COMMUNE graph query --unreferenced --json` → `unreferenced`.
    Tag every mention and every unmatched phrase with the sentence that produced
-   it and its tense (`present`, `past`, `negative`, `hypothetical`). A sentence
-   that argues *against* a subject still mentions it, and the tense is the only
-   thing that says so.
+   it and its tense, per `references/handoffs.md`. A sentence that argues
+   *against* a subject still mentions it, and the tense is the only thing that
+   says so.
 
 5. **Write the connect file.** Output: `dumps/<slug>.connect.md`, keys exactly
    as `references/handoffs.md` gives them, `status: ready`, `files:` seeded with
-   the target path. Body: `## What I ran` (the commands, verbatim),
-   `## Candidates` (each one with its sentence, in the human's words, and what
+   the target path. A new note follows the naming its collection already uses
+   — read one existing filename before you guess it. Body:
+   `## What I ran` (the commands, verbatim),
+   `## Candidates` (each with its sentence, in the human's words, and what
    linking or not linking it would do to the graph), `## Handoff`.
 
 6. **Hand off.** Print the two paths and say: *"Run `commune-write`."* Do not
@@ -71,7 +79,7 @@ Run every command from the wiki root — the directory holding `src/content` and
 
 ## Stop conditions
 
-- Preflight failed → show the line, stop.
+- Preflight failed, or a payload is not schema 1 → show the line, stop.
 - `duplicate-name` names the target → `status: blocked`, stop.
 - The dump names no target and the user does not answer → stop; the target is
   the one thing every later step needs.

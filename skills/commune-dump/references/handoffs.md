@@ -77,7 +77,16 @@ draft is never scored on them: a mention the draft ignores is not a miss.
 `tense` is the skill's judgement about the sentence that produced the candidate —
 `present`, `past`, `negative`, `hypothetical`. "I do not want to highlight Noon
 Tide" mentions Noontide and argues against linking it, and only the tense tag
-carries that.
+carries that. One tag per candidate: when a sentence both states a fact and
+refuses to feature it — "Noon Tide is the company, and I do not want to
+highlight it" — tag it `negative`, because the refusal is the half that changes
+the draft.
+
+`at_risk` is every **resolved** outbound link of the target, each with that
+entry's own inbound count and whether dropping this link would leave it at zero.
+The counts come from one `graph query --json`, never from counting by hand.
+Unresolved links are not at risk; they are already broken, and `check` reports
+them.
 
 ## `dumps/<slug>.answers.md` — the grill
 

@@ -40,8 +40,9 @@ const USAGE = `commune skills preflight — check the wiki's installed engine be
 Usage:
   node scripts/preflight.mjs                 Check node_modules/.bin/commune is >= ${MIN}.
                                              Prints the path to use on stdout.
-  node scripts/preflight.mjs --schema        Read one --json payload on stdin and
-                                             assert schema === ${SCHEMA}.
+  node scripts/preflight.mjs --schema        Read one --json payload on stdin, assert
+                                             schema === ${SCHEMA}, and write it back out
+                                             unchanged, so it can sit in a pipeline.
   node scripts/preflight.mjs --help
 
 Run it from the wiki root — the directory holding src/content and node_modules.
@@ -87,7 +88,9 @@ async function checkSchema() {
 	if (payload.schema !== SCHEMA) {
 		stop(`Preflight: payload is schema ${JSON.stringify(payload.schema)}, this skill reads schema ${SCHEMA}. Stop and say so. ${FIX}`);
 	}
-	process.stdout.write(`schema ${SCHEMA}\n`);
+	// Pass the payload straight through, so this is a filter in a pipeline
+	// rather than a step that eats the document it was checking.
+	process.stdout.write(raw);
 }
 
 async function checkVersion() {

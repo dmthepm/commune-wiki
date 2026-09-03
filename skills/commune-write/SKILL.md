@@ -41,8 +41,9 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    turn.
 
 3. **Draft** — when the newest round has answers under it. Output: the file at
-   `target:` in the dump, or a new file in `src/content/<collection>/` named by
-   the target slug. Write `## Round N — decisions extracted` into
+   `target:` in the dump, or a new file in `src/content/<collection>/`, named
+   the way that collection already names its files — read one before you
+   guess. Write `## Round N — decisions extracted` into
    `.answers.md` first, then apply those decisions as a delta to the base named
    by `base:`. Frontmatter comes from `WRITING.md`'s block for that collection,
    keys in its order. Append every file you touched to `files:` in
