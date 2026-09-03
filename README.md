@@ -1,10 +1,8 @@
-# Commune Wiki - Personal Knowledge Management Static Site Generator
+# Commune Wiki
 
-**Open-source Astro-based wiki** with Andy Matuschak-style sliding panes, WikiLinks, backlinks, and semantic search.
+An Astro wiki engine — WikiLinks, sliding panes, backlinks, static search — and a `commune` CLI that queries the content graph and checks links.
 
-**License**: MIT  
-**Status**: Active Development  
-**Live Example**: [devonmeadows.com](https://devonmeadows.com)
+**License**: MIT · **Live example**: [devonmeadows.com](https://devonmeadows.com)
 
 ---
 

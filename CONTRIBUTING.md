@@ -315,7 +315,7 @@ Link with custom text: [[Note Title|custom text]]
 
 - **Bugs/Features**: [Open an issue](https://github.com/dmthepm/commune-wiki/issues/new)
 - **General Questions**: [Start a discussion](https://github.com/dmthepm/commune-wiki/discussions/new)
-- **Security Issues**: Email security@commune.app (if domain is registered)
+- **Security Issues**: DM [@devonmeadows on X](https://x.com/devonmeadows)
 
 ---
 
