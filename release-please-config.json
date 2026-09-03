@@ -1,5 +1,21 @@
 {
 	"$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+	"changelog-sections": [
+		{ "type": "feat", "section": "Added" },
+		{ "type": "feature", "section": "Added" },
+		{ "type": "perf", "section": "Changed" },
+		{ "type": "refactor", "section": "Changed" },
+		{ "type": "build", "section": "Changed" },
+		{ "type": "ci", "section": "Changed" },
+		{ "type": "docs", "section": "Changed" },
+		{ "type": "deprecate", "section": "Deprecated" },
+		{ "type": "revert", "section": "Removed" },
+		{ "type": "fix", "scope": "security", "section": "Security" },
+		{ "type": "fix", "section": "Fixed" },
+		{ "type": "style", "section": "Changed", "hidden": true },
+		{ "type": "test", "section": "Changed", "hidden": true },
+		{ "type": "chore", "section": "Changed", "hidden": true }
+	],
 	"packages": {
 		".": {
 			"release-type": "node",
