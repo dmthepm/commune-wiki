@@ -32,6 +32,32 @@ by hand.
 
 ---
 
+## How the changelog is written
+
+`CHANGELOG.md` follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/):
+a fixed preamble, an `Unreleased` heading, then every version newest first with
+its changes grouped under the spec's vocabulary. Nobody writes those groups by
+hand — `changelog-sections` in `release-please-config.json` maps each
+conventional commit type to a section, so the type in the commit subject decides
+where the line lands: `feat:` gives **Added**; `perf:`, `refactor:`, `build:`,
+`ci:` and `docs:` give **Changed** (packaging and CI changes stay visible on
+purpose, so a stranger can see when the build changed); `deprecate:` gives
+**Deprecated**; `revert:` gives **Removed**; `fix(security):` gives
+**Security**; every other `fix:` gives **Fixed**. `chore:`, `test:` and `style:`
+are hidden, a type absent from the list is dropped from the changelog entirely,
+and a breaking change also gets its own `⚠ BREAKING CHANGES` heading whatever
+its type. Two consequences worth knowing. The matcher takes the first entry in
+the list that matches and the same list order sorts the sections, so **Security**
+renders just above **Fixed** rather than below it. And the `Unreleased` heading
+is deliberately not written as `[Unreleased]`: release-please splices each new
+release in immediately before the first heading matching `\n###? v?[0-9[]`, the
+bracketed form matches that, and every future release would be filed above
+`Unreleased` instead of below. Everything above the first version heading —
+preamble, comment, `Unreleased` — is carried over untouched on each release; the
+compare links at the bottom of the file are maintained by hand.
+
+---
+
 ## Step 1 — an npm account that owns the `@dmthepm` scope
 
 **Do:** sign in (or sign up) at <https://www.npmjs.com/>. The account's username
@@ -253,3 +279,32 @@ All fetched 2026-09-03.
 - GitHub, *Supported ecosystems and repositories* —
   <https://docs.github.com/en/code-security/dependabot/ecosystems-supported-by-dependabot/supported-ecosystems-and-repositories>.
   pnpm is served by the `npm` ecosystem (v7–v10).
+- Keep a Changelog 1.1.0 — <https://keepachangelog.com/en/1.1.0/>. Fetched
+  2026-09-03. The preamble wording, the six change types (Added, Changed,
+  Deprecated, Removed, Fixed, Security), "Keep an `Unreleased` section at the
+  top to track upcoming changes", and "The latest version comes first".
+- release-please, *Manifest Driven release-please* —
+  <https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md>.
+  On `changelog-sections`: "set default conventional commit => changelog
+  sections mapping/appearance". The config schema (fetched 2026-09-03) types
+  each entry as `{ type, section, hidden? }`, `type` and `section` required, and
+  sets no `additionalProperties: false` on the entry — which is what lets the
+  Security entry carry a `scope`.
+- release-please, `src/changelog-notes/default.ts` (main, read 2026-09-03).
+  `changelog-sections` is handed straight to
+  `conventional-changelog-conventionalcommits` as its `types`:
+  `if (options.changelogSections) { config.types = options.changelogSections; }`.
+- `conventional-changelog-conventionalcommits@6.1.0`, `writer-opts.js` (read
+  2026-09-03). `findTypeEntry` returns the first entry whose `type` matches and
+  whose `scope`, when it has one, equals the commit's scope — the reason
+  `fix(security):` can have its own section. `commitGroupOrder` is
+  `config.types.flatMap(t => t.section)` and `commitGroupsSort` ranks sections by
+  `indexOf` into it, so array order is render order. A commit whose type has no
+  entry, or whose entry is hidden, is discarded unless it carries a breaking
+  change.
+- release-please, `src/updaters/changelog.ts` (main, read 2026-09-03).
+  `DEFAULT_VERSION_HEADER_REGEX = '\n###? v?[0-9[]'`; the new entry is spliced in
+  at `content.search(this.versionHeaderRegex)`, so everything above the first
+  match survives verbatim. `versionHeaderRegex` is not a config key — the schema
+  has no such property and only the `dotnet-yoshi` and `r/news` updaters
+  override it.
