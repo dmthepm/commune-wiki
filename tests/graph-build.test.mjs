@@ -26,7 +26,7 @@ test('graph construction reports broken links as data, not as log lines', async 
 	const broken = graph.diagnostics.filter((d) => d.rule === 'broken-link');
 
 	assert.equal(broken.length, graph.diagnostics.length);
-	assert.equal(broken.length, 32);
+	assert.equal(broken.length, 30);
 	assert.equal(broken[0].severity, 'warning');
 	assert.match(broken[0].file, /^src\/content\//);
 });

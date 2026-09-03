@@ -2,7 +2,7 @@
 
 **Date**: 2025-10-16
 **Status**: Brainstorming / Vision Doc
-**Context**: Removing status badges. Exploring gamification that aligns with "finding yourself + getting paid for unique insights"
+**Context**: Removing status badges. Exploring gamification that aligns with "finding yourself + making unique connections"
 
 ---
 
@@ -111,18 +111,15 @@ If you follow someone's Commune:
 - Weekly synthesis email (auto-essay)
 - "What have they been thinking lately?" view
 - See their exploration process, not just outputs
-- Depth-gating: free tiers see first 3 hops, paid sees everything
 
 ---
 
 ## What We DON'T Know Yet (Pending Research)
 
 **Devon is researching**:
-- What platforms successfully help people find themselves + monetize?
 - What signals authenticity vs. performance?
 - How do platforms train users to explore vs. optimize for metrics?
 - What makes short, rough thoughts valuable vs. noise?
-- Economic models that reward exploration, not polish
 
 **Once we have this**: Synthesize with digital garden research to design the real indicator system.
 
@@ -141,7 +138,6 @@ If you follow someone's Commune:
 
 4. **Profile-level vs. note-level**: Maybe the indicator isn't about individual notes but about the PERSON:
    - "Devon has explored 37 atomic ideas"
-   - "3 readers paid to follow Devon's mind"
 
 5. **Preventing gaming**: Any visible metric can be gamed. How do we design for authenticity?
 
@@ -160,6 +156,4 @@ If you follow someone's Commune:
 
 ## Related Docs
 
-- [Deep Research: Evergreen Note Quality Signals](deep-research/evergreen-note-quality-signals.md)
 - [Evergreen Notes Guidelines](EVERGREEN-NOTES.md)
-- [PRD: Commune Platform](PRD-commune.md)

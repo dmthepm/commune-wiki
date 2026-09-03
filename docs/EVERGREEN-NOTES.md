@@ -262,26 +262,6 @@ updated: 2025-10-10
 
 ## Active Notes
 
-### Wiki tool as Commune's core product, not infrastructure
-
-**Status**: growing
-**Created**: 2025-10-15
-**Word Count**: 235
-
-The product vision is evolving. Initial thinking positioned Commune as high-ticket home server productization ($15-50K installations). After deploying devonmeadows.com, a different pattern emerged: **the wiki tool might be Commune's core product**, with home server as enabling infrastructure.
-
-Two market paths: self-hosters get Commune as a product (install on their server), or non-technical users get SaaS hosting. The value isn't the infrastructure—it's the [[Voice in, approvals out]] workflow that transforms raw thoughts into structured knowledge.
-
-Freemium model inspired by Substack and Patreon: free tier unlocks first 3 levels of wiki navigation, paid tiers unlock deeper exploration and agent features. This is "Patreon for thought"—people pay to [[Follow and Collect keep signal, not hype|follow someone's working mind]] in public.
-
-The core workflow: voice capture (iOS) → agent processing ([[Claude Code CLI]]) → wiki output ([[Atomic Notes]], [[WikiLinks]], public knowledge graph) → daily notes. More people should have this. Building for self first, figuring out market as we go.
-
-This reframes everything. [[Cloudflare Tunnel]], [[Plausible Analytics]], [[Mobile-first UX]], [[Agent system]]—all infrastructure **for** the wiki product, not the product itself. The 36 atomic notes on devonmeadows.com are proof: working brain in public resonates.
-
-**Important**: Documentation artifacts may look inconsistent because it **is evolving**. End-of-day reflections capture strategic insights when context is fresh.
-
-Related: [[Commune]], [[Depth-3 free is honest gating]], [[People pay to follow working mind]]
-
 ### iOS sync needs better error handling
 
 **Status**: growing  
@@ -316,7 +296,5 @@ See [[Token Management]] and [[WARP.md Automation Rules]] for specific implement
 
 ## References
 
-- [`docs/AGENT-SYSTEM.md`](AGENT-SYSTEM.md) - Complete agent architecture
-- [`docs/PRD-commune.md`](PRD-commune.md) - System requirements
 - [Andy Matuschak's Notes](https://notes.andymatuschak.org) - Gold standard reference
 

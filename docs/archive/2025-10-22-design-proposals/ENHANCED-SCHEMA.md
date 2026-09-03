@@ -77,7 +77,6 @@ follow_count: 0       # people following this note's updates
 collected_by: []      # list of users who collected this note
 collected_count: 0    # total collections (social signal)
 proposals: []         # suggested edits from trusted followers
-issues: []            # reader requests/tickets from $30 tier
 
 # === TECHNICAL METADATA ===
 content_hash: "sha256:abc123..."  # content fingerprint for change detection
@@ -153,4 +152,4 @@ This schema supports your vision of:
 5. **SEO optimization** for the "digital garden collection" goal
 6. **Quality tracking** for continuous improvement
 
-The schema grows with your system - start with timestamps and metrics, then add intelligence and social features as you build toward the subscription tiers.
+The schema grows with your system - start with timestamps and metrics, then add intelligence and social features as the wiki needs them.
