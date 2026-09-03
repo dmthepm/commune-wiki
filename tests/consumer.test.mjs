@@ -92,9 +92,16 @@ test('a consumer project installs this package and builds a wiki with it', async
 	// changing either here without regenerating it fails right there, which is
 	// the earliest anyone could be told.
 	await sh('pnpm', ['install']);
-	const { stdout: build } = await sh('pnpm', ['build']);
+	const { stdout: build, stderr: buildErr } = await sh('pnpm', ['build']);
 
 	assert.match(build, /2 total backlinks across 2 entries/, build);
+
+	// A stylesheet this package ships has to be CSS in a build that has never
+	// heard of Tailwind (#8). `@tailwind utilities` in `design-system.css` used
+	// to reach Lightning CSS unprocessed here: a warning, and a rule that did
+	// nothing. The build still succeeded, which is exactly why this is asserted
+	// on the output rather than on the exit code.
+	assert.doesNotMatch(build + buildErr, /Unknown at rule/, build + buildErr);
 
 	const hello = await readFile(path.join(DIST, 'notes/hello/index.html'), 'utf8');
 

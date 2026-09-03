@@ -1,0 +1,24 @@
+/**
+ * The engine site's own entry stylesheet.
+ *
+ * It exists to hold one line. `@tailwind utilities` is a directive, not CSS:
+ * it means nothing until Tailwind's PostCSS plugin has replaced it, and this
+ * repository's `astro.config.mjs` is what registers that plugin. A consumer
+ * of the package has their own build, and most of them will not have Tailwind
+ * in it — so a stylesheet the package *ships* cannot carry this line without
+ * handing them an `Unknown at rule: @tailwind` warning and a rule that does
+ * nothing (#8).
+ *
+ * Hence the location. `src/styles/` is inside `package.json`'s `files` and
+ * goes out with every install; `src/` is not. This file is the demonstration
+ * site's, and only the demonstration site's, which is why the pages under
+ * `src/pages/` import it alongside `design-system.css` and nothing under
+ * `src/components/` or `src/styles/` refers to it at all.
+ *
+ * The utilities themselves are used sparingly and only by this site's pages
+ * and a few of its components. A consumer who imports one of those components
+ * without Tailwind gets an unstyled `class` attribute, which is inert — the
+ * design system carries the appearance either way.
+ */
+
+@tailwind utilities;

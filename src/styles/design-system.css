@@ -1,10 +1,12 @@
 /**
  * Commune Design System
  * Clean, modern, with light/dark mode support
+ *
+ * Plain CSS, deliberately: this file ships with the package, so it must render
+ * correctly in a consumer build that has never heard of Tailwind or PostCSS.
+ * The engine site's own `@tailwind utilities` entry lives in `src/site.css`,
+ * which is not shipped (#8).
  */
-
-/* Only import Tailwind utilities - NOT base (which resets everything) */
-@tailwind utilities;
 
 :root {
   /* Light mode colors */
