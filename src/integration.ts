@@ -58,11 +58,19 @@ async function writeBacklinksFile(filePath: string, graph: Record<string, NoteMe
  * already decided which entries exist and where each one lives; this only moves
  * bytes.
  */
-async function writeMarkdownFiles(entries: ContentEntry[], outDir: string): Promise<number> {
+async function writeMarkdownFiles(
+	entries: ContentEntry[],
+	root: string,
+	outDir: string
+): Promise<number> {
 	for (const entry of entries) {
 		const destination = path.join(outDir, toMarkdownPath(entry.urlPath));
 		await mkdir(path.dirname(destination), { recursive: true });
-		await copyFile(entry.file, destination);
+		// `entry.file` is relative to the project root — the graph's promise —
+		// so the read is joined to that root and not left to the cwd. They are
+		// the same directory when someone runs `astro build` in their project
+		// and different the moment they do not.
+		await copyFile(path.join(root, entry.file), destination);
 	}
 
 	return entries.length;
@@ -72,20 +80,47 @@ function summarize(graph: Graph): string {
 	return `📊 ${graph.totalBacklinks} total backlinks across ${Object.keys(graph.nodes).length} entries`;
 }
 
-export default function backlinksIntegration(): AstroIntegration {
+/**
+ * Options for the integration.
+ *
+ * Empty, and deliberately so: everything the graph needs is already in the
+ * consumer's `defineConfig` — the root to read content from, the public
+ * directory to write the index to — and reading it from there is what stops a
+ * second, drifting copy of Astro's own configuration existing. The parameter
+ * is here so that the day something *is* configurable, `commune({ … })` is
+ * already the spelling in every consumer's config.
+ */
+export interface CommuneOptions {}
+
+export default function commune(_options: CommuneOptions = {}): AstroIntegration {
+	// `astro:build:done` is not handed the resolved config, so the two paths
+	// the graph needs are captured in `astro:config:setup` — which Astro always
+	// runs first — and closed over. Per-instance rather than module-level: one
+	// `commune()` call belongs to one Astro config, so two projects built in
+	// one process do not overwrite each other's roots.
+	let root: string;
+	let publicBacklinks: string;
+
 	return {
 		name: 'commune-backlinks',
 		hooks: {
 			// Write the public artifact before pages render. Note pages import
 			// backlinks.json at build time, so it has to be fresh on disk first —
 			// otherwise the build bakes in whatever the previous run left behind.
-			'astro:config:setup': async ({ logger }) => {
+			'astro:config:setup': async ({ config, logger }) => {
 				logger.info('🔗 Building public backlinks index...');
 
+				// Both are URLs, and `.pathname` percent-encodes: a project
+				// checked out under a path with a space would read from a
+				// literal `%20` directory and find no content at all.
+				// `fileURLToPath` is what Astro's own docs use.
+				root = fileURLToPath(config.root);
+				publicBacklinks = fileURLToPath(new URL('./backlinks.json', config.publicDir));
+
 				try {
-					const graph = buildBacklinksGraph(await loadContentEntries(), logger);
-					await writeBacklinksFile(path.join('public', 'backlinks.json'), toBacklinksJson(graph));
-					logger.info(`✅ Backlinks index written to public/backlinks.json`);
+					const graph = buildBacklinksGraph(await loadContentEntries({ root }), logger);
+					await writeBacklinksFile(publicBacklinks, toBacklinksJson(graph));
+					logger.info(`✅ Backlinks index written to ${path.relative(root, publicBacklinks)}`);
 					logger.info(summarize(graph));
 				} catch (error) {
 					logger.error('❌ Failed to build public backlinks index:');
@@ -97,20 +132,16 @@ export default function backlinksIntegration(): AstroIntegration {
 				logger.info('🔗 Building backlinks index...');
 
 				try {
-					const entries = await loadContentEntries();
+					const entries = await loadContentEntries({ root });
 					const graph = buildBacklinksGraph(entries, logger);
 					const json = toBacklinksJson(graph);
 
-					// `dir` is a URL, and `dir.pathname` percent-encodes: a project
-					// checked out under a path with a space writes to a literal
-					// `%20` directory. `fileURLToPath` is what Astro's own docs use.
 					await writeBacklinksFile(fileURLToPath(new URL('./backlinks.json', dir)), json);
 
-					// Also write to /public for dev server parity
-					// Use relative path from cwd to handle different build contexts
-					await writeBacklinksFile(path.join('public', 'backlinks.json'), json);
+					// Also written to the public directory, for dev server parity.
+					await writeBacklinksFile(publicBacklinks, json);
 
-					const written = await writeMarkdownFiles(entries, fileURLToPath(dir));
+					const written = await writeMarkdownFiles(entries, root, fileURLToPath(dir));
 
 					logger.info(`✅ Backlinks index written to /backlinks.json (dist + public)`);
 					logger.info(`📄 ${written} source files written as .md alongside their pages`);

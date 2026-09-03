@@ -321,23 +321,48 @@ export function resolveLink(
 		: byName.get(link.target.toLowerCase());
 }
 
-let lookupCache: Map<string, LinkTarget> | null = null;
+/**
+ * One in-flight or settled lookup per project root, keyed by its absolute path.
+ *
+ * Keyed on the *root* rather than built once per process, because the process
+ * is not the unit of work any more: the package is installed into somebody
+ * else's project, and the remark plugin there has to resolve `[[WikiLinks]]`
+ * against *their* content tree. A single module-level lookup would be filled by
+ * whichever project scanned first and then silently answered for every other
+ * one — the same failure `loadContentEntries` avoids by taking a root instead
+ * of calling `process.chdir`.
+ *
+ * The value is the promise, not the map, so the concurrent transforms of one
+ * build share a single scan rather than racing to start several. A rejected
+ * scan is evicted: a failure is a moment, not an answer, and remembering it
+ * would make one bad read permanent for the life of the process.
+ */
+const lookupCache = new Map<string, Promise<Map<string, LinkTarget>>>();
 
 /**
- * The link lookup, built once per process.
+ * The link lookup for one project root, built once and reused.
  *
  * The remark plugin runs per markdown file, so rescanning the content tree on
  * every transform would make builds quadratic. Call `resetGraphCache()` if a
  * caller needs to see content written during the same process.
  */
-export async function getLinkLookup(): Promise<Map<string, LinkTarget>> {
-	if (lookupCache) return lookupCache;
-	lookupCache = buildLinkLookup(await loadContentEntries());
-	return lookupCache;
+export function getLinkLookup(options: GraphOptions = {}): Promise<Map<string, LinkTarget>> {
+	// Resolved, so `.`, `./`, a relative path and the absolute one are one entry
+	// rather than four scans of the same tree.
+	const root = path.resolve(options.root ?? process.cwd());
+
+	const cached = lookupCache.get(root);
+	if (cached) return cached;
+
+	const pending = loadContentEntries({ root }).then(buildLinkLookup);
+	pending.catch(() => lookupCache.delete(root));
+	lookupCache.set(root, pending);
+
+	return pending;
 }
 
 export function resetGraphCache(): void {
-	lookupCache = null;
+	lookupCache.clear();
 }
 
 /**
