@@ -298,9 +298,25 @@
     else addEventListener('resize', publish);
   })();
 
+  // One platform check, shared with the search modal's own handler, so the
+  // printed shortcut and the key that actually works cannot drift apart.
+  // navigator.platform is deprecated but still the only thing every browser
+  // answers; userAgentData.platform is preferred where it exists.
+  window.CommuneIsMac = () => /mac/i.test(
+    (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || ''
+  );
+
+  // The button printed ⌘K to everyone. On Windows and Linux the shortcut is
+  // Ctrl+K, so the label named a key combination that did nothing.
+  (function labelSearchShortcut(){
+    if (window.CommuneIsMac()) return;
+    document.querySelectorAll('.search-btn kbd').forEach((el) => { el.textContent = 'Ctrl K'; });
+    document.querySelectorAll('.search-btn').forEach((el) => { el.setAttribute('aria-label', 'Search (Ctrl K)'); });
+  })();
+
   // cmd/ctrl-k opens modal
   addEventListener('keydown', (e) => {
-    const mac = navigator.platform.toUpperCase().includes('MAC');
+    const mac = window.CommuneIsMac();
     if ((mac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       dispatchEvent(new CustomEvent('commune:openSearch'));
