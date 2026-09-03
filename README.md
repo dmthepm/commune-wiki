@@ -14,7 +14,7 @@ You need an Astro 7 project on Node 22.12 or newer.
 pnpm add @dmthepm/commune @astrojs/markdown-remark
 ```
 
-That is the whole install. `astro.config.mjs`, in full:
+Then three files, and your notes. `astro.config.mjs`, in full:
 
 ```js
 import { defineConfig } from 'astro/config';
@@ -31,6 +31,46 @@ export default defineConfig({
 ```
 
 Astro 7 renders markdown with Sätteri and no longer installs the unified pipeline, so `markdown.processor` is where the wikilink plugins have to go. `site` is a parameter because the engine has no host of its own — it decides what counts as an external link against your origin, which you already declare once.
+
+Commune reads markdown off disk, but Astro will not render a page for it until the collection is registered and something routes it — so copy these two files. `src/content.config.ts`:
+
+```ts
+import { defineCollection, z } from 'astro:content';
+import { glob } from 'astro/loaders';
+
+export const collections = {
+  notes: defineCollection({
+    loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/notes' }),
+    schema: z.object({
+      title: z.string(),
+      visibility: z.enum(['public', 'private', 'draft']).default('private'),
+    }),
+  }),
+};
+```
+
+And `src/pages/notes/[...slug].astro`:
+
+```astro
+---
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const notes = await getCollection('notes', (note) => note.data.visibility === 'public');
+  return notes.map((note) => ({ params: { slug: note.id }, props: { note } }));
+}
+
+const { note } = Astro.props;
+const { Content } = await render(note);
+---
+
+<html lang="en">
+  <head><meta charset="utf-8" /><title>{note.data.title}</title></head>
+  <body><h1>{note.data.title}</h1><Content /></body>
+</html>
+```
+
+Both are the smallest versions that work. [`tests/fixtures/consumer`](tests/fixtures/consumer) is the same project one step further along — it adds the `research` and `pages` collections and imports components off the package — and it is the reference to read when you want the fuller shape.
 
 Notes go in `src/content/notes/`. Two frontmatter fields are load-bearing:
 
@@ -50,13 +90,13 @@ A link to <a href="/notes/world/" class="wikilink">World</a>, and one to
 <a href="https://astro.build" target="_blank" rel="noopener noreferrer">Astro</a>.
 ```
 
-Routes stay yours. The package ships the mechanism, not `src/pages/` — you write the `[...slug].astro` that renders a note, and Commune makes the links inside it work.
+That route is a starting point, not an interface. The package ships the mechanism and none of `src/pages/` — the markup, the layout and the URL shape are yours to change, and Commune keeps the links inside them working.
 
 ## What ships
 
 - **WikiLinks.** `[[Title]]` and `[[Title|Display text]]` become real hrefs at build time, matched against titles and aliases. A link that resolves to nothing stays plain text instead of rendering a dead anchor.
 - **Backlinks.** The build writes `backlinks.json` — every entry with its inbound and outbound edges — to `dist/` and `public/`. `Backlinks.astro` renders it on a page.
-- **Markdown twins.** Every published page gets its source written beside it, so `/notes/hello/` also answers at `/notes/hello.md`. Agents and readers get the same document without scraping HTML.
+- **Markdown twins.** Every published content entry gets its source written beside it, so `/notes/hello/` also answers at `/notes/hello.md`. Entries in the content directories only — a hand-written route under `src/pages/` has no source file to twin. Agents and readers get the same document without scraping HTML.
 - **External links.** Anything off your `site` origin gets `target="_blank" rel="noopener noreferrer"` without you marking it up.
 - **The graph as a library.** `@dmthepm/commune/graph` exports the content loader, the link resolver and the graph builder. The Astro build and the CLI both call it. That is the point: one resolver, not two that drift.
 - **Components and stylesheets.** `@dmthepm/commune/components/*.astro` and `@dmthepm/commune/styles/*.css`, shipped as source. These are the components off my own site rather than a theme system — take them as a starting point, not an API.
@@ -77,7 +117,7 @@ commune gate
 | --- | --- |
 | `graph query` | Every entry with its edges. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`. |
 | `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. |
-| `check` | Broken links, duplicate names, ambiguous targets. |
+| `check` | Broken links, duplicate names, ambiguous targets, non-canonical titles. |
 | `gate` | Run after a build, against the built site. |
 
 Every verb takes `--json` and emits one document on stdout with everything else on stderr. The human-readable text is the fallback rendering; the JSON is the contract.
