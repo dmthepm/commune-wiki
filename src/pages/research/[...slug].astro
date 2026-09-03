@@ -114,7 +114,7 @@ const formattedWordCount = data.wordCount.toLocaleString();
   <Header />
   <SearchModal />
 
-  <main style="max-width: 65ch; margin: 0 auto; padding: 2rem 1.5rem; min-height: calc(100vh - 200px);">
+  <main id="main" style="max-width: 65ch; margin: 0 auto; padding: 2rem 1.5rem; min-height: calc(100vh - 200px);">
     <!-- Match atomic notes header exactly -->
     <div class="note-header">
       <div class="note-date">Created {new Date(data.created + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>

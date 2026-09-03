@@ -365,7 +365,9 @@ if (window.wikiInitialized) {
   const firstPane = container.querySelector('.pane');
   if (firstPane) {
     firstPane.dataset.url = normalizeUrl(window.location.href);
-    focusPane(firstPane);
+    // Deliberately not focused: focusing the pane on load put the first tab
+    // stop inside the note, so the skip link and the header controls were only
+    // reachable by tabbing backwards.
     updateContainerLayout();
   }
 
