@@ -22,7 +22,7 @@ in the PR, or appended to `dumps/<slug>.answers.md`.
    re-draft the note around it, do not fix things nobody asked about, and do not
    improve a sentence the correction did not touch.
 5. **Re-verify and re-render.** `$COMMUNE check --json` against the connect
-   baseline, then `node scripts/review.mjs <base> <path> --connect … --answers …`.
+   baseline, then `node scripts/review.mjs <base> <path> --connect … --answers … --out dumps/<slug>.review.html`.
 6. **One commit per turn**, so each verdict is revertable on its own.
 
 ## When a correction becomes a rule

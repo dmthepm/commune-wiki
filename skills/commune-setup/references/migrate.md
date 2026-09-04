@@ -28,7 +28,7 @@ old file ends up deleted in the same commit.
 
 ## Worked example: `docs/NOTE-WRITING-BIBLE.md`
 
-The engine's own wiki carries this file, last updated 2025-10-16, 189 lines.
+The engine's own wiki carries this file, last updated 2025-10-16, 204 lines.
 Where each section goes:
 
 | Section in the bible | Goes to | Note |
@@ -46,6 +46,7 @@ Where each section goes:
 | Note Evolution → Status progression | **Frontmatter** | **Reconcile:** see below |
 | Note Evolution → How notes evolve | — | A description of the loop. The loop is the skills |
 | The Agent's Role | — | This became `commune-dump` and the grill; not a writing rule |
+| Depth Gating (Future) | — | A feature idea, not a rule; say it was dropped |
 | The Vision | — | Positioning |
 | Quality Signals Research | — | Research. Link it from a note if it should be readable |
 | Meta / Sources | — | Provenance of the old file, which is being deleted |

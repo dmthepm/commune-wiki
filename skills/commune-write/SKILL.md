@@ -26,7 +26,9 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
   note gets no graph verification, and do not pretend otherwise.
 - Candidates in `.connect.md` are offers. A mention the draft ignores is not a
   miss, and you never link something to raise a number.
-- Never install anything. Never commit. `commune-ship` commits.
+- Never install anything. Do not commit the draft; `commune-ship` commits it.
+  The one exception is refine, which commits each correction on its own so a
+  verdict can be reverted alone (`references/refine.md`).
 
 ## Steps
 
@@ -55,8 +57,8 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    `$COMMUNE graph related <target> --json` for what the note now links.
 
 5. **Render the side by side.** Run:
-   `node scripts/review.mjs <base-ref> <target> --connect dumps/<slug>.connect.md --answers dumps/<slug>.answers.md`
-   Output: `dumps/<slug>.review.html`. Print that path, then a short table of
+   `node scripts/review.mjs <base-ref> <target> --connect dumps/<slug>.connect.md --answers dumps/<slug>.answers.md --out dumps/<slug>.review.html`
+   Pass `--out`: the script's default is named after the note, not the dump. Print that path, then a short table of
    what changed in the graph — links added, links dropped, and for each dropped
    link what `at_risk` says it costs.
 
