@@ -265,6 +265,20 @@ Exit codes report whether the command finished, never what it found — `0` fini
 
 `commune --help` prints the full surface. `commune --version` prints the installed version, which is the honest way to know what you have.
 
+## Author with the skills
+
+The loop above the CLI ships as four agent skills, in `skills/`, installed straight from this repository rather than from npm:
+
+```bash
+npx skills add dmthepm/commune-wiki
+```
+
+They install for Claude Code and Codex, globally or into one project, and they drive the `commune` your wiki already has — `node_modules/.bin/commune`, called by path, never downloaded — so the CLI a skill runs is the one your site builds with. They need 0.4.0 or newer, they check that first, and they install nothing themselves.
+
+The loop is one dump, four files and two places it stops for you. `commune-dump` takes a dictated or pasted dump, writes it verbatim to `dumps/<date>-<slug>.md`, and asks the graph what it already touches — what it mentions, which of the target's links a rewrite would put at risk, which subjects have no note yet — into `dumps/<slug>.connect.md`. `commune-write` reads your `WRITING.md`, asks one short round of questions whose answers each change a file, stops while you answer them in `dumps/<slug>.answers.md`, then drafts into the real note and renders the original and the draft side by side as `dumps/<slug>.review.html`. `commune-ship` diffs `check` against the baseline, files the `updates` entry, builds, gates, greps `dist/` for every new href, commits and opens the PR — and never merges, because the last word is yours. `commune-setup` runs once per wiki and writes the `WRITING.md` the other three obey.
+
+Status, honestly: the skills, their test and the `WRITING.md` template are here. The loop has been run once end to end by hand, before it was skills; it has not yet been run as skills on a real wiki. That run is [#10](https://github.com/dmthepm/commune-wiki/issues/10), and this paragraph changes when it lands.
+
 ## What it is not
 
 It is not a note-taking app and it is not trying to replace one. I write in Obsidian; Commune is what turns the vault into a site. There is no editor here, no sync, no account, no server. The graph is computed from files on disk at build time, and the files are yours whether or not you ever run this.
@@ -273,7 +287,7 @@ It is not a note-taking app and it is not trying to replace one. I write in Obsi
 
 Commune is the engine under a larger idea: own your canon. The wiki is one output surface, not the product. What I am building toward is an authoring loop — dictate a dump, have agents find what it already connects to, grill it, draft it, ship it — where the graph is what makes connection-finding possible *before* a draft exists. That is why the graph is a queryable library with a CLI on top instead of a build artifact, and why `graph related` reads stdin.
 
-None of that loop is in this package. `pnpm add @dmthepm/commune` gives you the engine and the CLI above, and nothing else. The authoring skills and the email destination are tracked in [the issues](https://github.com/dmthepm/commune-wiki/issues); when they ship, this section shrinks and the one above it grows.
+The authoring half of that loop is here now, as the four skills above; `pnpm add @dmthepm/commune` still gives you the engine and the CLI and nothing else, which is what those skills drive. What is left — the email destination, the weekly intake from GitHub activity — is tracked in [the issues](https://github.com/dmthepm/commune-wiki/issues).
 
 ## Deploy
 
