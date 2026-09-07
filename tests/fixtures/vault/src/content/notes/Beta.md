@@ -4,6 +4,7 @@ visibility: public
 status: live
 aliases:
   - B
+  - Beta's twin
 tags:
   - seed
 ---

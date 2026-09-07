@@ -12,7 +12,7 @@
 
 import { visit } from 'unist-util-visit';
 import type { Root } from 'mdast';
-import { getLinkLookup, type GraphOptions } from './lib/graph.ts';
+import { getLinkLookup, linkKey, type GraphOptions } from './lib/graph.ts';
 
 export type WikiLinksOptions = GraphOptions;
 
@@ -60,8 +60,7 @@ export default function remarkWikiLinks({ root }: WikiLinksOptions = {}) {
 
 			// Resolve WikiLink to URL path
 			const trimmedLinkText = linkText.trim();
-			const lookupKey = trimmedLinkText.toLowerCase();
-			const resolved = lookup.get(lookupKey);
+			const resolved = lookup.get(linkKey(trimmedLinkText));
 
 			if (resolved) {
 				// Create a proper link node with correct URL for collection

@@ -348,6 +348,21 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
  * matters when two pieces of content claim the same name, and is a content bug
  * either way.
  */
+/**
+ * The key a wikilink is looked up by. Case-folded, and typographic quotes
+ * folded to their ASCII forms: a title in frontmatter is written with a
+ * straight apostrophe, but by the time the remark plugin sees the link text
+ * smartypants has curled it, so `[[Andy's Notes]]` arrived as `Andy’s Notes`
+ * and rendered as plain text.
+ */
+export function linkKey(name: string): string {
+	return name
+		.trim()
+		.replace(/[\u2018\u2019\u02BC]/g, "'")
+		.replace(/[\u201C\u201D]/g, '"')
+		.toLowerCase();
+}
+
 export function buildLinkLookup(entries: ContentEntry[]): Map<string, LinkTarget> {
 	const lookup = new Map<string, LinkTarget>();
 
@@ -358,9 +373,9 @@ export function buildLinkLookup(entries: ContentEntry[]): Map<string, LinkTarget
 			urlPath: entry.urlPath,
 		};
 		for (const alias of entry.aliases) {
-			lookup.set(alias.toLowerCase(), target);
+			lookup.set(linkKey(alias), target);
 		}
-		lookup.set(entry.title.toLowerCase(), target);
+		lookup.set(linkKey(entry.title), target);
 	}
 
 	return lookup;
