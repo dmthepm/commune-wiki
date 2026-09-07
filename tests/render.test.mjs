@@ -26,6 +26,12 @@ test('a wikilink renders as the anchor the site renders', async () => {
 	assert.equal(stdout.trim(), '<p><a href="/notes/alpha/" class="wikilink">Alpha</a> is a note.</p>');
 });
 
+test('a wikilink whose target has an apostrophe still resolves after smartypants curls it', async () => {
+	const { stdout } = await render("[[Beta's twin]] is an alias.\n");
+
+	assert.equal(stdout.trim(), '<p><a href="/notes/beta/" class="wikilink">Beta’s twin</a> is an alias.</p>');
+});
+
 test('a piped wikilink keeps the target and shows the label', async () => {
 	const { stdout } = await render('See [[Beta|the beta note]].\n');
 
