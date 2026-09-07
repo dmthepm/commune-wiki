@@ -34,15 +34,16 @@
         if (note?.isStarred) {
           // Check if star isn't already there
           if (!link.querySelector('.star-indicator-inline') && !link.nextElementSibling?.classList?.contains('star-indicator-inline')) {
-            // Create wrapper to prevent line break between link and star
+            // The star must not land on a line of its own, but the link itself
+            // has to wrap like any other run of text: a whole-link nowrap
+            // pushed long titles onto their own line on phones. A no-break
+            // space glues the star to the link's last word and nothing else.
             const wrapper = document.createElement('span');
-            wrapper.style.whiteSpace = 'nowrap';
-            wrapper.style.display = 'inline';
 
             // Create star as a separate clickable element (not part of the link)
             const star = document.createElement('span');
             star.className = 'star-indicator-inline';
-            star.textContent = ' ⭐';
+            star.textContent = '\u00A0⭐';
             star.setAttribute('aria-label', 'Top 5% most linked - click to learn more');
             star.setAttribute('role', 'button');
             star.setAttribute('tabindex', '0');
@@ -67,7 +68,7 @@
               }
             });
 
-            // Wrap the link in the nowrap container
+            // Keep the link and its star as one span
             link.parentNode.insertBefore(wrapper, link);
             wrapper.appendChild(link);
             wrapper.appendChild(star);
