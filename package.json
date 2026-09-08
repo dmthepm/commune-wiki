@@ -1,7 +1,7 @@
 {
   "name": "@dmthepm/commune",
   "type": "module",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Maintain a personal wiki from markdown notes, dictated thoughts and everyday work with authoring tools, a shared link graph and portable Astro publishing.",
   "license": "MIT",
   "keywords": [
