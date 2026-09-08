@@ -47,7 +47,9 @@ one hyphen. Create `dumps/` if the wiki has none.
    exists, stop and say so; a dump is never overwritten.
 
 3. **Baseline, and the name collision.** Run `$COMMUNE check --json` and keep
-   `summary` as `baseline`. Two collision cases, one stop:
+   `summary` fields in `baseline`, plus `baseline.findings`: every finding
+   projected to `(rule, file, target)`, using `null` for an absent target.
+   Two collision cases, one stop:
    - The target exists: any `duplicate-name` finding naming its title or an
      alias.
    - The target is new: `check` cannot see a file that is not there, so compare

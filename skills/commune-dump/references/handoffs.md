@@ -8,6 +8,21 @@ able to read it.
 Any step can be re-run by a different context window or a different harness,
 because these four files are the whole state. Nothing is carried in a chat.
 
+`WRITING.md`'s Frontmatter section sets `dumps.publish: opt-in` for dump pages.
+The values are `never | opt-in | all`: `never` permits no dump pages; the default
+`opt-in` keeps dumps private unless their frontmatter says `visibility: public`,
+which makes them publishable; `all` makes every dump public. Setup asks this
+question first, then asks separately about committing handoffs.
+
+`WRITING.md`'s Frontmatter section sets `dumps.commit: true` by default.
+Setup asks once whether to keep that default or use `false`. Ship commits all
+four handoffs only for an explicit `true`; false, missing or invalid leaves
+every `dumps/` path out of the commit, even if tracked or staged. With `false`,
+setup adds `dumps/` to `.gitignore`; with `true`, it removes blocking ignore
+rules. Public repositories expose committed handoffs regardless of dump
+visibility. Ignoring a tracked file does not remove its existing history.
+This policy does not create site pages; the engine does not load `dumps/`.
+
 Names, from one dump slug `<yyyy-mm-dd>-<target-slug>`:
 
 | File | Written by | Read by |
@@ -36,9 +51,11 @@ visibility: private      # private | public — whether the dump itself is publi
 The body is never fenced and never indented as code. `graph related` strips code
 before it matches, so a fenced dump has no mentions at all.
 
-`visibility` is the dump's own, not the note's: `private` is the default and
-means the dump is provenance beside the notes, never a page. `public` means the
-wiki may publish it. `publish` is about the *note* the dump becomes.
+`visibility` belongs to the dump and defaults to `private`. Under
+`dumps.publish: opt-in`, only `visibility: public` makes a dump publishable as a
+page. `never` permits no dump pages and `all` makes every dump public regardless
+of visibility. The dump's `publish` field is about the *note* it becomes;
+`dumps.commit` separately controls whether handoffs enter repository history.
 
 ## `dumps/<slug>.connect.md` — what the graph already knows
 
@@ -47,11 +64,14 @@ wiki may publish it. `publish` is about the *note* the dump becomes.
 kind: connect
 dump: dumps/2026-09-05-<slug>.md
 cli: "@dmthepm/commune 0.4.0"
-baseline:                # check --json summary, before any edit
+baseline:                # check --json summary fields plus finding identities, before any edit
   entries: 85
   edges: 396
   errors: 1
   warnings: 0
+  byRule: { broken-link: 1, ambiguous-target: 0, duplicate-name: 0, noncanonical-title: 0 }
+  findings:
+    - { rule: broken-link, file: src/content/notes/example.md, target: Missing }
 duplicate_name: []       # check findings whose candidates include the target; non-empty = stopped
 target: { file: src/content/notes/<slug>.md, urlPath: /notes/<slug>/, inbound: 6, outbound: 11 }
 at_risk:                 # the target's resolved outbound links; each one the draft may drop
@@ -70,6 +90,13 @@ status: ready | blocked
 ## Candidates
 ## Handoff
 ```
+
+`baseline.findings` records every finding as `{ rule, file, target }`, using
+`null` when target is absent and `[]` when there are no findings. Write and ship
+compare these tuples as sets; summary totals are context only. Equal counts
+can conceal a new finding replacing an old one. If identities are missing,
+recover them from the pre-edit revision before comparing; never baseline the
+edited corpus.
 
 `mentions`, `unmatched` and `unreferenced` are candidates for the human. The
 draft is never scored on them: a mention the draft ignores is not a miss.
@@ -127,9 +154,10 @@ check:                  # against connect's baseline
   new_findings: []      # non-empty = ship stopped
 updates_entry: src/content/updates/2026-09-05.md
 aiGenerated: false      # false when the summary sentence is the human's, true when the agent wrote it
-hrefs:                  # every new or renamed urlPath, grepped in dist/
-  - { urlPath: /research/<slug>/, found: true }
-commit: <sha>
+hrefs:                  # new hrefs, including each created or renamed page and twin
+  - { urlPath: /research/<slug>/, found: true, destination: dist/research/<slug>/index.html, exists: true }
+  - { urlPath: /research/<slug>.md, found: true, destination: dist/research/<slug>.md, exists: true }
+commit: <content-commit-sha>
 pr: https://github.com/<owner>/<repo>/pull/<n>
 preview: https://<hash>.<project>.pages.dev/research/<slug>/
 review: dumps/<slug>.review.html
@@ -140,3 +168,10 @@ review: dumps/<slug>.review.html
 
 `commune-ship` never merges. The PR is where the human reads the page in the
 site's chrome and says ship or leaves a correction.
+
+Prepare the receipt before the content commit with commit, PR and preview
+pending. After opening the PR, fill those fields; `commit` identifies the
+content commit. When `dumps.commit: true`, commit the completed receipt in a
+follow-up commit and push it. Otherwise the receipt stays local. `found` records
+an href occurrence in built HTML; `exists` records the destination file check.
+Both must be true. The generated review HTML is separate from the four handoffs.

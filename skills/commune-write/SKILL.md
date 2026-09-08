@@ -16,6 +16,9 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
 
 ## Rules
 
+- Use the target note's title verbatim in `[[Title]]`, with no display text
+  or pipe. Rewrite the sentence around the title.
+
 - `WRITING.md` at the wiki root decides every sentence and every frontmatter
   block. Read it first and read nothing else about voice. If it is missing,
   stop and say: *"Run `commune-setup` first — this wiki has no `WRITING.md`."*
@@ -51,8 +54,8 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    keys in its order. Append every file you touched to `files:` in
    `.connect.md`.
 
-4. **Verify.** Run `$COMMUNE check --json` and diff `summary` against
-   `baseline` in `.connect.md`. Any **new** finding is yours to fix before you
+4. **Verify.** Run `$COMMUNE check --json` and compare finding identities `(rule, file, target)`,
+   `null` for an absent target, against `baseline.findings` in `.connect.md`. Any **new** finding is yours to fix before you
    show anything; pre-existing findings are the baseline and are not. Then
    `$COMMUNE graph related <target> --json` for what the note now links.
 

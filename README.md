@@ -1,10 +1,18 @@
-# Commune
+# Commune: keep your thinking connected
 
-A wiki engine for Astro, and a CLI that queries the wiki's link graph without running a build.
+Commune helps you maintain a personal wiki from markdown notes, dictated thoughts and everyday work. Its CLI finds connections while you write, optional agent skills help you question and revise your notes, and its Astro engine publishes linked notes with backlinks and markdown source twins. MIT licensed; your files stay yours.
 
-Write markdown. Link notes with `[[double brackets]]`. Get a static site where every link resolves both ways, every page has a plain-markdown twin, and the whole graph is one JSON file you can also query from a terminal.
+- **See it:** explore [devon.md](https://devon.md).
+- **Build a wiki:** follow [Install](#install), starting with Astro 7 and Node 22.12+.
+- **Try the writing loop:** on an existing Commune wiki, follow [Author with the skills](#author-with-the-skills).
 
-MIT. It runs [devon.md](https://devon.md).
+## Vision and mission
+
+**Vision:** People can keep their thinking connected, current and in their own hands, and share it in public as it develops.
+
+**Mission:** Commune turns markdown notes, dictated thoughts and the residue of everyday work into a maintained personal wiki through a shared link graph, authoring tools and portable publishing.
+
+Commune grew out of [devon.md](https://devon.md). Devon built his own site and recognised the structure afterward, then extracted its tools so someone else could build on them. It is an MIT project with no company behind it and no plans for monetization.
 
 ## Install
 
@@ -94,13 +102,13 @@ That route is a starting point, not an interface. The package ships the mechanis
 
 ## What ships
 
-- **WikiLinks.** `[[Title]]` and `[[Title|Display text]]` become real hrefs at build time, matched against titles and aliases. A link that resolves to nothing stays plain text instead of rendering a dead anchor.
+- **WikiLinks.** Connect notes with `[[Title]]`, using the target title verbatim and rewriting the sentence around it. The renderer also resolves aliases and `[[Title|Display text]]`, but `check` and `gate` report these noncanonical spellings. A link that resolves to nothing stays plain text instead of rendering a dead anchor.
 - **Backlinks.** The build writes `backlinks.json` — every entry with its inbound and outbound edges — to `dist/` and `public/`. `Backlinks.astro` renders it on a page.
 - **Markdown twins.** Every published content entry gets its source written beside it, so `/notes/hello/` also answers at `/notes/hello.md`. Entries in the content directories only — a hand-written route under `src/pages/` has no source file to twin. Agents and readers get the same document without scraping HTML.
 - **External links.** Anything off your `site` origin gets `target="_blank" rel="noopener noreferrer"` without you marking it up.
 - **The graph as a library.** `@dmthepm/commune/graph` exports the content loader, the link resolver and the graph builder. The Astro build and the CLI both call it. That is the point: one resolver, not two that drift.
 - **Updates.** A fourth collection, `src/content/updates/`, for the dated entries that say what changed. `Updates.astro` renders the newest few as a card. See [Updates](#updates) below.
-- **Honest dates.** `updated:` in frontmatter wins where you wrote one; where you did not, the date comes from the file's last commit, and from its mtime in a tree with no history. Every entry says which, so a page can show the honest one. See [Dates](#dates) below.
+- **Dates with sources.** `updated:` in frontmatter wins where you wrote one; where you did not, the date comes from the file's last commit, and from its mtime in a tree with no history. Every entry says which, so a page can show where the date came from. See [Dates](#dates) below.
 - **A site-wide last-updated.** The build writes `site.json` beside `backlinks.json`: the newest date across the whole wiki, which entry it belongs to, and the newest commit date whatever the entries claim.
 - **Components and stylesheets.** `@dmthepm/commune/components/*.astro` and `@dmthepm/commune/styles/*.css`, shipped as source. These are the components off my own site rather than a theme system — take them as a starting point, not an API.
 
@@ -172,7 +180,7 @@ links:
 I rewrote the home note. [[Atomic Notes]] and [[Evergreen Notes]] are new.
 ```
 
-`links:` is the one place in frontmatter where a bare string is a link. Everywhere else a link has to be spelled `[[like this]]` — a page's own `url:` would otherwise become a self-edge — but `links:` means nothing else, so a title or a site path both resolve and both become real edges. Write it or don't: `[[wikilinks]]` in the body work the same way, and naming a page in both places is still one edge.
+`links:` is the one place in frontmatter where a bare string is a link. Everywhere else a link has to be spelled `[[like this]]`; a page's own `url:` would otherwise become a self-edge; but `links:` means nothing else, so a title or a site path both resolve and both become edges. Write it or don't: `[[wikilinks]]` in the body work the same way, and naming a page in both places is still one edge.
 
 Register the collection alongside your notes in `src/content.config.ts`:
 
@@ -228,7 +236,7 @@ export async function GET(context) {
 
 ## The CLI
 
-`commune` installs as a bin. It reads markdown off disk and answers without an Astro process running, which is what makes it useful while you are still writing.
+Find connections and check your notes while you write, without building the site. The `commune` executable reads markdown directly from disk and answers without an Astro process running.
 
 ```bash
 commune check
@@ -263,31 +271,37 @@ Every verb takes `--json` and emits one document on stdout with everything else 
 
 Exit codes report whether the command finished, never what it found — `0` finished, `1` could not finish, `2` invalid invocation. Findings live in the payload. A command that exits non-zero because it *found* something is indistinguishable, to a shell, from one that crashed. `gate` is the one deliberate exception: a gate's entire job is a yes/no and a build has to stop on it, so `gate` exits `1` when the build it checked is wrong.
 
-`commune --help` prints the full surface. `commune --version` prints the installed version, which is the honest way to know what you have.
+`commune --help` prints the full surface. `commune --version` prints the installed version, which is the way to know what you have.
 
 ## Author with the skills
 
-The loop above the CLI ships as four agent skills, in `skills/`, installed straight from this repository rather than from npm:
+Turn a dump into connected, reviewed writing with four agent skills, in `skills/`, installed straight from this repository rather than from npm:
 
 ```bash
 npx skills add dmthepm/commune-wiki
 ```
 
-They install for Claude Code and Codex, globally or into one project, and they drive the `commune` your wiki already has — `node_modules/.bin/commune`, called by path, never downloaded — so the CLI a skill runs is the one your site builds with. They need 0.4.0 or newer, they check that first, and they install nothing themselves.
+The skills install for Claude Code and Codex, globally or into one project. They call the wiki's existing `node_modules/.bin/commune` directly, so authoring and publishing use the same CLI. They require version 0.4.0 or newer, check it first and install nothing themselves.
 
-The loop is one dump, four files and two places it stops for you. `commune-dump` takes a dictated or pasted dump, writes it verbatim to `dumps/<date>-<slug>.md`, and asks the graph what it already touches — what it mentions, which of the target's links a rewrite would put at risk, which subjects have no note yet — into `dumps/<slug>.connect.md`. `commune-write` reads your `WRITING.md`, asks one short round of questions whose answers each change a file, stops while you answer them in `dumps/<slug>.answers.md`, then drafts into the real note and renders the original and the draft side by side as `dumps/<slug>.review.html`. `commune-ship` diffs `check` against the baseline, files the `updates` entry, builds, gates, greps `dist/` for every new href, commits and opens the PR — and never merges, because the last word is yours. `commune-setup` runs once per wiki and writes the `WRITING.md` the other three obey.
+`commune-setup` runs once per wiki and writes its `WRITING.md` rules. `commune-dump` saves dictated or pasted text verbatim to `dumps/<slug>.md` and records connection candidates and the check baseline in `dumps/<slug>.connect.md`. Here `<slug>` includes the capture date.
 
-Status, honestly: the skills, their test and the `WRITING.md` template are here. The loop has been run once end to end by hand, before it was skills; it has not yet been run as skills on a real wiki. That run is [#10](https://github.com/dmthepm/commune-wiki/issues/10), and this paragraph changes when it lands.
+`commune-write` asks one short round of editorial questions and waits for answers in `dumps/<slug>.answers.md`. It then drafts into the note and renders the original and draft side by side in `dumps/<slug>.review.html` for the author to review.
 
-## What it is not
+On the author's instruction, `commune-ship` compares finding identities against the baseline, files an update, builds, gates and verifies each new href and destination file. It commits according to `WRITING.md`'s `dumps.commit` policy, opens a PR and records the receipt in `dumps/<slug>.ship.md`. The author approves the content; this skill never merges. That boundary governs authored content, while code maintenance follows the repository's contribution rules.
 
-It is not a note-taking app and it is not trying to replace one. I write in Obsidian; Commune is what turns the vault into a site. There is no editor here, no sync, no account, no server. The graph is computed from files on disk at build time, and the files are yours whether or not you ever run this.
+The four skills, their tests and the `WRITING.md` template ship today. The loop was run once end to end by hand before the skills existed; an end-to-end run using the installed skills remains unverified.
+
+## Files and publishing
+
+Commune is not a note-taking app. It works with markdown files on disk, written in whatever editor you like, and provides no editor, sync service, account or server of its own. The files remain yours whether or not you ever run it.
+
+Only notes with `visibility: public` enter the graph and publishing output. Research, pages and updates are included regardless of visibility. Handoffs in `dumps/` are committed by default under the writing policy; they are outside the engine's content collections and do not automatically become site pages.
 
 ## Where this is going
 
-Commune is the engine under a larger idea: own your canon. The wiki is one output surface, not the product. What I am building toward is an authoring loop — dictate a dump, have agents find what it already connects to, grill it, draft it, ship it — where the graph is what makes connection-finding possible *before* a draft exists. That is why the graph is a queryable library with a CLI on top instead of a build artifact, and why `graph related` reads stdin.
+Commune ships an Astro publishing engine, a shared link graph, a CLI for finding and checking connections, and four authoring skills. Together they support maintaining existing thinking as well as adding notes. The engine and CLI install from npm; the optional skills install separately into an existing wiki.
 
-The authoring half of that loop is here now, as the four skills above; `pnpm add @dmthepm/commune` still gives you the engine and the CLI and nothing else, which is what those skills drive. What is left — the email destination, the weekly intake from GitHub activity — is tracked in [the issues](https://github.com/dmthepm/commune-wiki/issues).
+Three proofs are still owed: a repeated authoring run with the installed skills, a second person building a wiki and coming back to edit it a week later, and a session of browsing and light edits in Obsidian on a wiki of real size. Features follow what those sessions show is needed; they are tracked in [the issues](https://github.com/dmthepm/commune-wiki/issues).
 
 ## Deploy
 

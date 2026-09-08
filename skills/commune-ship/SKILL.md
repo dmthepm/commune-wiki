@@ -20,7 +20,7 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
 - **Never merge.** Open the PR and stop. Voice is the human's, and the PR is
   where they read the page in the site's chrome.
 - A green `check` is not proof the page exists. It did not catch a note whose
-  file name and title disagreed shipping a 404. Step 6 is what catches that.
+  file name and title disagreed shipping a 404. Step 5 is what catches that.
 - Pre-existing findings are the baseline, not your problem. **New** findings
   are, and they stop the ship.
 - Never install anything.
@@ -28,12 +28,14 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
 ## Steps
 
 1. **Preflight and read.** `node scripts/preflight.mjs` → `$COMMUNE`; stop on
-   exit 1. Read `dumps/<slug>.connect.md` for `files:` and `baseline:`, and
+   exit 1. Read `WRITING.md` for `dumps.commit`. Read `dumps/<slug>.connect.md` for `files:` and `baseline:`, and
    `dumps/<slug>.answers.md` for what was decided. Pipe every `--json` payload
-   through `node scripts/preflight.mjs --schema`.
+   through `node scripts/preflight.mjs --schema`. Compare finding identities
+   `(rule, file, target)` with `baseline.findings`, using `null` for absent targets.
 
-2. **Check against the baseline.** `$COMMUNE check --json`. Compare `summary`
-   to `baseline`. Any finding that is not in the baseline stops the ship: say
+2. **Check against the baseline.** `$COMMUNE check --json`. Compare identities as sets, never counts.
+   A missing `baseline.findings` requires recovering the pre-edit findings;
+   never treat the edited corpus as its own baseline. Any finding that is not in the baseline stops the ship: say
    which file and which rule, and hand back to `commune-write`.
 
 3. **File the updates entry.** `$COMMUNE update --recent <dump date> --json`
@@ -53,25 +55,32 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    without the build. `gate` exits 1 when the built site is wrong; that stops
    the ship.
 
-5. **Confirm every new href.** For each entry the file set created or renamed,
-   read its `urlPath` from `$COMMUNE graph query --json` and grep `dist/` for
-   it. Missing means the page did not render at the URL the graph promises —
-   a 404 that `check` cannot see.
+5. **Confirm every new href.** For each created or renamed entry, read its
+   `urlPath` from `$COMMUNE graph query --json`. Require both an href occurrence
+   in built HTML and an existing destination under `dist/`: `/path/` maps to
+   `dist/path/index.html`; its `/path.md` twin maps to `dist/path.md`. Check both
+   URLs, stripping query and fragment before mapping; `/` maps to `dist/index.html`.
+   Also check new internal links in edited files, including existing destinations.
+   Record occurrence and destination existence separately; either missing stops ship.
 
-6. **Commit and open the PR.** Commit exactly the paths in `files:` plus the
-   updates entry and the four `dumps/` handoff files. Conventional message,
-   subject in the wiki's own convention. Push the branch. Open the PR with the
-   preview URL and `dumps/<slug>.review.html` in the body, and the `summary`
-   sentence quoted so it can be corrected in one reply.
+6. **Commit and open the PR.** Prepare the receipt first with commit, PR and
+   preview pending. Commit exactly `files:` plus the updates entry; include the
+   four handoffs only when `WRITING.md` says `dumps.commit: true`. Otherwise
+   exclude every `dumps/` path, even if listed in `files:` or already staged.
+   Never use a blanket add. Use the wiki's conventional commit subject. Push and
+   open the PR with the preview URL and summary sentence. Include the review
+   path only when handoffs are shared; otherwise describe the review in the PR.
 
-7. **Write the receipt.** Output: `dumps/<slug>.ship.md`, keys per
-   `references/handoffs.md` — the check diff, the hrefs, the updates entry, the
-   commit, the PR URL, the preview URL. Print the PR URL and stop.
+7. **Finish the receipt.** Update `dumps/<slug>.ship.md` per
+   `references/handoffs.md` with the check diff, href checks, updates entry,
+   content commit, PR and preview URLs. When `dumps.commit: true`, commit this
+   receipt update separately and push; its `commit` names the content commit.
+   Otherwise keep it local. Print the PR URL and stop.
 
 ## Stop conditions
 
 - A new `check` finding → stop, name it, hand back to `commune-write`.
 - `gate` exits 1 → stop, quote its finding.
-- An href missing from `dist/` → stop. That is the 404 this step exists for.
+- An href occurrence or destination file missing from `dist/` → stop. That is the 404 this step exists for.
 - No preview URL yet (the deployment has not finished) → open the PR anyway and
   say the preview is pending; do not wait, and do not merge.
