@@ -54,7 +54,7 @@ jobs:
       # requests", which is off by default on personal-account repositories;
       # without it the first run fails on the PR create. RELEASE-SETUP.md has
       # the clicks.
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
