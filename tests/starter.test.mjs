@@ -23,7 +23,7 @@ test('starter copies from an unrelated cwd, including dotfiles and only publishe
   const destination = path.join(cwd, 'a wiki');
   const manifest = JSON.parse(await readFile(path.join(destination, 'package.json'), 'utf8'));
   assert.match(manifest.dependencies['@dmthepm/commune'], /^\^\d+\.\d+\.\d+$/);
-  assert.match(manifest.dependencies.astro, /^7\./);
+  assert.match(manifest.dependencies.astro, /^\^?7\./);
   assert.equal(manifest.license, 'MIT');
   for (const dependency of Object.values(manifest.dependencies)) assert.doesNotMatch(dependency, /file:|link:|workspace:|\.\.\//);
   assert.match(await readFile(path.join(destination, '.gitignore'), 'utf8'), /node_modules/);
