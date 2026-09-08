@@ -1,16 +1,18 @@
-# Commune: keep your thinking connected
+# Commune
+
+Keep your thinking connected.
 
 Commune helps you maintain a personal wiki from markdown notes, dictated thoughts and everyday work. Its CLI finds connections while you write, optional agent skills help you question and revise your notes, and its Astro engine publishes linked notes with backlinks and markdown source twins. MIT licensed; your files stay yours.
 
-- **See it:** explore [devon.md](https://devon.md).
-- **Build a wiki:** follow [Install](#install), starting with Astro 7 and Node 22.12+.
-- **Try the writing loop:** on an existing Commune wiki, follow [Author with the skills](#author-with-the-skills).
+- **See it.** Explore [devon.md](https://devon.md).
+- **Build a wiki.** Follow [Install](#install), starting with Astro 7 and Node 22.12+.
+- **Try the writing loop.** On an existing Commune wiki, follow [Author with the skills](#author-with-the-skills).
 
 ## Vision and mission
 
-**Vision:** People can keep their thinking connected, current and in their own hands, and share it in public as it develops.
+**Vision.** People can keep their thinking connected, current and in their own hands, and share it in public as it develops.
 
-**Mission:** Commune turns markdown notes, dictated thoughts and the residue of everyday work into a maintained personal wiki through a shared link graph, authoring tools and portable publishing.
+**Mission.** Commune turns markdown notes, dictated thoughts and the residue of everyday work into a maintained personal wiki through a shared link graph, authoring tools and portable publishing.
 
 Commune grew out of [devon.md](https://devon.md). Devon built his own site and recognised the structure afterward, then extracted its tools so someone else could build on them. It is an MIT project with no company behind it and no plans for monetization.
 
