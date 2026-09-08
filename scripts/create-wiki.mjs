@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { cp, mkdir, readdir, realpath } from 'node:fs/promises';
+import { cp, mkdir, readdir, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,14 +30,22 @@ if (args.length !== 1 || args[0].startsWith('-')) {
     await mkdir(path.dirname(destination), { recursive: true });
     await mkdir(destination);
     const excluded = new Set(['node_modules', 'dist', '.astro', '.git', '.DS_Store', 'backlinks.json', 'site.json']);
-    for (const entry of await readdir(source)) {
-      if (excluded.has(entry)) continue;
-      await cp(path.join(source, entry), path.join(destination, entry), {
-        recursive: true,
-        force: false,
-        errorOnExist: true,
-        filter: file => !excluded.has(path.basename(file)),
-      });
+    try {
+      for (const entry of await readdir(source)) {
+        if (excluded.has(entry)) continue;
+        await cp(path.join(source, entry), path.join(destination, entry), {
+          recursive: true,
+          force: false,
+          errorOnExist: true,
+          filter: file => !excluded.has(path.basename(file)),
+        });
+      }
+    } catch (error) {
+      // The directory was ours alone (mkdir above would have refused an
+      // existing one), so a half-copied wiki is removed rather than left
+      // to block the retry.
+      await rm(destination, { recursive: true, force: true });
+      throw error;
     }
     const quoted = "'" + destination.replaceAll("'", "'\\''") + "'";
     console.log(`Created ${destination}\n\nNext:\n  cd ${quoted}\n  npm install\n  npm run build\n  npm run verify\n  npm run dev\n\nNo dependencies were installed. Read README.md before publishing.`);
