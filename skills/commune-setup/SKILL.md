@@ -51,19 +51,21 @@ questions only the wiki's owner can answer.
    this shape.
 
 4. **Ask the residue** — only the sections still holding a placeholder, plus the
-   two below. One message, numbered, recommended answer first, each question
+   two questions below. One message, numbered, recommended answer first, each question
    naming what it changes in the file.
 
-5. **The two questions that are never inferable.**
-   - **Dumps policy.** *"`dumps.publish: opt-in` — a dictated dump stays
-     provenance beside the notes unless its frontmatter says `visibility:
-     public`. `never` or `all` instead?"* Write the answer into the
-     **Frontmatter** section's dumps line.
-   - **Public repository.** Only when the repo is public: *"`dumps/` will be
-     readable by anyone with the URL. Add `dumps/` to `.gitignore` so the
-     handoffs live only on your machine?"* Recommend gitignoring on a public
-     repo and committing on a private one. If they gitignore it, say plainly
-     that the loop still works and the provenance is no longer in the history.
+5. **Ask both policy questions once, recommended answer first.**
+   - **Publish pages.** Recommend `dumps.publish: opt-in`: dumps are private
+     by default; only a dump with `visibility: public` is publishable as a page.
+     Ask whether to keep `opt-in`, choose `never` (no dump pages), or `all`
+     (every dump is public). Record the answer in **Frontmatter**.
+   - **Commit handoffs.** Recommend `dumps.commit: true`: commit all four
+     handoffs so another person can inherit the writing history. Explain that
+     public repositories expose their contents even with `visibility: private`.
+     Ask whether to keep `true` or set `false` to exclude handoffs from commits.
+     Record the boolean in **Frontmatter**. With `false`, add `dumps/` to
+     `.gitignore`; with `true`, remove ignore rules blocking handoffs. Ignoring
+     tracked files does not hide existing history. Committing does not create pages.
 
 6. **Write and verify.** Write `WRITING.md`. Then check yourself: no
    `<angle bracket>` remains; every frontmatter block's keys and values exist in

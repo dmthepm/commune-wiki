@@ -2,7 +2,7 @@
   "name": "@dmthepm/commune",
   "type": "module",
   "version": "0.5.2",
-  "description": "An Astro wiki engine with WikiLinks, sliding panes, backlinks and static search, plus a commune CLI that queries the content graph and checks links",
+  "description": "Maintain a personal wiki from markdown notes, dictated thoughts and everyday work with authoring tools, a shared link graph and portable Astro publishing.",
   "license": "MIT",
   "keywords": [
     "astro",

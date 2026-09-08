@@ -29,8 +29,9 @@ Rules that change a sentence: length, person, what to cut.
 - **One idea per note.** <How to tell when it is two.>
 - **Proper nouns get their own note.** <Which ones: people, projects, products.
   The note says what the thing means here, then links out.>
-- **Linking:** <how densely, and where external links go — in the note, never as
-  the note.>
+- **Linking:** Use the target note's title verbatim in `[[Title]]`, with no
+  display text or pipe. Rewrite the sentence around the title.
+  <How densely to link, and where external links belong within the note.>
 
 ## Frontmatter
 
@@ -86,11 +87,20 @@ created: <yyyy-mm-dd>
 updated: <yyyy-mm-dd>
 ```
 
-**Dumps.** `dumps.publish: <never | opt-in | all>` — whether the dictated dumps
-in `dumps/` are ever published as pages. `never`: they stay provenance beside
-the notes. `opt-in`: a dump with `visibility: public` in its frontmatter is
-publishable, everything else is not. `all`: every dump is public. Default and
-recommendation: `opt-in`.
+**Dump pages.** `dumps.publish: opt-in` controls whether dictated dumps are
+published as pages. Values: `never | opt-in | all`. `never` means no dump pages;
+`opt-in` is the default, keeping dumps private unless their frontmatter says
+`visibility: public`, which makes them publishable; `all` makes every dump
+public. The engine does not automatically create pages from `dumps/`.
+
+**Handoff commits.** `dumps.commit: true` controls committing all four handoffs in
+`dumps/`. Setup asks once; `true` is the default so the writing history can be
+inherited. Set `false` to leave every `dumps/` path out of commits and add the
+directory to `.gitignore`. A public repository exposes committed handoffs,
+including dumps marked `visibility: private`. This setting does not publish
+site pages; `dumps/` is outside the engine's content collections. Ship includes
+handoffs only when this line explicitly says `true`; missing or invalid means
+leave them out.
 
 ## Avoid
 
