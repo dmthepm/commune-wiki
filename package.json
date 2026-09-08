@@ -63,6 +63,8 @@
   },
   "homepage": "https://github.com/dmthepm/commune-wiki#readme",
   "scripts": {
+    "create-wiki": "node scripts/create-wiki.mjs",
+    "test:starter": "node --test tests/starter.test.mjs",
     "build:lib": "tsc -p tsconfig.build.json",
     "prepare": "pnpm build:lib",
     "pretest": "pnpm build:lib",

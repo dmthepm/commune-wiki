@@ -1,0 +1,15 @@
+---
+import { getCollection } from 'astro:content';
+import WikiLayout from '../layouts/WikiLayout.astro';
+const notes = (await getCollection('notes', note => note.data.visibility === 'public'))
+  .sort((a, b) => a.data.title.localeCompare(b.data.title));
+---
+<WikiLayout title="Keep your thinking connected">
+  <p>A small home for ideas you want to return to. Open a note, follow a link, and keep the thought you came from beside you.</p>
+  <p>Start with <a href="/notes/welcome/" class="internal-link">Welcome</a>.</p>
+  <h2>Notes</h2>
+  <ul>
+    {notes.map(note => <li><a class="internal-link" href={`/notes/${note.id}/`}>{note.data.title}</a><p class="note-summary">{note.data.summary}</p></li>)}
+  </ul>
+  <p>Read the <a href="/updates/">updates</a>, or use Search (⌘K / Ctrl+K) to find a note.</p>
+</WikiLayout>

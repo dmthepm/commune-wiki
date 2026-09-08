@@ -1,331 +1,74 @@
-# Contributing to Commune Wiki
+# Contributing to Commune
 
-Thank you for your interest in contributing to Commune Wiki! This document provides guidelines for contributing to this open-source project.
+First-run reports, clearer instructions and small reproducible fixes are useful contributions. Be respectful, describe the problem concretely and leave room for other people’s experience.
 
----
+## Report a problem
 
-## 📋 Table of Contents
+For setup trouble, comment on [Tell me where it broke (#85)](https://github.com/dmthepm/commune-wiki/issues/85) or use the [first-run form](https://github.com/dmthepm/commune-wiki/issues/new?template=first-run.yml). Report where you stopped even if you do not know whether it is a bug. Include your OS, Node and package versions, approximate time spent, attempted step, expected result and actual result. Where you found Commune is optional.
 
-- [Code of Conduct](#code-of-conduct)
-- [How Can I Contribute?](#how-can-i-contribute)
-- [Development Setup](#development-setup)
-- [Submission Guidelines](#submission-guidelines)
-- [Coding Standards](#coding-standards)
+For other bugs or feature ideas, [open an issue](https://github.com/dmthepm/commune-wiki/issues/new) describing what you were trying to do. Check existing issues for the same problem. For a feature, explain the use case and any workaround before proposing an implementation.
 
----
+Use public sample notes or a small invented reproduction. Do not upload a private vault, credentials or unredacted personal logs. Screenshots and sanitized error output are optional. Questions can go in issues too.
 
-## Code of Conduct
+## Develop the engine
 
-This project follows standard open-source community guidelines:
-- Be respectful and constructive
-- Focus on what is best for the community
-- Show empathy towards other community members
+To create your own wiki, start with [the starter](examples/starter/README.md). These steps are for changing Commune itself.
 
----
+You need
 
-## How Can I Contribute?
+- Node **22.18+**. `.nvmrc` selects Node 22. Use its current release. Tests and the repository’s Astro config import TypeScript source directly and need default type stripping. Published-package consumers need Node **22.12+** and Astro **7**.
+- pnpm **10**, matching CI.
+- Git.
 
-### 🐛 Reporting Bugs
-
-**Before submitting a bug report**:
-- Check existing [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)
-- Include clear steps to reproduce
-- Describe expected vs actual behavior
-- Include screenshots if relevant
-
-**Bug Report Template**:
-```markdown
-**Describe the bug**
-A clear description of what the bug is.
-
-**To Reproduce**
-Steps to reproduce:
-1. Go to '...'
-2. Click on '....'
-3. See error
-
-**Expected behavior**
-What you expected to happen.
-
-**Screenshots/Logs**
-If applicable.
-
-**Environment**:
-- Node version: [e.g. 20.10.0]
-- pnpm version: [e.g. 8.15.0]
-- OS: [e.g. macOS 14.0]
-```
-
-### 💡 Feature Requests
-
-**Before requesting a feature**:
-- Check existing [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)
-- Explain the use case clearly
-- Describe how it benefits users
-
-**Feature Request Template**:
-```markdown
-**Problem Statement**
-What problem does this solve?
-
-**Proposed Solution**
-How should it work?
-
-**Alternatives Considered**
-What other approaches did you consider?
-
-**Additional Context**
-Any mockups, examples, or references.
-```
-
-### 🔧 Pull Requests
-
-**Good First Issues**:
-- Look for `good-first-issue` label
-- Documentation improvements
-- Bug fixes
-- Test coverage improvements
-
-**Pull Request Process**:
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature-name`
-3. Make your changes
-4. Test locally: `pnpm dev` and `pnpm build`
-5. Commit with clear messages (see [Commit Guidelines](#commit-guidelines))
-6. Push to your fork
-7. Open a Pull Request
-
----
-
-## Development Setup
-
-### Prerequisites
-
-- **Node.js**: 20+ (recommend using [nvm](https://github.com/nvm-sh/nvm))
-- **pnpm**: 8+ (`npm install -g pnpm`)
-- **Git**: Latest version
-
-### Local Development
+Clone your fork, then run.
 
 ```bash
-# Clone your fork
-git clone git@github.com:YOUR_USERNAME/commune-wiki.git
+git clone https://github.com/YOUR_USERNAME/commune-wiki.git
 cd commune-wiki
-
-# Add upstream remote
-git remote add upstream git@github.com:dmthepm/commune-wiki.git
-
-# Install dependencies
-pnpm install
-
-# Start dev server (http://localhost:4321)
+pnpm install --frozen-lockfile
 pnpm dev
+```
 
-# In another terminal, test production build
+The dev server prints its local URL. To inspect a production build.
+
+```bash
 pnpm build
 pnpm preview
 ```
 
-### Project Structure
+The graph lives in `src/lib/`, the CLI in `src/cli/`, and the integration and markdown plugins in `src/`. Package components and styles live in `src/components/` and `src/styles/`. `bin/commune.mjs` runs the compiled `lib/` output. The [consumer fixture](tests/fixtures/consumer) tests the package against the local working tree. The [starter](examples/starter) is a separate project using published dependencies. Authoring skills live in `skills/`.
 
-```
-commune-wiki/
-├── src/
-│   ├── content/
-│   │   ├── notes/          # Wiki notes (markdown)
-│   │   ├── research/       # Long-form research
-│   │   └── updates/        # Blog-style updates
-│   ├── components/         # Astro components
-│   ├── layouts/            # Page layouts
-│   ├── styles/             # Global CSS
-│   ├── lib/graph.ts        # The content graph core
-│   ├── cli/                # The `commune` CLI
-│   ├── remark-wikilinks.ts # WikiLinks plugin
-│   ├── rehype-external-links.ts
-│   └── integration.ts      # Backlinks / markdown-twin integration
-├── bin/commune.mjs         # CLI entry point (runs lib/)
-├── public/                 # Static assets
-└── astro.config.mjs        # Astro configuration
-```
+## Validate a change
 
-### Testing Your Changes
-
-**Before submitting a PR**:
+Run checks appropriate to the files and behavior you changed. Engine or CLI changes should pass.
 
 ```bash
-# 1. Build succeeds
+pnpm build:lib
+pnpm test
 pnpm build
-
-# 2. Preview looks correct
-pnpm preview
-# Open http://localhost:4321
-
-# 3. WikiLinks work
-# Create test note with [[WikiLink]] syntax
-# Verify link renders correctly
-
-# 4. Backlinks generate
-# Check /notes/your-note shows backlinks section
-
-# 5. Search works
-# Test Cmd-K palette search
 ```
 
----
+`pnpm build` compiles the library, builds the wiki and gates the output. `pnpm test:consumer` explicitly installs and builds the consumer fixture. The test suite also exercises that boundary. For component or styling changes, inspect the affected routes in a browser, including narrow screens and keyboard navigation. For documentation changes, check commands, paths and links against the implementation.
 
-## Submission Guidelines
+For starter changes, run these from the repository root.
 
-### Commit Guidelines
-
-**Format**: `type: concise description`
-
-**Types**:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation only
-- `style`: Formatting, missing semi-colons, etc.
-- `refactor`: Code change that neither fixes a bug nor adds a feature
-- `test`: Adding missing tests
-- `chore`: Maintain, dependencies, config
-
-**Examples**:
 ```bash
-feat: add RSS feed for notes
-fix: wikilink parsing for notes with dashes
-docs: update installation instructions
-refactor: extract backlinks logic to separate file
+pnpm test:starter
+COMMUNE_STARTER_INSTALL=1 pnpm test:starter
 ```
 
-### Pull Request Guidelines
+The first command checks the copier, destination safeguards and published dependency declarations. It skips the registry install test. The second also installs the copied starter’s dependencies from npm in a temporary directory, builds it and verifies the generated links and privacy checks. It needs registry access. Neither mode exercises browser interactions or proves a timed first install on another machine.
 
-**PR Title**: Same format as commit messages
+`commune check` reports findings in its output. Exit code 0 means the check completed, not that no problems were found. `commune gate` fails when the built output violates its checks.
 
-**PR Description Template**:
-```markdown
-## Description
-Brief description of changes.
+Report exactly what you ran and any remaining limitations. A local build or automated fixture does not prove that a new person can finish setup on another machine.
 
-## Type of Change
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
+## Submit a pull request
 
-## Testing
-How did you test this?
+Create a branch in your fork and keep changes focused on one problem. Follow nearby code conventions, add tests for changed behavior where useful, and update affected docs. Do not revert unrelated changes from someone else working in the same checkout.
 
-## Screenshots (if applicable)
-Before/after screenshots.
+Use a descriptive title such as `fix: resolve apostrophes in note titles` or `docs: clarify starter prerequisites`. Explain the concrete problem, what changes for the user, and how you validated it. Include screenshots when a visual change needs them. Call out breaking changes and migration steps.
 
-## Checklist
-- [ ] My code follows the style guidelines
-- [ ] I have tested my changes locally
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have updated the documentation accordingly
-```
+For sample notes, use the target title verbatim in `[[Note Title]]`. Aliases and display text can resolve, but `check` and `gate` report noncanonical spellings. Notes require a title and `visibility: public` to publish. Other frontmatter requirements depend on the consuming site’s schema. Research, pages and updates enter the engine’s graph regardless of visibility, so use public samples in those collections.
 
----
-
-## Coding Standards
-
-### TypeScript/JavaScript
-
-- Use TypeScript where possible
-- Prefer `const` over `let`
-- Use async/await over .then()
-- Extract complex logic into separate functions
-
-**Example**:
-```typescript
-// ✅ Good
-const processNote = async (note: Note): Promise<ProcessedNote> => {
-  const links = extractWikiLinks(note.content);
-  const backlinks = await generateBacklinks(note.slug);
-  return { ...note, links, backlinks };
-};
-
-// ❌ Avoid
-function processNote(note) {
-  return new Promise(resolve => {
-    // Complex nested logic
-  });
-}
-```
-
-### Markdown Content
-
-**Frontmatter** (required):
-```yaml
----
-title: "Your Note Title"
-visibility: "public"  # or "private"
-status: "evergreen"   # or "seedling", "budding"
-summary: "One-sentence summary"
-tags: [tag1, tag2]
----
-```
-
-**WikiLinks**:
-```markdown
-Link to other notes: [[Note Title]]
-Link with custom text: [[Note Title|custom text]]
-```
-
-**Headers**:
-- Use sentence case (not Title Case)
-- One H1 (`#`) per note (title)
-- Start content with H2 (`##`)
-
-### CSS/Styling
-
-- Use design system variables (see `src/styles/design-system.css`)
-- Prefer utility classes for simple styling
-- Custom components for complex UI
-
-**Example**:
-```astro
-<!-- ✅ Good - uses design system -->
-<button class="button-primary">
-  Click me
-</button>
-
-<!-- ❌ Avoid - inline styles -->
-<button style="background: blue;">
-  Click me
-</button>
-```
-
----
-
-## Additional Resources
-
-**Documentation**:
-- [Astro Docs](https://docs.astro.build/)
-- [Markdown Guide](https://www.markdownguide.org/)
-- [Remark Plugins](https://github.com/remarkjs/remark/blob/main/doc/plugins.md)
-
-**Community**:
-- [GitHub Discussions](https://github.com/dmthepm/commune-wiki/discussions)
-- [GitHub Issues](https://github.com/dmthepm/commune-wiki/issues)
-
-**Inspiration**:
-- [Andy Matuschak's Notes](https://notes.andymatuschak.org/)
-- [Maggie Appleton's Garden](https://maggieappleton.com/garden)
-
----
-
-## Questions?
-
-- **Bugs/Features**: [Open an issue](https://github.com/dmthepm/commune-wiki/issues/new)
-- **General Questions**: [Start a discussion](https://github.com/dmthepm/commune-wiki/discussions/new)
-- **Security Issues**: DM [@devonmeadows on X](https://x.com/devonmeadows)
-
----
-
-## License
-
-By contributing to Commune Wiki, you agree that your contributions will be licensed under the [MIT License](LICENSE).
-
----
-
-**Thank you for contributing!** 🎉
+Contributions are licensed under the [MIT License](LICENSE).

@@ -1,0 +1,42 @@
+.wiki-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  min-height: 73px;
+  box-sizing: border-box;
+  background: var(--c-bg);
+  border-bottom: 1px solid var(--c-border);
+  box-shadow: var(--c-shadow-sm);
+}
+.wiki-brand { color: var(--c-text); font-weight: 600; text-decoration: none; }
+.wiki-header nav { display: flex; align-items: center; gap: 1rem; }
+.wiki-header button {
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-bg-soft);
+  border: 1px solid var(--c-border);
+  border-radius: var(--c-radius-sm);
+  padding: .4rem .7rem;
+  cursor: pointer;
+}
+.wiki-header kbd { font-size: .75rem; color: var(--c-text-muted); }
+.wiki-skip {
+  position: fixed;
+  top: .5rem;
+  left: .5rem;
+  z-index: calc(var(--z-modal) + 1);
+  transform: translateY(-200%);
+  background: var(--c-bg);
+  padding: .5rem 1rem;
+}
+.wiki-skip:focus { transform: translateY(0); }
+.prose h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); line-height: 1.2; letter-spacing: -.025em; }
+.prose a { color: var(--c-accent); text-underline-offset: .2em; }
+.prose .backlinks { position: static; }
+.note-summary, .entry-meta { color: var(--c-text-muted); }
+:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 3px; }

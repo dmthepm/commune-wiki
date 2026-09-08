@@ -1,0 +1,13 @@
+---
+import { getCollection, render } from 'astro:content';
+import WikiLayout from '../../layouts/WikiLayout.astro';
+export async function getStaticPaths() {
+  return (await getCollection('updates')).map(update => ({ params: { slug: update.id }, props: { update } }));
+}
+const { update } = Astro.props;
+const { Content } = await render(update);
+---
+<WikiLayout title={update.data.title} description={update.data.summary} entryPath={`/updates/${update.id}/`}>
+  <p class="entry-meta"><time datetime={update.data.date.toISOString()}>{update.data.date.toISOString().slice(0, 10)}</time></p>
+  <Content />
+</WikiLayout>
