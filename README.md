@@ -298,7 +298,7 @@ Exit codes report whether the command finished, never what it found — `0` fini
 
 ## Author with the skills
 
-These optional skills require an existing Commune wiki and access to Claude Code or Codex. They do not install the engine or scaffold a site. Install the four authoring skills from this repository:
+These optional skills require an existing Commune wiki and access to Claude Code or Codex. They do not install the engine or scaffold a site. Install the four authoring skills from this repository.
 
 ```bash
 npx skills add dmthepm/commune-wiki
@@ -310,19 +310,19 @@ The skills install for Claude Code and Codex, globally or into one project. They
 
 `commune-write` asks one short round of editorial questions and waits for answers in `dumps/<slug>.answers.md`. It then drafts into the note and renders the original and draft side by side in `dumps/<slug>.review.html` for the author to review.
 
-On the author's instruction, `commune-ship` compares finding identities against the baseline, files an update, builds, gates and verifies each new href and destination file. It commits according to `WRITING.md`'s `dumps.commit` policy, opens a PR and records the receipt in `dumps/<slug>.ship.md`. The author approves the content; this skill never merges. That boundary governs authored content, while code maintenance follows the repository's contribution rules.
+On the author's instruction, `commune-ship` compares finding identities against the baseline, files an update, builds, gates and verifies each new href and destination file. It commits according to `WRITING.md`'s `dumps.commit` policy, opens a PR and records the receipt in `dumps/<slug>.ship.md`. The author approves the content. This skill never merges. That boundary governs authored content, while code maintenance follows the repository's contribution rules.
 
-The four skills, their tests and the `WRITING.md` template ship today. The loop was run once end to end by hand before the skills existed; an end-to-end run using the installed skills remains unverified.
+The four skills, their tests and the `WRITING.md` template ship today. The loop was run once end to end by hand before the skills existed. An end-to-end run using the installed skills remains unverified.
 
 ## Files and publishing
 
 Commune is not a note-taking app. It works with markdown files on disk, written in whatever editor you like, and provides no editor, sync service, account or server of its own. The files remain yours whether or not you ever run it.
 
-Only notes with `visibility: public` enter the graph and publishing output. Research, pages and updates are included regardless of visibility. Handoffs in `dumps/` are committed by default under the writing policy; they are outside the engine's content collections and do not automatically become site pages.
+Only notes with `visibility: public` enter the graph and publishing output. Research, pages and updates are included regardless of visibility. Handoffs in `dumps/` are committed by default under the writing policy. They are outside the engine's content collections and do not automatically become site pages.
 
 ## What needs testing
 
-The [launch checklist](docs/launch/README.md) tracks first-install, installed-skills and return-edit proof, plus browsing and editing in Obsidian. Features follow what those sessions show is needed; work is tracked in [the issues](https://github.com/dmthepm/commune-wiki/issues).
+The [launch checklist](docs/launch/README.md) tracks first-install, installed-skills and return-edit proof, plus browsing and editing in Obsidian. Features follow what those sessions show is needed. Work is tracked in [the issues](https://github.com/dmthepm/commune-wiki/issues).
 
 ## Deploy
 
@@ -330,7 +330,7 @@ The build output is `dist/`, a static directory with no runtime, so any static h
 
 ## Working on Commune itself
 
-Use Node 22.18+ (the current Node 22 release selected by `.nvmrc`) and pnpm 10. The repository runs TypeScript source directly in its tests; the published package has the lower Node 22.12+ minimum.
+Use Node 22.18+ (the current Node 22 release selected by `.nvmrc`) and pnpm 10. The repository runs TypeScript source directly in its tests. The published package has the lower Node 22.12+ minimum.
 
 ```bash
 pnpm install
@@ -339,7 +339,7 @@ pnpm build      # compile lib/, build the site, then gate it
 pnpm test       # node --test
 ```
 
-`pnpm test:consumer` installs `tests/fixtures/consumer` against the working tree and builds it. This checks the package boundary locally; it does not substitute for an independent first install.
+`pnpm test:consumer` installs `tests/fixtures/consumer` against the working tree and builds it. This checks the package boundary locally. It does not substitute for an independent first install.
 
 Run `pnpm test:starter` from the repository root to check the copier, destination safeguards and published dependency declarations. The registry install test is skipped by default. `COMMUNE_STARTER_INSTALL=1 pnpm test:starter` also copies the starter into a temporary directory, installs from npm, builds and verifies its output. Neither mode proves a timed first install on another machine.
 

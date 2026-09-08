@@ -1,6 +1,6 @@
 # Your Commune wiki
 
-A small, editable wiki on the published **@dmthepm/commune** package (0.5.2 or newer) and **Astro 7**. Three public notes link to one another; one update records the beginning. The package supplies sliding panes, backlinks, markdown sources, static search, and the Commune design system. The starter owns the routes and a generic header.
+A small, editable wiki on the published **@dmthepm/commune** package (0.5.2 or newer) and **Astro 7**. Three public notes link to one another. One update records the beginning. The package supplies sliding panes, backlinks, markdown sources, static search, and the Commune design system. The starter owns the routes and a generic header.
 
 ## Start locally
 
@@ -17,11 +17,11 @@ npm run verify
 npm run dev
 ```
 
-You can invoke the copier by its absolute path from any working directory. Its destination is relative to your current directory. It refuses an existing destination, including an empty folder or symlink, and never installs dependencies for you. You can also copy this entire `examples/starter` directory yourself; it has no dependency on the surrounding repository.
+You can invoke the copier by its absolute path from any working directory. Its destination is relative to your current directory. It refuses an existing destination, including an empty folder or symlink, and never installs dependencies for you. You can also copy this entire `examples/starter` directory yourself. It has no dependency on the surrounding repository.
 
 If you already have this starter as a standalone directory, begin with `npm install` inside it. Open the local URL printed by Astro, normally `http://localhost:4321`.
 
-Expected build output: six HTML pages (home, three notes, update index, one update), `dist/backlinks.json`, `dist/site.json`, and four `.md` sources. `npm run verify` checks the unchanged sample content: two reciprocal wikilinks and backlinks, exact markdown twins, component mounts, and private/draft exclusion. Once you replace the samples, update or remove that sample-specific verification script. `npm run check` checks your current content links; the build also runs Commune’s publication gate.
+Expected build output. Six HTML pages (home, three notes, update index, one update), `dist/backlinks.json`, `dist/site.json`, and four `.md` sources. `npm run verify` checks the unchanged sample content. Two reciprocal wikilinks and backlinks, exact markdown twins, component mounts, and private/draft exclusion. Once you replace the samples, update or remove that sample-specific verification script. `npm run check` checks your current content links. The build also runs Commune’s publication gate.
 
 ## Try the reading loop
 
@@ -29,9 +29,9 @@ Expected build output: six HTML pages (home, three notes, update index, one upda
 2. Follow **Writing in public**, close its pane with ×, then use browser Back. Return to a previous thought and check that the URL follows the visible note.
 3. Look for **Links to this note** below the writing. Backlinks are populated from the generated graph after JavaScript loads.
 4. Click **view as markdown**. `/notes/welcome.md` returns the original source.
-5. Click **Search**, or press ⌘K / Ctrl+K, and search for `Connected`. Escape closes the dialog. Search is a static local match over the published graph; there is no AI endpoint or API key to configure.
+5. Click **Search**, or press ⌘K / Ctrl+K, and search for `Connected`. Escape closes the dialog. Search is a static local match over the published graph. There is no AI endpoint or API key to configure.
 
-To test the production output, run `npm run preview` after building. If a link or search result looks stale after editing, restart `npm run dev`, or rebuild and restart preview: the package generates the graph at startup/build time.
+To test the production output, run `npm run preview` after building. If a link or search result looks stale after editing, restart `npm run dev`, or rebuild and restart preview. The package generates the graph at startup/build time.
 
 ## Make it yours
 
@@ -68,17 +68,17 @@ npx commune graph related src/content/notes/welcome.md --json
 
 Only notes explicitly marked `visibility: public` get HTML routes, graph/search entries, backlinks, or markdown twins. `private`, `draft`, and missing visibility stay unpublished. The included private and draft examples contain harmless test markers, and `npm run verify` searches the output for leaks.
 
-**In Commune, updates, research, and pages are always public.** This starter defines notes and updates only. Its update schema rejects `private` and `draft` visibility. Keep unpublished writing under notes, not updates, research, pages, or `public/`. Everything in `public/` is served as-is. Published markdown twins include the complete frontmatter: do not put secrets in a public note’s metadata.
+**In Commune, updates, research, and pages are always public.** This starter defines notes and updates only. Its update schema rejects `private` and `draft` visibility. Keep unpublished writing under notes, not updates, research, pages, or `public/`. Everything in `public/` is served as-is. Published markdown twins include the complete frontmatter. Do not put secrets in a public note’s metadata.
 
 Visibility controls the generated site, not access to source files in Git. A public source repository exposes its private/draft note files too. Keep your source repository private if it contains confidential writing, and publish only `dist/`.
 
 ## First-run troubleshooting and feedback
 
-- An engine/version error: check that your terminal uses Node 22.12+ and npm 9.6.5+.
-- Install fails: record the npm error and registry/network settings. The starter installs only published packages, with no monorepo paths.
-- A link fails the build: run `npm run check`; check spelling, unique titles, and the target note’s visibility.
-- No second pane: use a viewport at least 1024 pixels wide and allow JavaScript. Mobile navigation intentionally uses ordinary pages.
-- Search/backlinks are stale: restart the dev server after changing content, or rebuild production output.
+- An engine/version error. Check that your terminal uses Node 22.12+ and npm 9.6.5+.
+- Install fails. Record the npm error and registry/network settings. The starter installs only published packages, with no monorepo paths.
+- A link fails the build. Run `npm run check`. Check spelling, unique titles, and the target note’s visibility.
+- No second pane. Use a viewport at least 1024 pixels wide and allow JavaScript. Mobile navigation intentionally uses ordinary pages.
+- Search/backlinks are stale. Restart the dev server after changing content, or rebuild production output.
 
 Report your first confusing step in [Tell me where it broke (#85)](https://github.com/dmthepm/commune-wiki/issues/85). Include OS, Node/npm versions, minutes elapsed, command, expected result, actual result, and where you found Commune. Do not include private notes or secrets in logs.
 
@@ -86,4 +86,4 @@ A successful automated local install/build is **not** proof that another person 
 
 ## License
 
-This starter’s code, documentation, and sample notes are MIT licensed; see [LICENSE](LICENSE). Replace the samples with your writing and choose its license deliberately. The published Commune package is MIT licensed.
+This starter’s code, documentation, and sample notes are MIT licensed. See [LICENSE](LICENSE). Replace the samples with your writing and choose its license deliberately. The published Commune package is MIT licensed.
