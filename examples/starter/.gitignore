@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.astro/
+public/backlinks.json
+public/site.json
+.DS_Store
+.env
+.env.*

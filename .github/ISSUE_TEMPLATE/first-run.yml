@@ -1,0 +1,67 @@
+name: First-run problem
+description: Tell us where installing, editing or building your first wiki became confusing or failed.
+title: "[First run] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A stopped attempt is useful feedback. You can also comment on [Tell me where it broke (#85)](https://github.com/dmthepm/commune-wiki/issues/85).
+        Use public samples or an invented reproduction. Do not upload your private vault, credentials or unredacted personal logs. Approximate times and "not installed" or "unknown" versions are fine.
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and version
+      placeholder: "For example: macOS 15, Windows 11 with WSL Ubuntu 24.04, or Ubuntu 24.04"
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Node, package manager, Astro and Commune versions
+      description: In your wiki folder, run node --version, npm --version (or pnpm --version), and npm ls astro @dmthepm/commune (or pnpm list astro @dmthepm/commune). If setup stopped earlier, say unknown or not installed.
+      placeholder: |
+        Node:
+        npm or pnpm:
+        Astro:
+        @dmthepm/commune:
+    validations:
+      required: true
+  - type: input
+    id: time
+    attributes:
+      label: Approximate time spent
+      description: How long until you stopped or completed? If possible, separate prerequisite setup from wiki setup. No stopwatch required.
+      placeholder: "For example: 5 minutes updating Node, then 12 minutes on the starter"
+    validations:
+      required: true
+  - type: textarea
+    id: step
+    attributes:
+      label: Attempted step
+      description: Link the instructions you followed and include the command or action where you got stuck. Mention starter, existing Astro integration, or optional skills.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What did you expect to see or do next?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: What happened instead? Include a short sanitized error if available. Confusing wording or a missing next step counts too.
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Where did you find Commune? (optional)
+      description: A channel name or public link is enough. No personal information needed.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Public reproduction or screenshot (optional)
+      description: Share a small invented note, a public sample repository, or a sanitized screenshot if it helps. A private vault upload is never required.

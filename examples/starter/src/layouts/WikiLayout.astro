@@ -1,0 +1,60 @@
+---
+import SlidingPanes from '@dmthepm/commune/components/SlidingPanes.astro';
+import Backlinks from '@dmthepm/commune/components/Backlinks.astro';
+import BacklinksScript from '@dmthepm/commune/components/BacklinksScript.astro';
+import MarkdownLink from '@dmthepm/commune/components/MarkdownLink.astro';
+import SearchModal from '@dmthepm/commune/components/SearchModal.astro';
+import { toMarkdownHref } from '@dmthepm/commune/graph';
+import '@dmthepm/commune/styles/design-system.css';
+import '@dmthepm/commune/styles/notes.css';
+import '../styles/wiki.css';
+
+interface Props { title: string; description?: string; entryPath?: string; }
+const { title, description = 'A personal wiki of connected notes.', entryPath } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{title} · My wiki</title>
+  </head>
+  <body>
+    <a class="wiki-skip" href="#main">Skip to content</a>
+    <header class="wiki-header">
+      <a class="wiki-brand" href="/">My wiki</a>
+      <nav aria-label="Main navigation">
+        <a href="/updates/">Updates</a>
+        <button type="button" onclick="window.dispatchEvent(new CustomEvent('commune:openSearch'))">Search <kbd>⌘K</kbd></button>
+      </nav>
+    </header>
+    <main id="pane-container">
+      <article class="pane" data-url={Astro.url.pathname} tabindex="-1">
+        <div class="body-wrapper">
+          <div class="body" id="main" tabindex="-1">
+            <div class="pane-content">
+              <article class="prose">
+              <h1>{title}</h1>
+              <slot />
+              {entryPath && <Backlinks slug={entryPath} />}
+              {entryPath && <MarkdownLink href={toMarkdownHref(entryPath)} />}
+              </article>
+            </div>
+          </div>
+        </div>
+      </article>
+    </main>
+    <SearchModal />
+    <BacklinksScript />
+    <SlidingPanes />
+    <script>
+      const header = document.querySelector<HTMLElement>('.wiki-header');
+      if (header) {
+        const measure = () => document.documentElement.style.setProperty('--header-height', `${header.offsetHeight}px`);
+        measure();
+        new ResizeObserver(measure).observe(header);
+      }
+    </script>
+  </body>
+</html>

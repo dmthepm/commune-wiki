@@ -1,0 +1,9 @@
+---
+import { getCollection } from 'astro:content';
+import WikiLayout from '../../layouts/WikiLayout.astro';
+const updates = (await getCollection('updates')).sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+---
+<WikiLayout title="Updates">
+  <p>What changed in this wiki.</p>
+  <ul>{updates.map(update => <li><a class="internal-link" href={`/updates/${update.id}/`}>{update.data.title}</a><p>{update.data.summary}</p></li>)}</ul>
+</WikiLayout>

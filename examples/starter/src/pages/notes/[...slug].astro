@@ -1,0 +1,14 @@
+---
+import { getCollection, render } from 'astro:content';
+import WikiLayout from '../../layouts/WikiLayout.astro';
+export async function getStaticPaths() {
+  const notes = await getCollection('notes', note => note.data.visibility === 'public');
+  return notes.map(note => ({ params: { slug: note.id }, props: { note } }));
+}
+const { note } = Astro.props;
+const { Content } = await render(note);
+---
+<WikiLayout title={note.data.title} description={note.data.summary} entryPath={`/notes/${note.id}/`}>
+  <p class="entry-meta">{note.data.status}</p>
+  <Content />
+</WikiLayout>

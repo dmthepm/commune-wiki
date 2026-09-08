@@ -2,11 +2,32 @@
 
 Keep your thinking connected.
 
-Commune helps you maintain a personal wiki from markdown notes, dictated thoughts and everyday work. Its CLI finds connections while you write, optional agent skills help you question and revise your notes, and its Astro engine publishes linked notes with backlinks and markdown source twins. MIT licensed; your files stay yours.
+Commune helps you maintain a personal wiki from markdown notes and dictated thoughts. Its CLI finds connections while you write. Optional agent skills capture a dump, ask a short round of questions, draft a revision for your review and ship on your word. Its Astro engine publishes linked notes with backlinks and a markdown twin of every page. MIT. It runs [devon.md](https://devon.md).
 
 - **See it.** Explore [devon.md](https://devon.md).
-- **Build a wiki.** Follow [Install](#install), starting with Astro 7 and Node 22.12+.
-- **Try the writing loop.** On an existing Commune wiki, follow [Author with the skills](#author-with-the-skills).
+- **Start a wiki.** Copy the starter below. You need Node 22.12 or newer, npm and Git.
+- **Report a first run.** [Tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
+
+**Status on September 8, 2026.** Commune runs Devon's personal wiki. A timed install on another machine, an outside author's return edit, and an end to end run with the installed authoring skills are still unproven. The [launch checklist](docs/launch/README.md) lists the evidence still owed.
+
+## Start a wiki
+
+The starter is a separate project on the published package. Pick a new folder for it.
+
+```bash
+git clone https://github.com/dmthepm/commune-wiki.git
+cd commune-wiki
+node scripts/create-wiki.mjs ../my-wiki
+cd ../my-wiki
+npm install
+npm run build
+npm run verify
+npm run dev
+```
+
+Open the local URL Astro prints. The [starter instructions](examples/starter/README.md) walk through editing a sample note, opening connected notes in panes, and checking backlinks and markdown twins. The copy command installs nothing. `npm install` runs in your new wiki, and the engine repository itself needs no install.
+
+If you stop or have to guess, [tell me where](https://github.com/dmthepm/commune-wiki/issues/85). Include the step, your versions and what happened. No private vault needed. An existing Astro 7 project can skip the starter and use the [integration below](#install). The [agent skills](#author-with-the-skills) install separately into a wiki you already have and do not create a site.
 
 ## Vision and mission
 
@@ -24,7 +45,7 @@ You need an Astro 7 project on Node 22.12 or newer.
 pnpm add @dmthepm/commune @astrojs/markdown-remark
 ```
 
-Then three files, and your notes. `astro.config.mjs`, in full:
+This minimal integration produces plain HTML notes. For the assembled wiki interface, use the [starter](examples/starter/README.md). Add three files, and your notes. `astro.config.mjs`, in full:
 
 ```js
 import { defineConfig } from 'astro/config';
@@ -80,7 +101,7 @@ const { Content } = await render(note);
 </html>
 ```
 
-Both are the smallest versions that work. [`tests/fixtures/consumer`](tests/fixtures/consumer) is the same project one step further along — it adds the `research` and `pages` collections and imports components off the package — and it is the reference to read when you want the fuller shape.
+Both are minimal examples. [`examples/starter`](examples/starter) provides a separate wiki project. [`tests/fixtures/consumer`](tests/fixtures/consumer) tests integration against this repository through a local file dependency; it is a development fixture, not a portable starter.
 
 Notes go in `src/content/notes/`. Two frontmatter fields are load-bearing:
 
@@ -93,14 +114,14 @@ visibility: "public"
 A link to [[World]], and one to [Astro](https://astro.build).
 ```
 
-`title` is what `[[Hello]]` matches on. `visibility` defaults to private, so only `public` is published. Build that, and the paragraph renders as:
+`title` is what `[[Hello]]` matches on. For notes, `visibility` defaults to private, so only `public` is published. Add a second public note with `title: "World"` before building; the link then resolves and the paragraph renders as:
 
 ```html
 A link to <a href="/notes/world/" class="wikilink">World</a>, and one to
 <a href="https://astro.build" target="_blank" rel="noopener noreferrer">Astro</a>.
 ```
 
-That route is a starting point, not an interface. The package ships the mechanism and none of `src/pages/` — the markup, the layout and the URL shape are yours to change, and Commune keeps the links inside them working.
+That route is a starting point, not an interface. The package ships the mechanism and none of `src/pages/` — the markup, the layout and the URL shape are yours to change, with Commune resolving links through its shared graph.
 
 ## What ships
 
@@ -108,7 +129,7 @@ That route is a starting point, not an interface. The package ships the mechanis
 - **Backlinks.** The build writes `backlinks.json` — every entry with its inbound and outbound edges — to `dist/` and `public/`. `Backlinks.astro` renders it on a page.
 - **Markdown twins.** Every published content entry gets its source written beside it, so `/notes/hello/` also answers at `/notes/hello.md`. Entries in the content directories only — a hand-written route under `src/pages/` has no source file to twin. Agents and readers get the same document without scraping HTML.
 - **External links.** Anything off your `site` origin gets `target="_blank" rel="noopener noreferrer"` without you marking it up.
-- **The graph as a library.** `@dmthepm/commune/graph` exports the content loader, the link resolver and the graph builder. The Astro build and the CLI both call it. That is the point: one resolver, not two that drift.
+- **The graph as a library.** `@dmthepm/commune/graph` exports the content loader, the link resolver and the graph builder. The Astro build and the CLI both call it. Sharing the resolver reduces duplicated link logic; it does not guarantee that links never break.
 - **Updates.** A fourth collection, `src/content/updates/`, for the dated entries that say what changed. `Updates.astro` renders the newest few as a card. See [Updates](#updates) below.
 - **Dates with sources.** `updated:` in frontmatter wins where you wrote one; where you did not, the date comes from the file's last commit, and from its mtime in a tree with no history. Every entry says which, so a page can show where the date came from. See [Dates](#dates) below.
 - **A site-wide last-updated.** The build writes `site.json` beside `backlinks.json`: the newest date across the whole wiki, which entry it belongs to, and the newest commit date whatever the entries claim.
@@ -277,7 +298,7 @@ Exit codes report whether the command finished, never what it found — `0` fini
 
 ## Author with the skills
 
-Turn a dump into connected, reviewed writing with four agent skills, in `skills/`, installed straight from this repository rather than from npm:
+These optional skills require an existing Commune wiki and access to Claude Code or Codex. They do not install the engine or scaffold a site. Install the four authoring skills from this repository:
 
 ```bash
 npx skills add dmthepm/commune-wiki
@@ -299,17 +320,17 @@ Commune is not a note-taking app. It works with markdown files on disk, written 
 
 Only notes with `visibility: public` enter the graph and publishing output. Research, pages and updates are included regardless of visibility. Handoffs in `dumps/` are committed by default under the writing policy; they are outside the engine's content collections and do not automatically become site pages.
 
-## Where this is going
+## What needs testing
 
-Commune ships an Astro publishing engine, a shared link graph, a CLI for finding and checking connections, and four authoring skills. Together they support maintaining existing thinking as well as adding notes. The engine and CLI install from npm; the optional skills install separately into an existing wiki.
-
-Three proofs are still owed: a repeated authoring run with the installed skills, a second person building a wiki and coming back to edit it a week later, and a session of browsing and light edits in Obsidian on a wiki of real size. Features follow what those sessions show is needed; they are tracked in [the issues](https://github.com/dmthepm/commune-wiki/issues).
+The [launch checklist](docs/launch/README.md) tracks first-install, installed-skills and return-edit proof, plus browsing and editing in Obsidian. Features follow what those sessions show is needed; work is tracked in [the issues](https://github.com/dmthepm/commune-wiki/issues).
 
 ## Deploy
 
 The build output is `dist/`, a static directory with no runtime, so any static host serves it — see [docs/hosting.md](docs/hosting.md).
 
 ## Working on Commune itself
+
+Use Node 22.18+ (the current Node 22 release selected by `.nvmrc`) and pnpm 10. The repository runs TypeScript source directly in its tests; the published package has the lower Node 22.12+ minimum.
 
 ```bash
 pnpm install
@@ -318,7 +339,9 @@ pnpm build      # compile lib/, build the site, then gate it
 pnpm test       # node --test
 ```
 
-`pnpm test:consumer` installs `tests/fixtures/consumer` against the working tree and builds it. That fixture is a stranger's project in miniature, and it is the check that catches a package boundary this README describes wrongly.
+`pnpm test:consumer` installs `tests/fixtures/consumer` against the working tree and builds it. This checks the package boundary locally; it does not substitute for an independent first install.
+
+Run `pnpm test:starter` from the repository root to check the copier, destination safeguards and published dependency declarations. The registry install test is skipped by default. `COMMUNE_STARTER_INSTALL=1 pnpm test:starter` also copies the starter into a temporary directory, installs from npm, builds and verifies its output. Neither mode proves a timed first install on another machine.
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the rest. Issues and questions go to [the tracker](https://github.com/dmthepm/commune-wiki/issues).
 

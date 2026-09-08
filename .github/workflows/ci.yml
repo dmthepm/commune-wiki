@@ -46,6 +46,9 @@ jobs:
 
       - run: pnpm test
 
+      - name: verify published starter from an isolated directory
+        run: COMMUNE_STARTER_INSTALL=1 pnpm test:starter
+
       # The stranger's *project*. `pnpm test` already runs
       # `tests/consumer.test.mjs`, which is this plus the assertions, so this
       # step buys no coverage — it is the named entry point the plan asked for,
