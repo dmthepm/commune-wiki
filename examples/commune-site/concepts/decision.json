@@ -1,0 +1,185 @@
+{
+  "title": "Three futures for commune.md",
+  "question": "Choose a direction to carry into the working site, or steer a fresh hand.",
+  "options": [
+    {
+      "id": "atlas",
+      "label": "Routing Atlas",
+      "kicker": "THE ROLL",
+      "lineage": "Transport identity and route diagrams",
+      "thesis": "Every thought leads somewhere.",
+      "palette": [
+        "#163DEB",
+        "#F3F1E8",
+        "#DFFF00"
+      ],
+      "materials": [
+        "electric blue field",
+        "precise route geometry"
+      ],
+      "viewport": "A monumental headline meets three linked sample notes on a navigable route.",
+      "risk": "Routes must stay useful or the map becomes decoration.",
+      "comp": ".impeccable/mocks/decision/atlas.png",
+      "raised": [
+        {
+          "from": "Swiss Grid",
+          "raise": "One modular rhythm governs route maps and dense documentation."
+        },
+        {
+          "from": "Algorave",
+          "raise": "Source and reading views show the same selected passage."
+        },
+        {
+          "from": "Drum Machine",
+          "raise": "The current note remains unmistakable throughout the journey."
+        },
+        {
+          "from": "Sneaker Archive",
+          "raise": "Compact metadata remains readable at high density."
+        },
+        {
+          "from": "Provenance Ribbon",
+          "raise": "Pending proof stays beside the associated capability."
+        }
+      ]
+    },
+    {
+      "id": "workshop",
+      "label": "Publishing Workshop",
+      "kicker": "IMPECCABLE\u2019S PICK",
+      "lineage": "Independent literary publishing and type specimens",
+      "thesis": "Your notes deserve a life beyond the folder.",
+      "palette": [
+        "#34192D",
+        "#F7DCE3",
+        "#F04425"
+      ],
+      "materials": [
+        "ink and paper",
+        "open reading spreads"
+      ],
+      "viewport": "An enormous literary headline opens into two linked pages and their markdown source.",
+      "risk": "Editorial familiarity is deliberate and needs a working demo to earn its place.",
+      "comp": ".impeccable/mocks/decision/workshop.png"
+    },
+    {
+      "id": "assembly",
+      "label": "Open Assembly",
+      "lineage": "Festival lineup typographic hierarchy",
+      "verdict": "competitive",
+      "thesis": "A personal wiki with a public voice.",
+      "palette": [
+        "#E3F136",
+        "#171914"
+      ],
+      "materials": [
+        "saturated ground",
+        "condensed type"
+      ],
+      "viewport": "A full-width type composition steps down into a sample note and its links.",
+      "risk": "The loud opening must give way to a calm reading measure.",
+      "case": "Strong independent-builder identity with a more demanding transition into product explanation.",
+      "comp": ".impeccable/mocks/decision/assembly.png",
+      "hero": "https://impeccable.style/worlds/cards/posters-covers-sleeves-festival-lineup-poster-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/posters-covers-sleeves-festival-lineup-poster.webp"
+    },
+    {
+      "id": "swiss-grid",
+      "label": "Swiss Grid",
+      "verdict": "declined",
+      "thesis": "A considered alternative to the selected route system.",
+      "palette": [
+        "#ffffff",
+        "#151515",
+        "#ea2929"
+      ],
+      "materials": [
+        "catalog reference"
+      ],
+      "viewport": "Form adapted to linked notes and writing.",
+      "risk": "The metaphor competes with the wiki task.",
+      "case": "The atlas is stronger on audience identification and product clarity.",
+      "kept": "Modular discipline"
+    },
+    {
+      "id": "algorave",
+      "label": "Algorave",
+      "verdict": "declined",
+      "thesis": "A considered alternative to the selected route system.",
+      "palette": [
+        "#080808",
+        "#8ce539"
+      ],
+      "materials": [
+        "catalog reference"
+      ],
+      "viewport": "Form adapted to linked notes and writing.",
+      "risk": "The metaphor competes with the wiki task.",
+      "case": "The atlas is stronger on audience identification and product clarity.",
+      "kept": "Visible correspondence between source and output"
+    },
+    {
+      "id": "drum-machine",
+      "label": "Drum Machine",
+      "verdict": "declined",
+      "thesis": "A considered alternative to the selected route system.",
+      "palette": [
+        "#222222",
+        "#ed5226"
+      ],
+      "materials": [
+        "catalog reference"
+      ],
+      "viewport": "Form adapted to linked notes and writing.",
+      "risk": "The metaphor competes with the wiki task.",
+      "case": "The atlas is stronger on audience identification and product clarity.",
+      "kept": "Persistent selection indication"
+    },
+    {
+      "id": "sneaker-archive",
+      "label": "Sneaker Archive",
+      "verdict": "declined",
+      "thesis": "A considered alternative to the selected route system.",
+      "palette": [
+        "#d1642b",
+        "#161616"
+      ],
+      "materials": [
+        "catalog reference"
+      ],
+      "viewport": "Form adapted to linked notes and writing.",
+      "risk": "The metaphor competes with the wiki task.",
+      "case": "The atlas is stronger on audience identification and product clarity.",
+      "kept": "Compact readable metadata"
+    },
+    {
+      "id": "provenance-ribbon",
+      "label": "Provenance Ribbon",
+      "verdict": "declined",
+      "thesis": "A considered alternative to the selected route system.",
+      "palette": [
+        "#eee1cd",
+        "#c62938"
+      ],
+      "materials": [
+        "catalog reference"
+      ],
+      "viewport": "Form adapted to linked notes and writing.",
+      "risk": "The metaphor competes with the wiki task.",
+      "case": "The atlas is stronger on audience identification and product clarity.",
+      "kept": "Evidence remains attached to claims"
+    }
+  ],
+  "reroll": {
+    "registers": [
+      "safer",
+      "bolder"
+    ]
+  },
+  "steer": true,
+  "canon": true,
+  "buildPath": {
+    "value": "comp",
+    "toggle": true
+  }
+}
