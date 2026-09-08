@@ -4,11 +4,7 @@ Three desktop direction comps are complete. No concept has been approved. No pro
 
 ## Review
 
-Comparison board is http://127.0.0.1:65067/
-
-Local node server PID is 96146. It listens only on 127.0.0.1 port 65067. Question key is 4942876d. The Chrome preview tab was marked as a deliverable. No answer wait is running.
-
-The board offers Routing Atlas, Publishing Workshop and Open Assembly. It also carries quiet declined alternatives and a standard category exit. To resume choice collection, use the Impeccable serve-question script with --wait --key 4942876d from this folder. Do not start another server unless this process is gone.
+Three directions were compared on a local board during the round: Routing Atlas, Publishing Workshop and Open Assembly, with declined alternatives noted in DIRECTIONS.md. The rendered comps are kept outside the repository; ask the maintainer for them. No direction has been chosen.
 
 ## Verification
 
@@ -32,17 +28,9 @@ All paths below are relative to examples/commune-site.
 - concepts/decision.json
 - concepts/COPY.md
 - concepts/HANDOFF.md
-- .impeccable/mocks/decision/atlas.png
-- .impeccable/mocks/decision/atlas.json
-- .impeccable/mocks/decision/workshop.png
-- .impeccable/mocks/decision/workshop.json
-- .impeccable/mocks/decision/assembly.png
-- .impeccable/mocks/decision/assembly.json
 
 The decision server also created these runtime files.
 
-- .impeccable/questions/4942876d.log
-- .impeccable/questions/4942876d.state.json
 
 Native tool originals remain in the default generated_images folder outside the repository. No other repository files were authored by this concept task.
 
