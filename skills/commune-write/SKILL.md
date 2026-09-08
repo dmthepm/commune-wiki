@@ -54,8 +54,8 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    keys in its order. Append every file you touched to `files:` in
    `.connect.md`.
 
-4. **Verify.** Run `$COMMUNE check --json` and compare finding identities `(rule, file, target)` against
-   `baseline.findings` in `.connect.md`. Any **new** finding is yours to fix before you
+4. **Verify.** Run `$COMMUNE check --json` and compare finding identities `(rule, file, target)`,
+   `null` for an absent target, against `baseline.findings` in `.connect.md`. Any **new** finding is yours to fix before you
    show anything; pre-existing findings are the baseline and are not. Then
    `$COMMUNE graph related <target> --json` for what the note now links.
 

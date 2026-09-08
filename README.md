@@ -12,7 +12,7 @@ Commune helps you maintain a personal wiki from markdown notes, dictated thought
 
 **Mission:** Commune turns markdown notes, dictated thoughts and the residue of everyday work into a maintained personal wiki through a shared link graph, authoring tools and portable publishing.
 
-Commune grew out of [devon.md](https://devon.md). Devon built his own site and recognised the structure afterward, then extracted its tools so a friend could inherit the learnings. It is an MIT project with no company behind it and no plans for monetization.
+Commune grew out of [devon.md](https://devon.md). Devon built his own site and recognised the structure afterward, then extracted its tools so someone else could build on them. It is an MIT project with no company behind it and no plans for monetization.
 
 ## Install
 
