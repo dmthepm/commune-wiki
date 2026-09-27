@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import rehypeExternalLinks from '../src/rehype-external-links.ts';
 
-const SITE = 'https://devonmeadows.com';
+const SITE = 'https://wiki.example';
 
 /** One `<a>` element node, the shape rehype hands the plugin. */
 function anchor(href, properties = {}) {

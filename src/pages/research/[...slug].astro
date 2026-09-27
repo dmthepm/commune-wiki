@@ -33,6 +33,10 @@ const summaryUrl = `/notes/${data.summaryNote}/`;
 
 // Format word count with comma
 const formattedWordCount = data.wordCount.toLocaleString();
+// The absolute origin for og, canonical and JSON-LD URLs. It comes from
+// `site` in `astro.config.mjs`, so a consumer who copies this page gets
+// their own origin by declaring theirs rather than editing this file.
+const origin = Astro.site?.origin ?? 'https://wiki.example';
 ---
 <html lang="en">
 <head>
@@ -47,7 +51,7 @@ const formattedWordCount = data.wordCount.toLocaleString();
   <meta property="og:type" content="article" />
   <meta property="og:url" content={Astro.url} />
   <meta property="og:site_name" content="Commune" />
-  <meta property="og:image" content="https://devonmeadows.com/og-image.jpg" />
+  <meta property="og:image" content={`${origin}/og-image.jpg`} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   {data.created && <meta property="article:published_time" content={`${data.created}T00:00:00-07:00`} />}
@@ -57,7 +61,7 @@ const formattedWordCount = data.wordCount.toLocaleString();
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content={title} />
   <meta name="twitter:description" content={data.summary || `Deep research: ${title}`} />
-  <meta name="twitter:image" content="https://devonmeadows.com/og-image.jpg" />
+  <meta name="twitter:image" content={`${origin}/og-image.jpg`} />
 
   <meta name="author" content={data.author} />
   <link rel="icon" type="image/png" href="/favicon-32x32.png" />
@@ -70,18 +74,18 @@ const formattedWordCount = data.wordCount.toLocaleString();
         "@type": "Article",
         "headline": title,
         "description": data.summary || title,
-        "image": "https://devonmeadows.com/og-image.jpg",
+        "image": `${origin}/og-image.jpg`,
         "author": {
           "@type": "Person",
           "name": data.author,
-          "url": "https://devonmeadows.com/"
+          "url": `${origin}/`
         },
         "datePublished": `${data.created}T00:00:00-07:00`,
         "dateModified": `${data.updated || data.created}T00:00:00-07:00`,
         "wordCount": data.wordCount,
         "url": Astro.url.href,
         "isPartOf": {
-          "@id": "https://devonmeadows.com/#website"
+          "@id": `${origin}/#website`
         }
       },
       {
@@ -91,13 +95,13 @@ const formattedWordCount = data.wordCount.toLocaleString();
             "@type": "ListItem",
             "position": 1,
             "name": "Home",
-            "item": "https://devonmeadows.com/"
+            "item": `${origin}/`
           },
           {
             "@type": "ListItem",
             "position": 2,
             "name": "Summary",
-            "item": `https://devonmeadows.com${summaryUrl}`
+            "item": `${origin}${summaryUrl}`
           },
           {
             "@type": "ListItem",
@@ -354,8 +358,10 @@ const formattedWordCount = data.wordCount.toLocaleString();
       links.forEach(link => {
         const href = link.getAttribute('href');
         if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-          // Check if it's not an internal link
-          if (!href.includes('devonmeadows.com')) {
+          // Compare hosts rather than matching a literal: the page already
+          // knows the origin it was served from, and a hardcoded host is a
+          // second copy of the rule `src/rehype-external-links.ts` owns.
+          if (link.hostname !== location.hostname) {
             link.setAttribute('target', '_blank');
             link.setAttribute('rel', 'noopener noreferrer');
           }

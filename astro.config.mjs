@@ -7,7 +7,7 @@ import { communeMarkdown } from './src/markdown.ts';
 // The deployed origin, declared once. `src/rehype-external-links.ts` decides what
 // counts as external by comparing hosts against it, so the site's own host is
 // configuration here rather than a constant baked into the engine.
-const site = 'https://devonmeadows.com';
+const site = 'https://wiki.example';
 
 // https://astro.build/config
 export default defineConfig({
