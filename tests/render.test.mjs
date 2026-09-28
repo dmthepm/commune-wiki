@@ -94,15 +94,15 @@ test('a path is read relative to the root, with its frontmatter split off', asyn
 });
 
 test('the site comes from the Astro config when the flag does not name one', async () => {
-	// The engine's own config declares https://devonmeadows.com, so a link there
+	// The engine's own config declares https://wiki.example, so a link there
 	// is internal without anyone passing --site.
 	const child = run(process.execPath, [BIN, 'render', '-', '--json']);
-	child.child.stdin.end('[home](https://devonmeadows.com/notes/) and [out](https://example.org/)\n');
+	child.child.stdin.end('[home](https://wiki.example/notes/) and [out](https://example.org/)\n');
 	const { stdout, stderr } = await child;
 
 	const { html, site } = JSON.parse(stdout);
-	assert.equal(site, 'https://devonmeadows.com');
-	assert.equal(html.includes('href="https://devonmeadows.com/notes/" target'), false);
+	assert.equal(site, 'https://wiki.example');
+	assert.equal(html.includes('href="https://wiki.example/notes/" target'), false);
 	assert.match(html, /href="https:\/\/example\.org\/" target="_blank"/);
 	// Nothing to warn about: an origin was found.
 	assert.equal(stderr, '');

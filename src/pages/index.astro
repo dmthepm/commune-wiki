@@ -44,6 +44,10 @@ function getRelativeDate(dateString: string): string {
     ? { month: 'short', day: 'numeric' }
     : { month: 'short', day: 'numeric', year: 'numeric' });
 }
+// The absolute origin for og, canonical and JSON-LD URLs. It comes from
+// `site` in `astro.config.mjs`, so a consumer who copies this page gets
+// their own origin by declaring theirs rather than editing this file.
+const origin = Astro.site?.origin ?? 'https://wiki.example';
 ---
 <html lang="en">
 <head>
@@ -56,9 +60,9 @@ function getRelativeDate(dateString: string): string {
   <meta property="og:title" content={title} />
   <meta property="og:description" content={data.summary || title} />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://devonmeadows.com/" />
+  <meta property="og:url" content={`${origin}/`} />
   <meta property="og:site_name" content="Commune" />
-  <meta property="og:image" content="https://devonmeadows.com/og-image.jpg" />
+  <meta property="og:image" content={`${origin}/og-image.jpg`} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
 
@@ -66,7 +70,7 @@ function getRelativeDate(dateString: string): string {
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content={title} />
   <meta name="twitter:description" content={data.summary || title} />
-  <meta name="twitter:image" content="https://devonmeadows.com/og-image.jpg" />
+  <meta name="twitter:image" content={`${origin}/og-image.jpg`} />
 
   <!-- Author -->
   <meta name="author" content="Devon Meadows" />
@@ -81,34 +85,34 @@ function getRelativeDate(dateString: string): string {
         "@type": "Article",
         "headline": title,
         "description": data.summary || title,
-        "image": "https://devonmeadows.com/og-image.jpg",
+        "image": `${origin}/og-image.jpg`,
         "author": {
           "@type": "Person",
           "name": data.author || 'Devon Meadows',
-          "url": "https://devonmeadows.com/"
+          "url": `${origin}/`
         },
         "datePublished": `${data.created || data.updated}T00:00:00-07:00`,
         "dateModified": `${data.updated || data.created}T00:00:00-07:00`,
-        "url": "https://devonmeadows.com/",
+        "url": `${origin}/`,
         "isPartOf": {
-          "@id": "https://devonmeadows.com/#website"
+          "@id": `${origin}/#website`
         }
       },
       {
         "@type": "WebSite",
-        "@id": "https://devonmeadows.com/#website",
-        "url": "https://devonmeadows.com/",
+        "@id": `${origin}/#website`,
+        "url": `${origin}/`,
         "name": "Commune",
         "description": data.summary || "Devon Meadows' working brain in public",
         "author": {
-          "@id": "https://devonmeadows.com/#person"
+          "@id": `${origin}/#person`
         }
       },
       {
         "@type": "Person",
-        "@id": "https://devonmeadows.com/#person",
+        "@id": `${origin}/#person`,
         "name": "Devon Meadows",
-        "url": "https://devonmeadows.com/",
+        "url": `${origin}/`,
         "description": "Builder of Commune. Dad. Thinker. Tinkerer."
       }
     ]
