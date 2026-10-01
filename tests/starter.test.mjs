@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const exec = promisify(execFile);
 const copier = fileURLToPath(new URL('../scripts/create-wiki.mjs', import.meta.url));
 const source = fileURLToPath(new URL('../examples/starter/', import.meta.url));
+const root = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 async function sandbox(t) {
   const directory = await mkdtemp(path.join(tmpdir(), 'commune-starter-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -22,7 +23,10 @@ test('starter copies from an unrelated cwd, including dotfiles and only publishe
   assert.match(stdout, /No dependencies were installed/);
   const destination = path.join(cwd, 'a wiki');
   const manifest = JSON.parse(await readFile(path.join(destination, 'package.json'), 'utf8'));
-  assert.match(manifest.dependencies['@dmthepm/commune'], /^\^\d+\.\d+\.\d+$/);
+  // Pinned to this release. release-please rewrites it in the release PR
+  // (release-please-config.json, extra-files), so a starter copied from any
+  // tag installs the engine that tag describes.
+  assert.equal(manifest.dependencies['@dmthepm/commune'], root.version);
   assert.match(manifest.dependencies.astro, /^\^?7\./);
   assert.equal(manifest.license, 'MIT');
   for (const dependency of Object.values(manifest.dependencies)) assert.doesNotMatch(dependency, /file:|link:|workspace:|\.\.\//);
@@ -60,6 +64,11 @@ test('published starter installs, builds, and passes semantic link/privacy check
   skip: process.env.COMMUNE_STARTER_INSTALL !== '1' && 'Set COMMUNE_STARTER_INSTALL=1 to exercise the npm registry',
   timeout: 240_000,
 }, async t => {
+  // In a release pull request the starter already pins the version that
+  // merging will publish, so the registry cannot serve it yet. The release
+  // workflow's own test run covers that tag after it is published.
+  const { stdout: published } = await exec('npm', ['view', `@dmthepm/commune@${root.version}`, 'version']).catch(() => ({ stdout: '' }));
+  if (!published.trim()) return t.skip(`@dmthepm/commune@${root.version} is not on npm yet`);
   const cwd = await sandbox(t);
   await exec(process.execPath, [copier, 'wiki'], { cwd });
   const options = { cwd: path.join(cwd, 'wiki'), timeout: 180_000, maxBuffer: 8 * 1024 * 1024 };

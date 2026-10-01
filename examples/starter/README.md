@@ -1,6 +1,6 @@
 # Your Commune wiki
 
-A small, editable wiki on the published **@dmthepm/commune** package (0.5.2 or newer) and **Astro 7**. Three public notes link to one another. One update records the beginning. The package supplies sliding panes, backlinks, markdown sources, static search, and the Commune design system. The starter owns the routes and a generic header.
+A small, editable wiki on the published **@dmthepm/commune** package and **Astro 7**. Three public notes link to one another. One update records the beginning. The package supplies sliding panes, backlinks, markdown sources, static search, and the Commune design system. The starter owns the routes and a generic header.
 
 ## Start locally
 
