@@ -2,17 +2,21 @@
 
 Keep your thinking connected.
 
-Commune helps you maintain a personal wiki from markdown notes and dictated thoughts. Its CLI finds connections while you write. Optional agent skills capture a dump, ask a short round of questions, draft a revision for your review and ship on your word. Its Astro engine publishes linked notes with backlinks and a markdown twin of every page. MIT. It runs [devon.md](https://devon.md).
+Commune turns a folder of markdown notes into a personal wiki. Linked notes open side by side in sliding panes, each page lists what links to it, and every page has a markdown twin at the same address ending in `.md`. A CLI queries the link graph while you write. Optional agent skills turn a dictated dump into a revision you review. MIT. It runs [devon.md](https://devon.md).
 
-- **See it.** Explore [devon.md](https://devon.md).
-- **Start a wiki.** Copy the starter below. You need Node 22.12 or newer, npm and Git.
-- **Report a first run.** [Tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
+![Following links on devon.md. Hovering a link shows a preview, and clicking opens the note in a pane beside the last one.](docs/media/panes.gif)
 
-**Status on September 8, 2026.** Commune runs Devon's personal wiki. A timed install on another machine, an outside author's return edit, and an end to end run with the installed authoring skills are still unproven. The [launch checklist](docs/launch/README.md) lists the evidence still owed.
+Start a wiki in one paste. You need Node 22.12 or newer, npm and Git.
+
+```bash
+git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev
+```
+
+Open the address Astro prints. The clone is only the source of the copy, and you can delete it afterward. If you stop or have to guess, [tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
 
 ## Start a wiki
 
-The starter is a separate project on the published package. Pick a new folder for it.
+The starter is a separate project on the published package. Step by step, with a build and a check of the sample content before the dev server.
 
 ```bash
 git clone https://github.com/dmthepm/commune-wiki.git
