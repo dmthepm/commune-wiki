@@ -49,7 +49,7 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
 
 4. **Build and gate.** The wiki's `build` script, run with the package manager
    its lockfile names (`package-lock.json` npm, `pnpm-lock.yaml` pnpm,
-   `yarn.lock` yarn), never `astro build` by hand: the wiki's
+   `yarn.lock` yarn, `bun.lock` bun), never `astro build` by hand: the wiki's
    script carries its lifecycle hooks (devon-wiki's `prebuild` unshallows the
    clone so dates are real). If the script does not end in `commune gate`, run
    `$COMMUNE gate` after it. `gate` reads
