@@ -1,8 +1,8 @@
 # Launch evidence checklist
 
-Status on September 8, 2026. This is a checklist for gathering evidence, not a record of completed installs or a posting schedule. The working demonstration is [devon.md](https://devon.md). First-run feedback already has a home. [Tell me where it broke (#85)](https://github.com/dmthepm/commune-wiki/issues/85).
+Status on September 8, 2026. This is a checklist for gathering evidence, not a record of completed installs. The working demonstration is [devon.md](https://devon.md). First-run feedback already has a home. [Tell me where it broke (#85)](https://github.com/dmthepm/commune-wiki/issues/85).
 
-## Before broader distribution
+## Proof still owed
 
 - [ ] Verify the [starter](../../examples/starter/README.md) from the public instructions and a publicly available revision. It must install the published Commune package without local `file:` dependencies, build two linked public notes, and provide working panes, return navigation, backlinks and markdown sources.
 - [ ] **Timed other machine proof, still owed.** Have someone follow those instructions on a machine other than Devon’s, with no inherited project dependencies or private configuration. Record OS, Node, package manager, Astro and Commune versions, source revision, prerequisite setup time, wiki setup time, exact steps, help needed, and the resulting page. Preserve failed attempts too. The launch gate is two linked notes built within ten minutes after the stated prerequisites are ready. Ten minutes is the acceptance target, not a measured install claim. A fresh directory, CI run or local fixture alone does not satisfy this gate.
@@ -46,11 +46,3 @@ A completed receipt records what happened. Do not fill missing fields with assum
 - [ ] Open a sample wiki in Obsidian, edit a note, rebuild and compare links. Follow with a real-size wiki trial before broader compatibility claims.
 - [ ] Test an upgrade from the initial starter package version to the next release and document any migration steps.
 - [ ] Before calling commune.md a live second consumer, verify its deployed site, public source, dependency and component imports. Audit devon.md’s imports before making a “zero copied engine code” claim.
-
-## Distribution and follow-up
-
-Recheck the current rules of each destination immediately before posting. Keep affiliation clear. Where a community requires original human writing, Devon must write the post himself. No public posts, messages, issue changes or deployments are authorized by this checklist alone.
-
-Ask for one observable action. Build two linked notes, follow and return through panes, or report the first unclear step. Accept feedback in its originating thread and link reproducible failures to #85 or a focused issue. Never ask friends for stars or manufacture votes, testimonials, usage or install times. The shared build and CLI resolver reduces duplicated logic. It cannot promise links never drift or break. Existing package keywords already include `astro-integration` and `withastro`. Check discovery before proposing metadata work.
-
-Track voluntary attempted installs, completed builds, first edits and return edits separately from stars. Keep unmeasured conversion rates and channel reach marked unknown. Review failures before expanding distribution. After ten reported attempts, if fewer than three complete, pause new distribution and repair onboarding. If a moderator rejects a post, stop that channel rather than reposting through another account.
