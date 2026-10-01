@@ -47,7 +47,9 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    that sentence is the human's — dictated or edited by them — and `true` when
    you wrote it and they only approved. Show them the sentence.
 
-4. **Build and gate.** `pnpm run build`, never `astro build` by hand: the wiki's
+4. **Build and gate.** The wiki's `build` script, run with the package manager
+   its lockfile names (`package-lock.json` npm, `pnpm-lock.yaml` pnpm,
+   `yarn.lock` yarn, `bun.lock` bun), never `astro build` by hand: the wiki's
    script carries its lifecycle hooks (devon-wiki's `prebuild` unshallows the
    clone so dates are real). If the script does not end in `commune gate`, run
    `$COMMUNE gate` after it. `gate` reads

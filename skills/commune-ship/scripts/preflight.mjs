@@ -32,7 +32,9 @@ const execFileAsync = promisify(execFile);
 
 /** The release that ships `render`, `--unreferenced` and normalised `related`. */
 const MIN = '0.4.0';
-const FIX = 'Install or update the engine: pnpm add @dmthepm/commune@latest';
+/** The wiki's own package manager, read from its lockfile. The starter uses npm. */
+const ADD = existsSync('pnpm-lock.yaml') ? 'pnpm add' : existsSync('yarn.lock') ? 'yarn add' : existsSync('bun.lock') || existsSync('bun.lockb') ? 'bun add' : 'npm install';
+const FIX = `Install or update the engine: ${ADD} @dmthepm/commune@latest`;
 const SCHEMA = 1;
 
 const USAGE = `commune skills preflight — check the wiki's installed engine before a skill runs
