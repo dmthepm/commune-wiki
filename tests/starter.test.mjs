@@ -64,6 +64,11 @@ test('published starter installs, builds, and passes semantic link/privacy check
   skip: process.env.COMMUNE_STARTER_INSTALL !== '1' && 'Set COMMUNE_STARTER_INSTALL=1 to exercise the npm registry',
   timeout: 240_000,
 }, async t => {
+  // In a release pull request the starter already pins the version that
+  // merging will publish, so the registry cannot serve it yet. The release
+  // workflow's own test run covers that tag after it is published.
+  const { stdout: published } = await exec('npm', ['view', `@dmthepm/commune@${root.version}`, 'version']).catch(() => ({ stdout: '' }));
+  if (!published.trim()) return t.skip(`@dmthepm/commune@${root.version} is not on npm yet`);
   const cwd = await sandbox(t);
   await exec(process.execPath, [copier, 'wiki'], { cwd });
   const options = { cwd: path.join(cwd, 'wiki'), timeout: 180_000, maxBuffer: 8 * 1024 * 1024 };
