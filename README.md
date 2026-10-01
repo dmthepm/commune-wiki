@@ -316,7 +316,7 @@ The skills install for Claude Code and Codex, globally or into one project. They
 
 On the author's instruction, `commune-ship` compares finding identities against the baseline, files an update, builds, gates and verifies each new href and destination file. It commits according to `WRITING.md`'s `dumps.commit` policy, opens a PR and records the receipt in `dumps/<slug>.ship.md`. The author approves the content. This skill never merges. That boundary governs authored content, while code maintenance follows the repository's contribution rules.
 
-The four skills, their tests and the `WRITING.md` template ship today. The loop was run once end to end by hand before the skills existed. An end-to-end run using the installed skills remains unverified.
+The four skills, their tests and the `WRITING.md` template ship today. An end to end run of the installed skills on a fresh starter wiki, from dictation to a gated commit, passed on October 1, 2026. Pushing and opening the pull request were not part of that run.
 
 ## Files and publishing
 
