@@ -2,8 +2,6 @@
 
 Status on September 8, 2026. This is a checklist for gathering evidence, not a record of completed installs or a posting schedule. The working demonstration is [devon.md](https://devon.md). First-run feedback already has a home. [Tell me where it broke (#85)](https://github.com/dmthepm/commune-wiki/issues/85).
 
-The adoption research is kept separately in [docs/research/2026-09-08-commune-adoption](../research/2026-09-08-commune-adoption/). This checklist does not replace that research.
-
 ## Before broader distribution
 
 - [ ] Verify the [starter](../../examples/starter/README.md) from the public instructions and a publicly available revision. It must install the published Commune package without local `file:` dependencies, build two linked public notes, and provide working panes, return navigation, backlinks and markdown sources.
