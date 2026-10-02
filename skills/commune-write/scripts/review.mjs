@@ -101,20 +101,32 @@ function candidates(text) {
 	for (const line of frontmatter(text).split('\n')) {
 		const key = /^([a-z_]+):/.exec(line);
 		if (key) current = wanted.includes(key[1]) ? key[1] : null;
-		else if (current && line.trim().startsWith('-')) out.push(`${current}: ${line.trim().slice(1).trim()}`);
+		else if (current && line.trim().startsWith('-')) out.push({ kind: current, entry: line.trim().slice(1).trim() });
 	}
 	return out;
 }
 
-/** The newest `## Round N — questions` block, verbatim. */
-function questions(text) {
-	const blocks = text.split(/^## /m).filter((block) => /^Round \d+ — questions/.test(block));
-	const last = blocks.at(-1);
-	return last ? last.split('\n').slice(1).join('\n').trim() : '';
+/** One candidate as kind, target and sentence; the raw entry when it has another shape. */
+function candidate({ kind, entry }) {
+	const target = /(?:urlPath|phrase|file):\s*("?)([^,"}]+)\1/.exec(entry);
+	const sentence = /sentence:\s*"((?:[^"\\]|\\.)*)"/.exec(entry);
+	if (!target) return `<li><span class="kind">${escape(kind)}</span> ${escape(entry)}</li>`;
+	return `<li><span class="kind">${escape(kind)}</span> <code>${escape(target[2].trim())}</code>${sentence ? `<q>${escape(sentence[1])}</q>` : ''}</li>`;
 }
 
-function page({ file, base, original, draft, marginQuestions, marginCandidates, stylesheet }) {
-	const list = (items) => (items.length === 0 ? '<p class="empty">none</p>' : `<ul>${items.map((item) => `<li>${escape(item)}</li>`).join('')}</ul>`);
+/** The newest `## Round N — questions` block and, once given, its answers, verbatim. */
+function round(text) {
+	const blocks = text.split(/^## /m);
+	const body = (block) => block.split('\n').slice(1).join('\n').trim();
+	const asked = blocks.filter((block) => /^Round \d+ — questions/.test(block)).at(-1);
+	if (!asked) return '';
+	const n = /^Round (\d+)/.exec(asked)[1];
+	const answered = blocks.find((block) => new RegExp(`^Round ${n} — answers`).test(block));
+	return `#### Questions\n\n${body(asked)}${answered ? `\n\n#### Answers\n\n${body(answered)}` : ''}`;
+}
+
+function page({ file, base, original, draft, marginRound, marginCandidates, stylesheet }) {
+	const list = (items) => (items.length === 0 ? '<p class="empty">none</p>' : `<ul>${items.map(candidate).join('')}</ul>`);
 	return `<!doctype html>
 <html lang="en">
 <head>
@@ -136,8 +148,13 @@ ${stylesheet ? `<link rel="stylesheet" href="${escape(stylesheet)}">` : ''}
   .col { background: var(--c-bg-soft, #f8f9fa); border: 1px solid var(--c-border, #e5e5e5);
          border-radius: var(--c-radius-md, .75rem); padding: 1.25rem; overflow-wrap: anywhere; }
   .margin { position: sticky; top: 1.5rem; font-size: .85rem; }
-  .margin pre { white-space: pre-wrap; font: inherit; margin: 0 0 1rem; }
+  .margin .round { margin: 0 0 1rem; overflow-wrap: anywhere; }
+  .margin .round h4 { font-size: .8rem; margin: 1rem 0 .25rem; }
+  .margin .round p { margin: 0 0 .6rem; }
   .margin ul { padding-left: 1.1rem; margin: 0 0 1rem; }
+  .margin li { margin: 0 0 .6rem; }
+  .margin .kind { color: var(--c-text-muted, #6c757d); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+  .margin q { display: block; margin-top: .2rem; }
   .empty { color: var(--c-text-muted, #6c757d); margin: 0 0 1rem; }
 </style>
 </head>
@@ -151,7 +168,7 @@ ${stylesheet ? `<link rel="stylesheet" href="${escape(stylesheet)}">` : ''}
   <section><h2>Draft</h2><div class="col">${draft}</div></section>
   <aside class="margin">
     <h2>This round</h2>
-    ${marginQuestions ? `<pre>${escape(marginQuestions)}</pre>` : '<p class="empty">no questions yet</p>'}
+    ${marginRound ? `<div class="round">${marginRound}</div>` : '<p class="empty">no questions yet</p>'}
     <h2>Candidates</h2>
     ${list(marginCandidates)}
   </aside>
@@ -191,6 +208,9 @@ const original = before === null
 	? '<p><em>New file. Nothing at this ref to compare against.</em></p>'
 	: (await render(bin, before)).html;
 const draft = (await render(bin, readFileSync(file, 'utf8'))).html;
+// The round goes through the same renderer, so its wikilinks resolve the way the note's do.
+const roundText = options.answers && existsSync(options.answers) ? round(readFileSync(options.answers, 'utf8')) : '';
+const marginRound = roundText ? (await render(bin, roundText)).html : '';
 
 const stylesheets = [
 	'node_modules/@dmthepm/commune/src/styles/design-system.css',
@@ -204,7 +224,7 @@ writeFileSync(out, page({
 	base,
 	original,
 	draft,
-	marginQuestions: options.answers && existsSync(options.answers) ? questions(readFileSync(options.answers, 'utf8')) : '',
+	marginRound,
 	marginCandidates: options.connect && existsSync(options.connect) ? candidates(readFileSync(options.connect, 'utf8')) : [],
 	// Relative to the page, which lives in dumps/.
 	stylesheet: found ? path.relative(path.dirname(path.resolve(out)), path.resolve(found)) : null,
