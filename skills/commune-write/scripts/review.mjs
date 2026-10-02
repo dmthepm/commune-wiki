@@ -106,12 +106,39 @@ function candidates(text) {
 	return out;
 }
 
-/** One candidate as kind, target and sentence; the raw entry when it has another shape. */
+/**
+ * One connect entry, a one-level YAML flow mapping such as
+ * `{ phrase: "walks", sentence: "...", tense: present }`, as its fields; null
+ * for any other shape. Keys are read left to right, so text inside a quoted
+ * value can never be taken for a key.
+ */
+function fields(entry) {
+	const body = /^\{(.*)\}$/.exec(entry.trim());
+	if (!body) return null;
+	const pair = /\s*([A-Za-z_]+):\s*("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^,]*?)\s*(?:,|$)/y;
+	const out = {};
+	while (pair.lastIndex < body[1].length) {
+		const match = pair.exec(body[1]);
+		if (!match) return null;
+		let value = match[2];
+		if (value.startsWith('"')) {
+			try { value = JSON.parse(value); } catch { return null; }
+		} else if (value.startsWith("'")) value = value.slice(1, -1).replace(/''/g, "'");
+		out[match[1]] = value;
+	}
+	return out;
+}
+
+/** One candidate as kind, target, sentence and any other fields; the raw entry when it has another shape. */
 function candidate({ kind, entry }) {
-	const target = /(?:urlPath|phrase|file):\s*("?)([^,"}]+)\1/.exec(entry);
-	const sentence = /sentence:\s*"((?:[^"\\]|\\.)*)"/.exec(entry);
-	if (!target) return `<li><span class="kind">${escape(kind)}</span> ${escape(entry)}</li>`;
-	return `<li><span class="kind">${escape(kind)}</span> <code>${escape(target[2].trim())}</code>${sentence ? `<q>${escape(sentence[1])}</q>` : ''}</li>`;
+	const label = `<span class="kind">${escape(kind)}</span>`;
+	const parsed = fields(entry);
+	const target = parsed && (parsed.urlPath ?? parsed.phrase ?? parsed.file);
+	if (!target) return `<li>${label} ${escape(entry)}</li>`;
+	const rest = Object.entries(parsed)
+		.filter(([key]) => !['urlPath', 'phrase', 'file', 'sentence', 'tense'].includes(key))
+		.map(([key, value]) => `${key} ${value}`);
+	return `<li>${label} <code>${escape(target)}</code>${rest.length ? ` <small>${escape(rest.join(', '))}</small>` : ''}${parsed.sentence ? `<q>${escape(parsed.sentence)}</q>` : ''}</li>`;
 }
 
 /** The newest `## Round N — questions` block and, once given, its answers, verbatim. */
@@ -210,7 +237,9 @@ const original = before === null
 const draft = (await render(bin, readFileSync(file, 'utf8'))).html;
 // The round goes through the same renderer, so its wikilinks resolve the way the note's do.
 const roundText = options.answers && existsSync(options.answers) ? round(readFileSync(options.answers, 'utf8')) : '';
-const marginRound = roundText ? (await render(bin, roundText)).html : '';
+// The engine passes raw HTML through, and a round quotes pasted dump text, so
+// every `<` is made literal before rendering. Markdown and wikilinks still render.
+const marginRound = roundText ? (await render(bin, roundText.replace(/</g, '&lt;'))).html : '';
 
 const stylesheets = [
 	'node_modules/@dmthepm/commune/src/styles/design-system.css',
