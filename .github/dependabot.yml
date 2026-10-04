@@ -44,6 +44,14 @@ updates:
         update-types:
           - minor
           - patch
+    # `@types/node` describes the Node the package runs on, and that is the
+    # floor in `.nvmrc` and `engines` (22), not the newest Node. Types for a
+    # later major type-check calls that do not exist on 22, so its majors move
+    # by hand when the floor moves, and only minor and patch arrive here.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
 
   # The workflows' own actions — `actions/checkout`, `pnpm/action-setup`,
   # `actions/setup-node`, `googleapis/release-please-action`. These are pinned
