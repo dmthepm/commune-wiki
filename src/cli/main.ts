@@ -22,6 +22,7 @@ import { parseRecent, queryCommand, type QueryFilters } from './query.ts';
 import { checkCommand } from './check.ts';
 import { gateCommand } from './gate.ts';
 import { relatedCommand } from './related.ts';
+import { renameCommand } from './rename.ts';
 import { updateCommand } from './update.ts';
 import { COMMAND_USAGE, USAGE } from './usage.ts';
 import { readVersion } from './version.ts';
@@ -55,13 +56,19 @@ const RENDER_OPTIONS: ParseArgsOptionsConfig = {
 	site: { type: 'string' },
 };
 
+const RENAME_OPTIONS: ParseArgsOptionsConfig = {
+	...GLOBAL,
+	'move-url': { type: 'boolean', default: false },
+	'dry-run': { type: 'boolean', default: false },
+};
+
 const GATE_OPTIONS: ParseArgsOptionsConfig = {
 	...GLOBAL,
 	dist: { type: 'string' },
 };
 
 /** Every route, longest first, so `graph query` is matched before a bare `graph`. */
-const ROUTES = ['graph query', 'graph related', 'check', 'gate', 'update', 'render'];
+const ROUTES = ['graph query', 'graph related', 'check', 'gate', 'update', 'render', 'rename'];
 
 interface Route {
 	name: string;
@@ -242,6 +249,27 @@ async function dispatch(args: string[]): Promise<number> {
 				resolveRecent(values.recent as string, usage)!,
 				today(),
 				values.write as boolean,
+				values.json as boolean
+			);
+		}
+		case 'rename': {
+			const { values, positionals } = parseStrict(rest, RENAME_OPTIONS, true, usage);
+			if (values.help) {
+				process.stdout.write(`${usage}\n`);
+				return EXIT_OK;
+			}
+			if (positionals.length !== 2) {
+				throw usageError(
+					`rename takes <from> and <to>, got ${positionals.length}${positionals.length ? `: ${positionals.join(' ')}` : ''}. A path containing spaces has to be quoted.`,
+					usage
+				);
+			}
+			return renameCommand(
+				await resolveRoot(values.root as string | undefined),
+				positionals[0],
+				positionals[1],
+				values['move-url'] as boolean,
+				values['dry-run'] as boolean,
 				values.json as boolean
 			);
 		}

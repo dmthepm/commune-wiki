@@ -7,6 +7,7 @@ Usage:
   commune [--root <dir>] graph related <path|text|-> [--json]
   commune [--root <dir>] render        <path|-> [--site <origin>] [--json]
   commune [--root <dir>] update        [--recent <duration|date>] [--write] [--json]
+  commune [--root <dir>] rename        <from> <to> [--move-url] [--dry-run] [--json]
   commune [--root <dir>] check         [--json]
   commune [--root <dir>] gate          [--dist <dir>] [--json]
   commune --version
@@ -40,11 +41,21 @@ update options:
   --write                       Write src/content/updates/<today>.md. Without it,
                                 the entry is printed on stdout. Never overwrites.
 
+rename options:
+  <from> <to>    Paths relative to --root, for example
+                 "src/content/notes/Old.md" "src/content/notes/New.md". <to> must
+                 stay inside <from>'s collection and must not exist.
+  --move-url     Let the URL follow the new name and write 301s to
+                 public/_redirects. Without it the URL stays: a slug: pin holding
+                 the old slug is added when the new name would move it.
+  --dry-run      Print the plan (the move, every line changed, the URL decision)
+                 and write nothing.
+
 gate options:
   --dist <dir>   The built site to check, relative to --root. Default: dist.
 
 Exit codes:
-  0  finished, findings or not
+  0  finished, findings or not (a dry run included)
   1  could not finish
   2  invalid invocation
 
@@ -71,6 +82,18 @@ resolved against the content tree and external links marked. Frontmatter is
 split off and not rendered. --json adds the links the document contains and
 the names among them that resolve to nothing — which the HTML cannot tell
 you, since an unresolved WikiLink renders as plain text.`,
+	rename: `Usage: commune [--root <dir>] rename <from> <to> [--move-url] [--dry-run] [--json]
+
+Rename a note and rewrite every link to it: wikilinks (with labels, headings,
+block refs and embeds), relative file links, and frontmatter links. Links spelled
+through an alias are left alone, since the alias still resolves. Code is never
+touched. The only safe way to rename a note: mv, git mv and editors leave every
+link to the old name broken.
+
+By default the URL stays. --move-url lets it follow the name and writes 301
+redirects to public/_redirects. Refuses if <to> exists, if <from> is not a
+content entry, if <to> leaves the collection, or if the new name would collide
+with another entry's title or alias.`,
 	check: 'Usage: commune [--root <dir>] check [--json]',
 	gate: `Usage: commune [--root <dir>] gate [--dist <dir>] [--json]
 

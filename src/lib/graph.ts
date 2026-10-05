@@ -612,7 +612,7 @@ function extractFrontmatterLinks(frontmatter: Record<string, unknown>): Extracte
 }
 
 /** A wikilink or embed, capturing the target and discarding any display text. */
-const WIKILINK = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+export const WIKILINK = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
 
 /**
  * A markdown link or image, capturing the destination.
@@ -621,7 +621,7 @@ const WIKILINK = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
  * followed by a title in quotes. Link text is `[^\]]*` rather than `[^\]]+`
  * because an image embed can legitimately carry no alt text.
  */
-const MARKDOWN_LINK = /!?\[[^\]]*\]\(\s*(<[^>]*>|[^()\s]+)(?:\s+"[^"]*")?\s*\)/g;
+export const MARKDOWN_LINK = /!?\[[^\]]*\]\(\s*(<[^>]*>|[^()\s]+)(?:\s+"[^"]*")?\s*\)/g;
 
 /**
  * Turn a markdown link destination into an edge, or nothing if it leaves the site.
