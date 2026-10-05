@@ -60,6 +60,14 @@ export interface ContentEntry {
 	title: string;
 	collection: CollectionName;
 	aliases: string[];
+	/**
+	 * Extra URLs this entry also renders at, from `routes:` frontmatter.
+	 *
+	 * Each is in the form `toUrlPath` returns, already validated. The entry
+	 * keeps one identity, `urlPath`: the graph has one node for it, and a page
+	 * at a route points `rel=canonical` back at `urlPath`.
+	 */
+	routes: string[];
 	tags: string[];
 	status: string;
 	summary?: string;
@@ -151,6 +159,65 @@ export function toUrlPath(
 	// `/notes/<slug>/index.html`, and the client-side graph lookups key off the
 	// pathname the browser actually reports.
 	return { slug, urlPath: `/${collection}/${slug}/` };
+}
+
+/**
+ * Validate one `routes:` value and return it in the form `toUrlPath` returns.
+ *
+ * Throws rather than repairs. A route is an address the author chose, and
+ * quietly turning `/about` into `/about/` or `/a/../b/` into `/b/` would put a
+ * page somewhere the frontmatter does not say. The error names the spelling
+ * that would have been accepted, so the fix is one edit.
+ *
+ * The accepted form is the one every canonical URL has: `/` for the home page,
+ * otherwise a leading and a trailing slash with no empty, `.` or `..` segment.
+ * Traversal is rejected for the reason `toMarkdownPath` rejects it, since the
+ * build writes a file at each route.
+ */
+export function toRoutePath(value: unknown): string {
+	if (typeof value !== 'string') {
+		throw new Error(`a route must be a string, got ${JSON.stringify(value)}`);
+	}
+	if (!value.startsWith('/')) {
+		throw new Error(`route ${JSON.stringify(value)} must be a site-absolute path starting with "/"`);
+	}
+
+	const segments = value.split('/').filter((segment) => segment.length > 0);
+	if (segments.some((segment) => segment === '.' || segment === '..')) {
+		throw new Error(`route ${JSON.stringify(value)} must not contain "." or ".." segments`);
+	}
+	if (segments.some((segment) => !/^[A-Za-z0-9._~-]+$/.test(segment))) {
+		throw new Error(
+			`route ${JSON.stringify(value)} must be a plain path: each segment may use only letters, digits and . _ ~ -`
+		);
+	}
+
+	const normalized = segments.length === 0 ? '/' : `/${segments.join('/')}/`;
+	if (normalized !== value) {
+		throw new Error(`route ${JSON.stringify(value)} must be written as ${JSON.stringify(normalized)}`);
+	}
+	return normalized;
+}
+
+/**
+ * The absolute URL a page at an alias route names in `<link rel="canonical">`.
+ *
+ * `site` is Astro's `Astro.site`. Takes the entry's canonical `urlPath`, never
+ * the route the page is being served at: the point of `rel=canonical` is that
+ * every address of one entry agrees on a single answer.
+ *
+ * Throws when `site` is not set, because `new URL` would otherwise fail with
+ * "Invalid URL" and nothing to say which config line is missing. A `base` path
+ * is not supported: `urlPath` is resolved against the origin, so a site served
+ * under `/wiki/` would get a canonical URL without it.
+ */
+export function toCanonicalUrl(urlPath: string, site: string | URL | undefined): string {
+	if (!site) {
+		throw new Error(
+			'toCanonicalUrl needs `site`: set `site` in the Astro config so Astro.site is defined'
+		);
+	}
+	return new URL(urlPath, site).href;
 }
 
 /**
@@ -330,6 +397,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 				title: (data.title as string) || slug,
 				collection,
 				aliases: (data.aliases as string[]) || [],
+				routes: readRoutes(data, file),
 				tags: (data.tags as string[]) || [],
 				status: (data.status as string) || 'seed',
 				...(summary ? { summary } : {}),
@@ -342,6 +410,22 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 	}
 
 	return entries;
+}
+
+/** The validated `routes:` of one file, with the file named in any error. */
+function readRoutes(data: Record<string, unknown>, file: string): string[] {
+	if (data.routes === undefined || data.routes === null) return [];
+	if (!Array.isArray(data.routes)) {
+		throw new Error(`${file}: routes must be a list of site paths, e.g. routes: ["/"]`);
+	}
+	const routes = data.routes.map((value) => {
+		try {
+			return toRoutePath(value);
+		} catch (error) {
+			throw new Error(`${file}: ${(error as Error).message}`, { cause: error });
+		}
+	});
+	return [...new Set(routes)];
 }
 
 /**
@@ -390,9 +474,24 @@ export function buildLinkLookup(entries: ContentEntry[]): Map<string, LinkTarget
  * Separate from the title/alias lookup on purpose. A path and a title are
  * different namespaces, and mixing them is what let `/notes/atomic-notes`
  * resolve through an alias rather than through the route it actually names.
+ *
+ * An entry's `routes` resolve to the entry too, so a link to `/start/` reaches
+ * the note that renders there, and the edge lands on the one node at its
+ * canonical URL. Canonical URLs go in last, so a route can never take over
+ * another entry's own address; `route-collision` reports that case.
  */
 export function buildUrlLookup(entries: ContentEntry[]): Map<string, LinkTarget> {
 	const lookup = new Map<string, LinkTarget>();
+
+	for (const entry of entries) {
+		for (const route of entry.routes) {
+			lookup.set(route, {
+				slug: entry.slug,
+				collection: entry.collection,
+				urlPath: entry.urlPath,
+			});
+		}
+	}
 
 	for (const entry of entries) {
 		lookup.set(entry.urlPath, {
@@ -528,7 +627,7 @@ export interface ExtractedLink {
 }
 
 /** Frontmatter keys whose values are vocabulary, not links. */
-const NON_LINK_KEYS = new Set(['aliases', 'tags']);
+const NON_LINK_KEYS = new Set(['aliases', 'tags', 'routes']);
 
 /**
  * Frontmatter keys whose strings are link targets in their own right.
@@ -814,7 +913,8 @@ export type DiagnosticRule =
 	| 'ambiguous-target'
 	| 'duplicate-name'
 	| 'noncanonical-title'
-	| 'broken-anchor';
+	| 'broken-anchor'
+	| 'route-collision';
 
 /**
  * One finding, as data.
@@ -1233,6 +1333,83 @@ export function findDuplicateNames(entries: ContentEntry[]): Diagnostic[] {
 	return diagnostics;
 }
 
+/**
+ * The key two URLs collide on: the file the build writes for them.
+ *
+ * Compared by `toMarkdownPath` rather than by the URL string, since that is
+ * what actually clashes. `/` and `/index/` are different strings and the same
+ * `index.md`, and a page whose `url` lacks its trailing slash is still the
+ * same page as the route that has one. A path `toMarkdownPath` refuses keeps
+ * its own spelling, so it can still collide with itself.
+ */
+function twinKey(urlPath: string): string {
+	try {
+		return toMarkdownPath(urlPath);
+	} catch {
+		return urlPath;
+	}
+}
+
+/**
+ * Routes that land on an address something else already owns.
+ *
+ * A route collides with another entry's canonical URL or with another entry's
+ * route when both map to the same twin file (see `twinKey`). Either way two
+ * entries would write the same page and the same `.md`, and the build refuses
+ * it. Reported once per contested address, against the first entry that
+ * declares a route there, since that is the line to change. Two entries whose
+ * canonical URLs alone collide are not this rule's business.
+ *
+ * An entry repeating its own canonical URL as a route is not a collision, only
+ * redundant, and `loadContentEntries` has already dropped repeats within one
+ * entry.
+ */
+export function findRouteCollisions(entries: ContentEntry[]): Diagnostic[] {
+	const claims = new Map<string, { entry: ContentEntry; route?: string }[]>();
+	const claim = (key: string, entry: ContentEntry, route?: string) => {
+		const list = claims.get(key) ?? [];
+		// A route is a distinct claim only when it is not the entry's own
+		// address; the second route at one address is the entry agreeing with
+		// itself.
+		if (!list.some((existing) => existing.entry === entry)) {
+			list.push({ entry, ...(route !== undefined ? { route } : {}) });
+		}
+		claims.set(key, list);
+	};
+
+	for (const entry of entries) {
+		const own = twinKey(entry.urlPath);
+		claim(own, entry);
+		for (const route of entry.routes) {
+			if (twinKey(route) !== own) claim(twinKey(route), entry, route);
+		}
+	}
+
+	const diagnostics: Diagnostic[] = [];
+
+	for (const list of claims.values()) {
+		if (list.length < 2) continue;
+		const declared = list.filter((claimant) => claimant.route !== undefined);
+		if (declared.length === 0) continue;
+
+		const [first] = declared;
+		const urls = list.map(({ entry }) => entry.urlPath).sort();
+		diagnostics.push({
+			rule: 'route-collision',
+			severity: 'error',
+			file: first.entry.file,
+			urlPath: first.entry.urlPath,
+			target: first.route,
+			candidates: urls,
+			message: `${first.entry.urlPath} declares the route ${first.route}, which ${list.length} entries answer to (${urls.join(
+				', '
+			)}) and which would write the same markdown twin`,
+		});
+	}
+
+	return diagnostics;
+}
+
 /** Keep the first item per key, so an entry cannot collide with itself. */
 function distinct<T>(items: T[], key: (item: T) => string): T[] {
 	const seen = new Set<string>();
@@ -1377,5 +1554,10 @@ const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
  * that has to render pages, so `check` adds it after this, with `findBrokenAnchors`.
  */
 export function checkEntries(entries: ContentEntry[], graph: Graph): Diagnostic[] {
-	return [...graph.diagnostics, ...findDuplicateNames(entries), ...findNoncanonicalTitles(entries)];
+	return [
+		...graph.diagnostics,
+		...findDuplicateNames(entries),
+		...findNoncanonicalTitles(entries),
+		...findRouteCollisions(entries),
+	];
 }

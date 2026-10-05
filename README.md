@@ -133,6 +133,7 @@ That route is a starting point, not an interface. The package ships the mechanis
 - **Heading links.** `[[Title#Some heading]]` lands on that heading: the link ends in `#some-heading`, the same id every heading on the page is given. `[[#Some heading]]` links within the page it is written on. Write the title verbatim, as for any link: `check` and `gate` report `[[beta#Intro]]`, an alias, or a label on a heading link, so there is no `[[Title#Heading|label]]`. Block references (`[[Title^id]]`) are not supported: they link to the note and no further, and neither do embeds (`![[Title#Heading]]`). Type the heading as it reads, since a percent-encoded heading in the brackets is not decoded. `check` warns with `broken-anchor` when `[[Title#Heading]]` names a note that has no such heading, and reads `[[#Heading]]` against its own note. It reads the ids off the page rendered by the same processor as `commune render`, so any heading the page gives an id counts. When two headings in a note share a name, the link reaches the first, and `check` treats it as found. A heading named "Main" takes the id `main`, which the layout's `<main>` already uses, so a link to it lands on the layout instead.
 - **Backlinks.** The build writes `backlinks.json` — every entry with its inbound and outbound edges — to `dist/` and `public/`. `Backlinks.astro` renders it on a page.
 - **Markdown twins.** Every published content entry gets its source written beside it, so `/notes/hello/` also answers at `/notes/hello.md`. Entries in the content directories only — a hand-written route under `src/pages/` has no source file to twin. Agents and readers get the same document without scraping HTML.
+- **Alias routes.** An entry can also render at other URLs, such as the home note at `/`. See [Alias routes](#alias-routes) below.
 - **External links.** Anything off your `site` origin gets `target="_blank" rel="noopener noreferrer"` without you marking it up.
 - **The graph as a library.** `@dmthepm/commune/graph` exports the content loader, the link resolver and the graph builder. The Astro build and the CLI both call it. Sharing the resolver reduces duplicated link logic; it does not guarantee that links never break.
 - **Updates.** A fourth collection, `src/content/updates/`, for the dated entries that say what changed. `Updates.astro` renders the newest few as a card. See [Updates](#updates) below.
@@ -190,6 +191,54 @@ On **Cloudflare Workers Builds**, check the build log for the warning above — 
 ```
 
 It is a sibling of `backlinks.json` rather than a key inside it, because every top-level key of `backlinks.json` is a urlPath and its readers walk it as one. Generated, not committed: a date derived from history changes on the same commit that changes it, so a committed copy would be stale exactly when it mattered. Add `public/site.json` to your `.gitignore`.
+
+## Alias routes
+
+A note can render at more than one URL. The usual case is a home note that lives at `/notes/my-working-notes/` and is also the front page at `/`. Declare the extra URLs in frontmatter:
+
+```yaml
+---
+title: "My Working Notes"
+routes: ["/"]
+---
+```
+
+The key is `routes`, not `aliases`. `aliases` already means the other names a `[[WikiLink]]` resolves to, and a name is not an address. Keeping the two apart means neither has to guess which one a value is.
+
+Each route has to be a site-absolute path in the form every canonical URL has: `/` for the home page, otherwise a leading and a trailing slash, as in `/start/`, with only letters, digits and `. _ ~ -` in each segment. `/start`, `start/`, `/a/../b/`, a query string, a fragment, a space or a `%` stops the build with an error that names the file and, where there is one, the spelling that would have worked.
+
+What the engine does with a route:
+
+- **One node.** `backlinks.json` and `site.json` keep one entry for the note, at its canonical URL. A route is a second address, not a second note.
+- **A twin at each route.** The build writes the source file at `toMarkdownPath` of every route, so `routes: ["/"]` gives `/index.md` as well as `/notes/my-working-notes.md`. Both are the file, byte for byte. The dev server answers them too.
+- **Listed on the entry.** `commune graph query --json` returns `routes` on each entry, empty when there are none.
+- **Links resolve.** A markdown link to a route, `[start](/start/)`, reaches the note that renders there, and the edge lands on the one node at its canonical URL.
+- **Checked.** `commune check` reports `route-collision` when a route is another entry's URL, or when two entries declare the same route. Addresses are compared by the markdown twin they write, so `/` and `/index/` collide, and so do `/about/` and a page with `url: "/about"`. It is an error, because two entries would write the same file: the build refuses it with a message naming both files, the dev server refuses that `.md` request, `commune gate` fails, and `commune rename --move-url` will not create one.
+- **Warned when unrendered.** The build warns about a route that has no page in the output, since the engine writes the twin and not the page.
+
+The engine does not write the page at the route. Pages are yours, so the route is a page you write, and the one thing it has to get right is `rel=canonical`. Search engines treat two URLs with the same content as one page and pick a winner, and `rel=canonical` is how you pick it. `toCanonicalUrl` from `@dmthepm/commune/graph` builds the absolute URL from the entry's own `urlPath`, never from the route being served:
+
+```astro
+---
+// src/pages/index.astro
+import { getCollection, render } from 'astro:content';
+import { toCanonicalUrl, toMarkdownHref } from '@dmthepm/commune/graph';
+
+const notes = await getCollection('notes', (note) => note.data.visibility === 'public');
+const home = notes.find((note) => note.data.routes.includes('/'));
+if (!home) throw new Error('No public note declares routes: ["/"]');
+const { Content } = await render(home);
+---
+<head>
+  <link rel="canonical" href={toCanonicalUrl(`/notes/${home.id}/`, Astro.site)} />
+</head>
+<Content />
+<a href={toMarkdownHref('/')}>source</a>
+```
+
+The `visibility` filter matters: without it a private note that declares `routes: ["/"]` would be published at `/`. The `/notes/${home.id}/` URL is for the notes collection; an entry in another collection uses its own `urlPath`. `toCanonicalUrl` throws when `site` is not set in the Astro config, and it does not support a `base` path: the canonical URL is built against the origin alone.
+
+Add `routes: z.array(z.string()).default([])` to the collection schema so `note.data.routes` exists. [`tests/fixtures/consumer`](tests/fixtures/consumer/src/pages/index.astro) is this page, built in CI.
 
 ## Updates
 

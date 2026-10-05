@@ -36,6 +36,7 @@ import {
 	buildUrlLookup,
 	extractLinks,
 	findDuplicateNames,
+	findRouteCollisions,
 	linkKey,
 	loadContentEntries,
 	resolveLink,
@@ -609,6 +610,9 @@ export async function renameCommand(
 			title: (fm.title as string) || slug,
 			collection: fileCollection,
 			aliases: (fm.aliases as string[]) || [],
+			// Unpublished files are only here to be rewritten, and a draft's
+			// routes are not addresses anything resolves to.
+			routes: [],
 			tags: [],
 			status: 'seed',
 			updatedSource: 'none',
@@ -639,6 +643,20 @@ export async function renameCommand(
 				`renaming to ${to} would make links ambiguous. ${introduced.map((d) => d.message).join(' ')}`
 			);
 		}
+
+		// A moved URL can land on another note's route, or a note's route can
+		// now sit on the moved URL. Same test, run before and after.
+		const routeKey = (d: { target?: string }) => `${d.target}`;
+		const knownRoutes = new Set(findRouteCollisions(everyone).map(routeKey));
+		const collided = findRouteCollisions(everyone.map((e) => (e === subject ? renamed : e))).filter(
+			(d) => !knownRoutes.has(routeKey(d))
+		);
+		if (collided.length) {
+			throw failure(
+				'EREFUSED',
+				`renaming to ${to} would put two entries on one address. ${collided.map((d) => d.message).join(' ')}`
+			);
+		}
 	}
 
 	// Plan every edit in memory.
@@ -662,7 +680,10 @@ export async function renameCommand(
 		ambiguous: [],
 		isOurs(link, site) {
 			if (link.kind === 'url') {
-				return url.decision === 'moved' && byUrl.get(link.target)?.urlPath === oldUrl;
+				// Compared on the written path, not through the lookup: a link to
+				// one of this note's routes resolves to it too, and a route does
+				// not move when the note does.
+				return url.decision === 'moved' && link.target === oldUrl;
 			}
 			if (linkKey(link.target) !== stemKey) return false;
 

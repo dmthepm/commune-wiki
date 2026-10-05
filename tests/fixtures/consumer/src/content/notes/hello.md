@@ -1,6 +1,7 @@
 ---
 title: "Hello"
 visibility: "public"
+routes: ["/"]
 ---
 
 Hello links to [[World]], and out to [somewhere else](https://example.org/away)

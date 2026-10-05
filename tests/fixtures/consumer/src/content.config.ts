@@ -5,13 +5,14 @@ import { glob } from 'astro/loaders';
 // that still exercise it: `visibility` because notes opt in to being public,
 // `url` because that is how a page declares the route it renders at, and
 // `date`/`links` because an update is a dated thing that names what it rolls
-// up. The real engine's schemas carry a dozen more fields; none of them change
+// up, and `routes` because a note can also render at another URL. The real engine's schemas carry a dozen more fields; none of them change
 // a link.
 const notes = defineCollection({
 	loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/notes' }),
 	schema: z.object({
 		title: z.string(),
 		visibility: z.enum(['public', 'private', 'draft']).default('private'),
+		routes: z.array(z.string()).default([]),
 	}),
 });
 

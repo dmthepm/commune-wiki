@@ -67,6 +67,8 @@ export interface QueryEntry {
 	tags: string[];
 	status: string;
 	aliases: string[];
+	/** Extra URLs the entry also renders at. `urlPath` stays its one canonical address. */
+	routes: string[];
 	updated?: string;
 	/** Where `updated` came from: frontmatter, git history, the file's mtime, or nowhere. */
 	updatedSource: DateSource;
@@ -89,6 +91,7 @@ function toQueryEntry(entry: ContentEntry, graph: Graph): QueryEntry {
 		tags: entry.tags,
 		status: entry.status,
 		aliases: entry.aliases,
+		routes: entry.routes,
 		...(entry.updated ? { updated: entry.updated } : {}),
 		updatedSource: entry.updatedSource,
 		...(entry.created ? { created: entry.created } : {}),

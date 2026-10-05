@@ -15,11 +15,12 @@
  * with the package — was the one repo that could not run it. The three
  * assertions are unchanged; only the way you invoke them is.
  *
- * Three assertions:
+ * Four assertions:
  *   1. every page in the `pages` collection is present in the search index
  *   2. every WikiLink that resolves uses the target's exact title (no pipes,
  *      no case drift) — the canonical-title rule
  *   3. WikiLinks pointing at standalone pages actually render as hrefs
+ *   4. no entry declares a `routes:` address another entry already owns
  *
  * The canonical-title rule itself lives in the graph core, where `commune
  * check` reports it as a `noncanonical-title` finding. This verb is the *gate*:
@@ -31,6 +32,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
 	findNoncanonicalTitles,
+	findRouteCollisions,
 	loadContentEntries,
 	stripCode,
 	type ContentEntry,
@@ -40,7 +42,7 @@ import { SCHEMA, writeJson } from './output.ts';
 
 /** Which assertion failed, and what it saw. */
 export interface GateFailure {
-	assertion: 'pages-indexed' | 'canonical-titles' | 'page-links-rendered';
+	assertion: 'pages-indexed' | 'canonical-titles' | 'page-links-rendered' | 'route-collisions';
 	message: string;
 }
 
@@ -109,6 +111,26 @@ function titlesAreCanonical(entries: ContentEntry[]): GateFailure[] {
 }
 
 /**
+ * 4. No route may land on another entry's address.
+ *
+ * Two entries on one address write one markdown twin, and the build refuses
+ * it; failing here as well means a gate-only pipeline hears about it too.
+ */
+function routesAreFree(entries: ContentEntry[]): GateFailure[] {
+	const collisions = findRouteCollisions(entries);
+	if (!collisions.length) return [];
+
+	return [
+		{
+			assertion: 'route-collisions',
+			message: `routes must not share an address:\n${collisions
+				.map((finding) => `${finding.file}: ${finding.message}`)
+				.join('\n')}`,
+		},
+	];
+}
+
+/**
  * 3. A note that links to a standalone page must actually render that href.
  *
  * The one assertion that catches a resolver regression rather than a content
@@ -170,11 +192,12 @@ export async function gateCommand(root: string, dist: string, json: boolean): Pr
 	const pages = entries.filter((entry) => entry.collection === 'pages');
 	const distDir = path.resolve(root, dist);
 
-	// All three run, rather than stopping at the first: a build that broke two
+	// All four run, rather than stopping at the first: a build that broke two
 	// things should say so once, not across two rebuilds.
 	const failures: GateFailure[] = [
 		...pagesAreIndexed(pages, index),
 		...titlesAreCanonical(entries),
+		...routesAreFree(entries),
 		...(await pageLinksRender(entries, pages, distDir)),
 	];
 
