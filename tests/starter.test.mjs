@@ -47,6 +47,10 @@ test('copier names the wiki the way it was asked for', async t => {
   const elsewhere = path.join(outside, 'far');
   const { stdout: absolute } = await exec(process.execPath, [copier, elsewhere], { cwd });
   assert.ok(absolute.startsWith(`Created ${elsewhere}\n`), 'a destination outside the cwd stays absolute');
+  const { stdout: dashed } = await exec(process.execPath, [copier, './-wiki'], { cwd });
+  assert.match(dashed, /\n  cd \.\/-wiki\n/, 'a name starting with a dash is not read as an option');
+  const { stdout: dotted } = await exec(process.execPath, [copier, '..wiki'], { cwd });
+  assert.match(dotted, /\n  cd \.\.wiki\n/, 'a name starting with two dots is still inside the cwd');
 });
 
 test('copier refuses existing directories, files, and symlinks without overwriting', async t => {

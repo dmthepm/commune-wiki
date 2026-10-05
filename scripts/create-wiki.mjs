@@ -52,7 +52,8 @@ if (args.length !== 1 || args[0].startsWith('-')) {
     // two-line absolute path. Anything outside it stays absolute.
     const relative = path.relative(process.cwd(), destination);
     const outside = relative === '' || relative.split(path.sep)[0] === '..' || path.isAbsolute(relative);
-    const shown = outside ? destination : relative;
+    // `./` keeps a name that starts with a dash from reading as an option to `cd`.
+    const shown = outside ? destination : relative.startsWith('-') ? `.${path.sep}${relative}` : relative;
     const quoted = /^[\w./-]+$/.test(shown) ? shown : "'" + shown.replaceAll("'", "'\\''") + "'";
     console.log(`Created ${shown}\n\nNext:\n  cd ${quoted}\n  npm install\n  npm run build\n  npm run verify\n  npm run dev\n\nNo dependencies were installed. Read README.md before publishing.`);
   } catch (error) {
