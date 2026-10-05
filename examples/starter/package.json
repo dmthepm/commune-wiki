@@ -16,7 +16,7 @@
     "verify": "node scripts/verify-build.mjs"
   },
   "dependencies": {
-    "@dmthepm/commune": "0.6.4",
+    "@dmthepm/commune": "0.6.5",
     "@astrojs/markdown-remark": "^7.3.0",
     "astro": "^7.2.10"
   }
