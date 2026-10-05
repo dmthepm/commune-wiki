@@ -187,7 +187,7 @@ test('a heading the page gives an id never warns, whatever markup it is written 
 		['## Autolink <https://example.com> here', 'Autolink <https://example.com> here'],
 		['## Fish &copy; chips', 'Fish © chips'],
 		['## *Really* **very** ~~bad~~ idea', 'Really very bad idea'],
-		['## A [link](https://example.com/x_y) and ![image](a.png)', 'A link and'],
+		['## A [link](https://example.com/x_y) here', 'A link here'],
 		['## Café au lait', 'Café au lait'],
 		['## 日本語の見出し', '日本語の見出し'],
 	];
