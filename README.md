@@ -6,7 +6,7 @@ Commune turns a folder of markdown notes into a personal wiki. Linked notes open
 
 ![Following links on devon.md. Hovering a link shows a preview, and clicking opens the note in a pane beside the last one.](docs/media/panes.gif)
 
-Start a wiki in one paste. You need Node 22.12 or newer, npm and Git.
+Start a wiki in one paste. You need Node 22.12 or newer, npm and Git. Node 22.19 or newer avoids an npm `EBADENGINE` warning from one of Astro's dependencies.
 
 ```bash
 git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev
