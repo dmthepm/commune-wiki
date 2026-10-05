@@ -200,6 +200,20 @@ if (window.wikiInitialized) {
     paneTarget(pane, hash)?.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'auto' });
   };
 
+  // The scroller is the pane's .body-wrapper, not the .pane itself.
+  const paneScroller = (pane) => pane?.querySelector('.body-wrapper');
+
+  // A history entry has no idea where its pane was scrolled to. Before the
+  // address bar moves on, the entry being left remembers it in its state, so
+  // Back can put the reader where they were, including a place they scrolled
+  // to by hand, which no URL records.
+  const saveScroll = () => {
+    const url = normalizeUrl(window.location.href);
+    const pane = Array.from(container.querySelectorAll('.pane')).findLast(p => p.dataset.url === url);
+    const scroller = paneScroller(pane);
+    if (scroller) history.replaceState({ ...history.state, scrollTop: scroller.scrollTop }, '');
+  };
+
   const openPane = async (url) => {
     const normalizedUrl = normalizeUrl(url);
     const hash = new URL(url, window.location.origin).hash;
@@ -208,7 +222,10 @@ if (window.wikiInitialized) {
     // response, a timeout — hands the URL to the browser so the reader lands
     // on the real 404 instead of on a page that lies about which note it is
     // showing.
-    const recordVisit = () => history.pushState({ pane: normalizedUrl }, '', normalizedUrl + hash);
+    const recordVisit = () => {
+      saveScroll();
+      history.pushState({ pane: normalizedUrl }, '', normalizedUrl + hash);
+    };
     const giveUp = () => { window.location.href = url; };
 
     try {
@@ -311,7 +328,7 @@ if (window.wikiInitialized) {
     }
   };
 
-  const focusPane = (pane, hash) => {
+  const focusPane = (pane, hash, scrollTop) => {
     requestAnimationFrame(() => {
       if (document.activeElement && document.activeElement !== pane && document.activeElement.blur) {
         document.activeElement.blur();
@@ -322,7 +339,14 @@ if (window.wikiInitialized) {
       if (window.innerWidth >= 1024) {
         requestAnimationFrame(() => {
           pane.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });
-          scrollToHash(pane, hash);
+          // A remembered position beats the fragment; with neither, the pane
+          // stays where it is.
+          if (typeof scrollTop === 'number') {
+            const scroller = paneScroller(pane);
+            if (scroller) scroller.scrollTop = scrollTop;
+          } else {
+            scrollToHash(pane, hash);
+          }
         });
       }
     });
@@ -331,6 +355,7 @@ if (window.wikiInitialized) {
   const closePane = (pane) => {
     if (pane === container.firstElementChild) return;
     const previousPane = pane.previousElementSibling;
+    saveScroll();
     pane.remove();
     updateContainerLayout();
     if (previousPane && previousPane.classList.contains('pane')) {
@@ -370,8 +395,16 @@ if (window.wikiInitialized) {
       const hash = fragment.getAttribute('href');
       if (paneTarget(pane, hash)) {
         e.preventDefault();
+        // Remember where the reader was before the jump moves them.
+        saveScroll();
         scrollToHash(pane, hash);
-        if (pane.dataset.url) history.pushState({ pane: pane.dataset.url }, '', pane.dataset.url + hash);
+        if (pane.dataset.url) {
+          // Clicking the heading the address bar already names is not a new
+          // place to go back to, so it replaces the entry instead of stacking
+          // a duplicate on top of it.
+          const alreadyHere = normalizeUrl(window.location.href) === pane.dataset.url && window.location.hash === hash;
+          history[alreadyHere ? 'replaceState' : 'pushState']({ pane: pane.dataset.url }, '', pane.dataset.url + hash);
+        }
         return;
       }
     }
@@ -385,13 +418,14 @@ if (window.wikiInitialized) {
     if (clickedPane && document.activeElement !== clickedPane) {
       focusPane(clickedPane);
       if (clickedPane.dataset.url) {
+        saveScroll();
         history.pushState({ pane: clickedPane.dataset.url }, '', clickedPane.dataset.url);
       }
     }
   };
 
   // Handle popstate (browser history navigation)
-  const handlePopstate = () => {
+  const handlePopstate = (e) => {
     const targetUrl = normalizeUrl(window.location.href);
     const panes = Array.from(container.querySelectorAll('.pane'));
     const targetIndex = panes.findLastIndex(p => p.dataset.url === targetUrl);
@@ -401,7 +435,7 @@ if (window.wikiInitialized) {
         panes[i].remove();
       }
       updateContainerLayout();
-      focusPane(panes[targetIndex]);
+      focusPane(panes[targetIndex], window.location.hash, e.state?.scrollTop);
     } else {
       window.location.reload();
     }
@@ -415,6 +449,10 @@ if (window.wikiInitialized) {
     // stop inside the note, so the skip link and the header controls were only
     // reachable by tabbing backwards.
     updateContainerLayout();
+    // A reload (Forward into a pane that was closed rebuilds the page this
+    // way) lands on the note's URL with its fragment. The pane scrolls, not
+    // the page, so the heading is brought into view here.
+    scrollToHash(firstPane, window.location.hash);
   }
 
   // --- SINGLE EVENT DELEGATION SETUP ---
