@@ -4,7 +4,7 @@ A small, editable wiki on the published **@dmthepm/commune** package and **Astro
 
 ## Start locally
 
-You need **Node.js 22.12.0 or newer**, **npm 9.6.5 or newer**, and an internet connection for the first install. Check with `node --version` and `npm --version`.
+You need **Node.js 22.12.0 or newer**, **npm 9.6.5 or newer**, and an internet connection for the first install. Node 22.19 or newer is recommended. On 22.12 to 22.18 the install warns `EBADENGINE` for `undici`, a dependency of Astro's font support, which the starter does not use. Check with `node --version` and `npm --version`.
 
 From a Commune repository checkout, create a new directory:
 
@@ -74,7 +74,7 @@ Visibility controls the generated site, not access to source files in Git. A pub
 
 ## First-run troubleshooting and feedback
 
-- An engine/version error. Check that your terminal uses Node 22.12+ and npm 9.6.5+.
+- An engine/version error. Check that your terminal uses Node 22.12+ and npm 9.6.5+. An `EBADENGINE` warning for `undici` on Node 22.12 to 22.18 does not stop the starter, and Node 22.19+ removes it.
 - Install fails. Record the npm error and registry/network settings. The starter installs only published packages, with no monorepo paths.
 - A link renders as plain text. It points at nothing the wiki publishes. The build still succeeds and logs a broken-link warning, and `npm run check` lists every one. Check spelling, unique titles, and the target note’s visibility.
 - `npm run verify` fails after you edit the samples. It checks the shipped sample notes only, so this is expected. Use `npm run check` for your own content.
