@@ -1,0 +1,32 @@
+---
+// The alias pattern (#66): `hello.md` declares `routes: ["/"]`, so this route
+// renders that same entry at `/`. Three things make it an alias and not a
+// second page. The note is found by the route it declares rather than by its
+// id, so the front door is whichever note says so. `<link rel="canonical">`
+// names the entry's own URL, so a crawler indexes one address. And the
+// markdown link is the entry's, because the integration wrote `/index.md`.
+import { getCollection, render } from 'astro:content';
+import { toCanonicalUrl, toMarkdownHref } from '@dmthepm/commune/graph';
+
+const notes = await getCollection('notes', (note) => note.data.visibility === 'public');
+const home = notes.find((note) => note.data.routes.includes('/'));
+if (!home) throw new Error('No note declares routes: ["/"]');
+
+const { Content } = await render(home);
+const urlPath = `/notes/${home.id}/`;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>{home.data.title}</title>
+		<link rel="canonical" href={toCanonicalUrl(urlPath, Astro.site!)} />
+	</head>
+	<body>
+		<main>
+			<h1>{home.data.title}</h1>
+			<Content />
+			<a href={toMarkdownHref('/')}>source</a>
+		</main>
+	</body>
+</html>

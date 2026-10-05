@@ -76,23 +76,32 @@ async function writeSiteFile(filePath: string, summary: SiteSummary) {
  * so anything that reformats on the way through would break it. The graph
  * already decided which entries exist and where each one lives; this only moves
  * bytes.
+ *
+ * An entry that declares `routes:` also renders at each of them, so each gets
+ * the same twin at its own `toMarkdownPath` (`/index.md` for `/`). The same
+ * source file is copied again, not a second rendering of it.
  */
 async function writeMarkdownFiles(
 	entries: ContentEntry[],
 	root: string,
 	outDir: string
 ): Promise<number> {
+	let written = 0;
+
 	for (const entry of entries) {
-		const destination = path.join(outDir, toMarkdownPath(entry.urlPath));
-		await mkdir(path.dirname(destination), { recursive: true });
-		// `entry.file` is relative to the project root — the graph's promise —
-		// so the read is joined to that root and not left to the cwd. They are
-		// the same directory when someone runs `astro build` in their project
-		// and different the moment they do not.
-		await copyFile(path.join(root, entry.file), destination);
+		for (const urlPath of [entry.urlPath, ...entry.routes]) {
+			const destination = path.join(outDir, toMarkdownPath(urlPath));
+			await mkdir(path.dirname(destination), { recursive: true });
+			// `entry.file` is relative to the project root — the graph's promise —
+			// so the read is joined to that root and not left to the cwd. They are
+			// the same directory when someone runs `astro build` in their project
+			// and different the moment they do not.
+			await copyFile(path.join(root, entry.file), destination);
+			written += 1;
+		}
 	}
 
-	return entries.length;
+	return written;
 }
 
 /**
@@ -118,7 +127,9 @@ async function findMarkdownTwin(root: string, pathname: string): Promise<string 
 	const entries = await loadContentEntries({ root });
 	const entry = entries.find((candidate) => {
 		try {
-			return toMarkdownPath(candidate.urlPath) === requested;
+			return [candidate.urlPath, ...candidate.routes].some(
+				(urlPath) => toMarkdownPath(urlPath) === requested
+			);
 		} catch {
 			return false;
 		}
@@ -226,7 +237,7 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 					const written = await writeMarkdownFiles(entries, root, fileURLToPath(dir));
 
 					logger.info(`✅ Backlinks index written to /backlinks.json (dist + public)`);
-					logger.info(`📄 ${written} source files written as .md alongside their pages`);
+					logger.info(`📄 ${written} twins written as .md alongside their pages`);
 					logger.info(summarize(graph));
 					logger.info(
 						site.lastUpdated

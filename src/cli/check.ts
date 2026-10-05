@@ -29,6 +29,7 @@ const RULES: DiagnosticRule[] = [
 	'duplicate-name',
 	'noncanonical-title',
 	'broken-anchor',
+	'route-collision',
 ];
 
 /** A finding as it appears in the payload: no internal rendering fields. */

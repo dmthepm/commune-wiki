@@ -609,6 +609,9 @@ export async function renameCommand(
 			title: (fm.title as string) || slug,
 			collection: fileCollection,
 			aliases: (fm.aliases as string[]) || [],
+			// Unpublished files are only here to be rewritten, and a draft's
+			// routes are not addresses anything resolves to.
+			routes: [],
 			tags: [],
 			status: 'seed',
 			updatedSource: 'none',

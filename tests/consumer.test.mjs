@@ -26,6 +26,9 @@
  *   - `Updates.astro` rendered the changelog card into the HTML, with no
  *     client script behind it;
  *   - `site.json` landed beside `backlinks.json` with the site's newest date;
+ *   - an entry that declares `routes: ["/"]` renders at `/` with
+ *     `rel=canonical` pointing at its own URL, gets its twin at `/index.md`,
+ *     and still has the one node in `backlinks.json` (#66);
  *   - and the search modal's semantic tier stays absent unless a page asks for
  *     it — the one assertion here that reads a second route, because proving
  *     the opt-in is a seam takes a project on both sides of it.
@@ -173,6 +176,16 @@ test('a consumer project installs this package and builds a wiki with it', async
 	const published = await readFile(path.join(DIST, 'notes/hello.md'), 'utf8');
 	const source = await readFile(path.join(FIXTURE, 'src/content/notes/hello.md'), 'utf8');
 	assert.equal(published, source);
+
+	// An alias route (#66). `hello.md` declares `routes: ["/"]`, so the same
+	// entry also renders at `/` and answers at `/index.md`. The page says which
+	// address is the real one, and the graph (asserted above to hold three
+	// keys) never grew a node for `/`.
+	const home = await readFile(path.join(DIST, 'index.html'), 'utf8');
+	assert.match(home, /<link rel="canonical" href="https:\/\/example\.com\/notes\/hello\/">/);
+	assert.match(home, /<h1>Hello<\/h1>/);
+	assert.match(home, /<a href="\/index\.md">/);
+	assert.equal(await readFile(path.join(DIST, 'index.md'), 'utf8'), source);
 
 	// The search modal's semantic tier is opt-in (#56). This fixture is the
 	// stranger: it passes no `semanticEndpoint`, so its note page must carry no
