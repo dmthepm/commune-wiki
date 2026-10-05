@@ -127,4 +127,17 @@ describe('the rendered site', () => {
 			}
 		}
 	});
+
+	test('the pane script keeps a link\'s fragment and looks it up inside its own pane', async () => {
+		// Every open pane repeats its note's heading ids, so `document.getElementById`
+		// would answer from whichever pane came first. The browser check lives in
+		// the PR for #61; this pins the three pieces that behaviour rests on.
+		const [, html] = (await pages()).find(([file]) => file.startsWith('notes/') && file.endsWith('index.html'));
+
+		assert.match(html, /new URL\(url, window\.location\.origin\)\.hash/);
+		assert.match(html, /pane\.querySelector\('#' \+ CSS\.escape\(id\)\)/);
+		assert.match(html, /normalizedUrl \+ hash/);
+		assert.match(html, /closest\?\.\('\.pane a\[href\^="#"\]'\)/);
+		assert.doesNotMatch(html, /document\.getElementById\(id\)/);
+	});
 });
