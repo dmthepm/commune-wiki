@@ -11,10 +11,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { commune, VAULT } from './helpers.mjs';
+import { applyPlan } from '../src/cli/rename.ts';
 
 const NOTES = 'src/content/notes';
 
@@ -353,4 +354,214 @@ test('check reports no new findings after a rename on a copy of the fixture vaul
 test('--help and the verb usage both list rename', async () => {
 	assert.match((await commune('--help')).stdout, /commune \[--root <dir>\] rename +<from> <to>/);
 	assert.match((await commune('rename', '--help')).stdout, /--move-url/);
+});
+
+/** A small vault in a temp dir, from a map of file to text. */
+async function withFiles(files, body) {
+	const dir = await mkdtemp(path.join(tmpdir(), 'commune-rename-'));
+	try {
+		for (const [file, text] of Object.entries(files)) await put(dir, file, text);
+		return await body(dir);
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+}
+
+/** Is this disk case-insensitive? Decided at runtime: it is a property of the disk, not the OS. */
+async function caseInsensitive() {
+	const dir = await mkdtemp(path.join(tmpdir(), 'commune-case-'));
+	try {
+		await writeFile(path.join(dir, 'Probe'), '');
+		return await exists(path.join(dir, 'probe'));
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+}
+
+test('a case-only rename keeps the note and its links (case-insensitive disks only)', async (t) => {
+	if (!(await caseInsensitive())) return t.skip('this disk is case-sensitive');
+	const dir = await mkdtemp(path.join(tmpdir(), 'commune-rename-fixture-'));
+	try {
+		await cp(VAULT, dir, { recursive: true });
+		const before = await read(dir, `${NOTES}/Alpha.md`);
+		const { code, stderr } = await commune('--root', dir, 'rename', `${NOTES}/Alpha.md`, `${NOTES}/alpha.md`);
+		assert.equal(code, 0, stderr);
+
+		const names = await readdir(path.join(dir, NOTES));
+		assert.ok(names.includes('alpha.md'), 'the new spelling is on disk');
+		assert.equal(names.includes('Alpha.md'), false, 'the old spelling is gone');
+		assert.match(await read(dir, `${NOTES}/alpha.md`), /Links to \[\[Beta\|the beta note\]\]/);
+		assert.notEqual(before, '');
+		assert.match(await read(dir, `${NOTES}/Beta.md`), /\[\[alpha\]\]/);
+		assert.equal((await graph(dir)).entries.some((entry) => entry.file === `${NOTES}/alpha.md`), true);
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+test('the case-only write path never unlinks the source', async () => {
+	await withFiles({ [`${NOTES}/Alpha.md`]: 'old content\n' }, async (dir) => {
+		const { chmod: realChmod, mkdir: realMkdir, rename, unlink, writeFile: realWrite } = await import('node:fs/promises');
+		const unlinked = [];
+		const ops = {
+			chmod: realChmod,
+			mkdir: realMkdir,
+			rename,
+			writeFile: realWrite,
+			unlink: async (file) => {
+				unlinked.push(file);
+				return unlink(file);
+			},
+		};
+		const edit = {
+			file: `${NOTES}/alpha.md`,
+			source: `${NOTES}/Alpha.md`,
+			before: 'old content\n',
+			after: 'new content\n',
+			changes: [],
+			mode: 0o644,
+		};
+		await applyPlan(dir, `${NOTES}/Alpha.md`, `${NOTES}/alpha.md`, [edit], undefined, true, ops);
+
+		assert.deepEqual(
+			unlinked.filter((file) => !file.includes('.commune-rename-')),
+			[],
+			'only staging leftovers may be unlinked'
+		);
+		assert.deepEqual(await readdir(path.join(dir, NOTES)), ['alpha.md']);
+		assert.equal(await read(dir, `${NOTES}/alpha.md`), 'new content\n');
+	});
+});
+
+test('renaming a private note rewrites the links to it, and checks its name against private notes too', async () => {
+	await withRenameVault(async (dir) => {
+		await put(dir, `${NOTES}/Secret.md`, '---\ntitle: Secret\n---\n\nHidden. Links [[Linker]].\n');
+		await put(dir, `${NOTES}/Reader.md`, note('Reader', 'See [[Secret]] and [[Secret|label]] and [file](./Secret.md).'));
+		await put(dir, `${NOTES}/Hidden Two.md`, '---\ntitle: Hidden Two\n---\n\nAlso [[Secret#Part]].\n');
+
+		const { code, stdout, stderr } = await commune('--root', dir, 'rename', `${NOTES}/Secret.md`, `${NOTES}/Revealed.md`);
+		assert.equal(code, 0, stderr);
+		assert.match(stdout, /not published/);
+		assert.match(await read(dir, `${NOTES}/Reader.md`), /See \[\[Revealed\]\] and \[\[Revealed\|label\]\] and \[file\]\(\.\/Revealed\.md\)\./);
+		assert.match(await read(dir, `${NOTES}/Hidden Two.md`), /\[\[Revealed#Part\]\]/);
+		assert.match(await read(dir, `${NOTES}/Revealed.md`), /^---\ntitle: Revealed\n/);
+
+		// A private note's title counts as a name: a public note may not take it.
+		await put(dir, `${NOTES}/Quiet.md`, '---\ntitle: Quiet Name\n---\n\nx\n');
+		const refused = await commune('--root', dir, 'rename', OLD, `${NOTES}/Quiet Name.md`);
+		assert.equal(refused.code, 1);
+		assert.match(refused.stderr, /ambiguous/);
+	});
+});
+
+test('a relative file link is read against its own directory before the basename', async () => {
+	const files = {
+		[`${NOTES}/Isolated.md`]: note('Isolated', 'x'),
+		'src/content/research/Isolated.md': '---\ntitle: Isolated Research\n---\n\ny\n',
+		[`${NOTES}/Edge.md`]: note('Edge', 'Here [i](./Isolated.md) and there [r](../research/Isolated.md).'),
+	};
+	await withFiles(files, async (dir) => {
+		const { code, stderr } = await commune('--root', dir, 'rename', `${NOTES}/Isolated.md`, `${NOTES}/Renamed.md`);
+		assert.equal(code, 0, stderr);
+		assert.match(await read(dir, `${NOTES}/Edge.md`), /\[i\]\(\.\/Renamed\.md\) and there \[r\]\(\.\.\/research\/Isolated\.md\)/);
+	});
+
+	await withFiles(
+		{ ...files, [`${NOTES}/Edge.md`]: note('Edge', 'Line one.\n\nLost [x](./gone/Isolated.md).') },
+		async (dir) => {
+			const { code, stderr } = await commune('--root', dir, 'rename', `${NOTES}/Isolated.md`, `${NOTES}/Renamed.md`);
+			assert.equal(code, 1);
+			assert.match(stderr, /Edge\.md:\d+ \.\/gone\/Isolated\.md/);
+			assert.equal(await exists(path.join(dir, `${NOTES}/Isolated.md`)), true);
+		}
+	);
+});
+
+test('refuses an empty or whitespace-padded new name', async () => {
+	await withRenameVault(async (dir) => {
+		for (const name of ['.md', ' .md', ' Spaced .md']) {
+			const { code, stderr } = await commune('--root', dir, 'rename', OLD, `${NOTES}/${name}`);
+			assert.equal(code, 1, JSON.stringify(name));
+			assert.match(stderr, /not a usable name/);
+		}
+		assert.equal(await exists(path.join(dir, OLD)), true);
+	});
+});
+
+test('links inside HTML comments and nested fences are not rewritten', async () => {
+	await withRenameVault(async (dir) => {
+		await put(
+			dir,
+			`${NOTES}/Linker.md`,
+			note(
+				'Linker',
+				[
+					'<!-- [[Old Title]] one-line comment -->',
+					'<!--',
+					'[[Old Title]] in a block comment',
+					'-->',
+					'Live [[Old Title]] after a comment.',
+					'````md',
+					'```',
+					'[[Old Title]] inside the inner fence',
+					'```',
+					'[[Old Title]] still inside the outer fence',
+					'````',
+					'Live again [[Old Title]].',
+					'~~~~',
+					'~~~',
+					'[[Old Title]] in a tilde fence',
+					'~~~',
+					'~~~~',
+				].join('\n')
+			)
+		);
+		const { code, stderr } = await commune('--root', dir, 'rename', OLD, NEW, '--move-url');
+		assert.equal(code, 0, stderr);
+		const linker = await read(dir, `${NOTES}/Linker.md`);
+		assert.equal(linker.match(/\[\[New Title\]\]/g).length, 2);
+		assert.equal(linker.match(/\[\[Old Title\]\]/g).length, 5);
+		assert.match(linker, /<!-- \[\[Old Title\]\] one-line comment -->/);
+		assert.match(linker, /Live \[\[New Title\]\] after a comment\./);
+		assert.match(linker, /Live again \[\[New Title\]\]\./);
+	});
+});
+
+test('file modes are kept, and a read-only file is refused by name', async (t) => {
+	await withRenameVault(async (dir) => {
+		await chmod(path.join(dir, `${NOTES}/Other.md`), 0o640);
+		await chmod(path.join(dir, OLD), 0o600);
+		const { code, stderr } = await commune('--root', dir, 'rename', OLD, NEW);
+		assert.equal(code, 0, stderr);
+		assert.equal((await stat(path.join(dir, `${NOTES}/Other.md`))).mode & 0o777, 0o640);
+		assert.equal((await stat(path.join(dir, NEW))).mode & 0o777, 0o600);
+	});
+
+	if (process.getuid?.() === 0) return t.diagnostic('root ignores write bits; refusal not asserted');
+	await withRenameVault(async (dir) => {
+		await chmod(path.join(dir, `${NOTES}/Linker.md`), 0o444);
+		const { code, stderr } = await commune('--root', dir, 'rename', OLD, NEW);
+		assert.equal(code, 1);
+		assert.match(stderr, /Linker\.md is read-only/);
+		assert.equal(await exists(path.join(dir, OLD)), true, 'nothing was written');
+		assert.match(await read(dir, `${NOTES}/Other.md`), /Old Title/);
+	});
+});
+
+test('--move-url on a page that declares its url says so', async () => {
+	await withFiles(
+		{ 'src/content/pages/Old Page.md': '---\ntitle: Old Page\nurl: /custom/\n---\n\nx\n' },
+		async (dir) => {
+			for (const flags of [['--move-url'], []]) {
+				const from = (await exists(path.join(dir, 'src/content/pages/Old Page.md'))) ? 'Old Page' : 'New Page';
+				const to = from === 'Old Page' ? 'New Page' : 'Old Page';
+				const { code, stdout } = await commune(
+					'--root', dir, 'rename', `src/content/pages/${from}.md`, `src/content/pages/${to}.md`, ...flags
+				);
+				assert.equal(code, 0);
+				assert.match(stdout, /URL stays \/custom\/; this page declares its own url: in frontmatter/);
+			}
+			assert.equal(await exists(path.join(dir, 'public/_redirects')), false);
+		}
+	);
 });

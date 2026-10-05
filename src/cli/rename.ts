@@ -7,10 +7,10 @@
  * warning. This verb is the only sanctioned way to do it.
  *
  * Nothing here parses markdown a second time. Link spans are found with the
- * graph core's own patterns (`WIKILINK`, `MARKDOWN_LINK`) over `stripCode`'d
- * text, each span is read back through `extractLinks`, and it is rewritten only
- * if `resolveLink` says it points at the entry being renamed. Code is blanked
- * by `stripCode` before matching, so it is never touched.
+ * graph core's own patterns (`WIKILINK`, `MARKDOWN_LINK`) over text with code
+ * and HTML comments blanked (`maskNonProse`), each span is read back through
+ * `extractLinks`, and it is rewritten only if it points at the file being
+ * renamed. Blanked text is never touched.
  *
  * The order is plan, then write. Everything that will change is computed in
  * memory first, refusals happen there, and `--dry-run` prints the plan and
@@ -23,7 +23,7 @@
  * the old URL and its `.md` twin.
  */
 
-import { mkdir, readFile, readdir, stat, unlink, writeFile, rename as renameFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, stat, unlink, writeFile, rename as renameFile } from 'node:fs/promises';
 import path from 'node:path';
 import { glob } from 'tinyglobby';
 import matter from 'gray-matter';
@@ -32,7 +32,6 @@ import {
 	COLLECTIONS,
 	MARKDOWN_LINK,
 	WIKILINK,
-	buildBasenameLookup,
 	buildLinkLookup,
 	buildUrlLookup,
 	extractLinks,
@@ -67,6 +66,8 @@ interface FileEdit {
 	before: string;
 	after: string;
 	changes: LineChange[];
+	/** Permission bits of the file this replaces, so the replacement keeps them. */
+	mode?: number;
 }
 
 type UrlDecision = 'unchanged' | 'pinned' | 'moved' | 'unpublished';
@@ -104,7 +105,75 @@ interface Rewrite {
 	oldStem: string;
 	newStem: string;
 	newExt: string;
-	isOurs: (link: ExtractedLink, fileLink: boolean) => boolean;
+	isOurs: (link: ExtractedLink, site: Site) => boolean;
+	/** Relative file links that name this file's basename but cannot be told apart from another's. */
+	ambiguous: string[];
+}
+
+/** Where a link sits. `destination` is set for a file link, which names a path. */
+interface Site {
+	file: string;
+	line: number;
+	destination?: string;
+}
+
+/**
+ * Blank what is not prose, keeping every offset.
+ *
+ * Rename-local on purpose: `stripCode` is the extractor's, and changing it
+ * would change what the graph sees. This one also blanks HTML comments, and
+ * closes a fence only with a marker of the same character that is at least as
+ * long as the one that opened it, so a four-backtick fence can wrap a
+ * three-backtick one. Inline code goes through `stripCode` afterwards.
+ */
+export function maskNonProse(text: string): string {
+	const blank = (value: string) => value.replace(/[^\n\r]/g, ' ');
+	let fence: { char: string; length: number } | undefined;
+	let comment = false;
+
+	const masked = text.split('\n').map((line) => {
+		if (fence) {
+			const close = /^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/.exec(line);
+			if (close && close[1][0] === fence.char && close[1].length >= fence.length) fence = undefined;
+			return blank(line);
+		}
+
+		let out = '';
+		let rest = line;
+		if (comment) {
+			const end = rest.indexOf('-->');
+			if (end < 0) return blank(line);
+			out = blank(rest.slice(0, end + 3));
+			rest = rest.slice(end + 3);
+			comment = false;
+		} else {
+			const open = /^ {0,3}(`{3,}|~{3,})/.exec(rest);
+			// An info string after a backtick fence may not contain a backtick.
+			if (open && !(open[1][0] === '`' && rest.slice(open[0].length).includes('`'))) {
+				fence = { char: open[1][0], length: open[1].length };
+				return blank(line);
+			}
+		}
+
+		// Inline code first, so a `<!--` written inside backticks starts nothing.
+		rest = rest.replace(/`[^`\n]*`/g, blank);
+		for (;;) {
+			const start = rest.indexOf('<!--');
+			if (start < 0) break;
+			const end = rest.indexOf('-->', start + 4);
+			if (end < 0) {
+				out += rest.slice(0, start) + blank(rest.slice(start));
+				rest = '';
+				comment = true;
+				break;
+			}
+			out += rest.slice(0, start) + blank(rest.slice(start, end + 3));
+			rest = rest.slice(end + 3);
+		}
+		return out + rest;
+	});
+
+	return stripCode(masked.join('\n'));
 }
 
 /** Replace the name in `Name#Heading` or `Name^block`, keeping the subpath and any padding. */
@@ -149,15 +218,15 @@ function rewriteDestination(
 }
 
 /** Rewrite wikilinks and markdown links in free text. Code is never touched. */
-function rewriteText(text: string, rewrite: Rewrite): string {
-	const prose = stripCode(text);
+function rewriteText(text: string, rewrite: Rewrite, site: Site): string {
+	const prose = maskNonProse(text);
 	const edits: { start: number; end: number; value: string }[] = [];
 
 	for (const match of prose.matchAll(WIKILINK)) {
 		const start = match.index!;
 		const original = text.slice(start, start + match[0].length);
 		const [link] = extractLinks(original);
-		if (!link || link.kind !== 'name' || !rewrite.isOurs(link, false)) continue;
+		if (!link || link.kind !== 'name' || !rewrite.isOurs(link, { file: site.file, line: lineOf(text, start, site.line) })) continue;
 
 		const parts = /^\[\[([^\]|]+)([\s\S]*)\]\]$/.exec(original);
 		if (!parts) continue;
@@ -175,8 +244,8 @@ function rewriteText(text: string, rewrite: Rewrite): string {
 		const [link] = extractLinks(`[](${destination})`);
 		if (!link) continue;
 
-		const fileLink = link.kind === 'name';
-		if (!rewrite.isOurs(link, fileLink)) continue;
+		const here = { file: site.file, line: lineOf(text, from, site.line) };
+		if (!rewrite.isOurs(link, link.kind === 'name' ? { ...here, destination } : here)) continue;
 		edits.push({ start: from, end: to, value: rewriteDestination(destination, link, rewrite, false) });
 	}
 
@@ -195,7 +264,7 @@ function applyEdits(text: string, edits: { start: number; end: number; value: st
 const VOCABULARY_KEYS = new Set(['aliases', 'tags']);
 
 /** Rewrite one bare `links:` item, keeping its quotes. */
-function rewriteBareItem(item: string, rewrite: Rewrite): string {
+function rewriteBareItem(item: string, rewrite: Rewrite, site: Site): string {
 	const [, lead, quote, value, trail] = /^(\s*)(["']?)([\s\S]*?)\2(\s*)$/.exec(item)!;
 	if (!value || value.includes('[[')) return item;
 
@@ -203,7 +272,7 @@ function rewriteBareItem(item: string, rewrite: Rewrite): string {
 	if (!link) return item;
 
 	const isFile = link.kind === 'name' && /\.mdx?$/i.test(value);
-	if (!rewrite.isOurs(link, isFile)) return item;
+	if (!rewrite.isOurs(link, isFile ? { ...site, destination: value } : site)) return item;
 
 	const next =
 		link.kind === 'url' || isFile
@@ -219,12 +288,13 @@ function rewriteBareItem(item: string, rewrite: Rewrite): string {
  * are rewritten only under `links:`, which is the one key the extractor reads
  * them from.
  */
-function rewriteFrontmatter(fm: string, rewrite: Rewrite): string {
+function rewriteFrontmatter(fm: string, rewrite: Rewrite, file: string, firstLine: number): string {
 	let key = '';
 
 	return fm
 		.split('\n')
-		.map((rawLine) => {
+		.map((rawLine, index) => {
+			const site = { file, line: firstLine + index };
 			const cr = rawLine.endsWith('\r') ? '\r' : '';
 			let line = cr ? rawLine.slice(0, -1) : rawLine;
 
@@ -232,18 +302,18 @@ function rewriteFrontmatter(fm: string, rewrite: Rewrite): string {
 			if (top) key = top[1];
 			if (VOCABULARY_KEYS.has(key)) return rawLine;
 
-			line = rewriteText(line, rewrite);
+			line = rewriteText(line, rewrite, site);
 
 			if (key === 'links') {
 				const item = /^(\s*-\s+)(.*?)(\s+#.*)?$/.exec(line);
 				const scalar = /^(links:\s*)(.*?)(\s+#.*)?$/.exec(line);
 				if (item) {
-					line = `${item[1]}${rewriteBareItem(item[2], rewrite)}${item[3] ?? ''}`;
+					line = `${item[1]}${rewriteBareItem(item[2], rewrite, site)}${item[3] ?? ''}`;
 				} else if (scalar && scalar[2]) {
 					const value = scalar[2];
 					const next = value.startsWith('[')
-						? value.replace(/[^[\],]+/g, (piece) => rewriteBareItem(piece, rewrite))
-						: rewriteBareItem(value, rewrite);
+						? value.replace(/[^[\],]+/g, (piece) => rewriteBareItem(piece, rewrite, site))
+						: rewriteBareItem(value, rewrite, site);
 					line = `${scalar[1]}${next}${scalar[3] ?? ''}`;
 				}
 			}
@@ -253,11 +323,16 @@ function rewriteFrontmatter(fm: string, rewrite: Rewrite): string {
 		.join('\n');
 }
 
-function rewriteFile(raw: string, rewrite: Rewrite): string {
+function rewriteFile(raw: string, rewrite: Rewrite, file: string): string {
 	const split = splitFrontmatter(raw);
-	if (!split) return rewriteText(raw, rewrite);
+	if (!split) return rewriteText(raw, rewrite, { file, line: 1 });
+	const fmLine = lineOf(split.head, split.head.length);
+	const bodyLine = lineOf(raw, raw.length - split.body.length);
 	return (
-		split.head + rewriteFrontmatter(split.fm, rewrite) + split.tail + rewriteText(split.body, rewrite)
+		split.head +
+		rewriteFrontmatter(split.fm, rewrite, file, fmLine) +
+		split.tail +
+		rewriteText(split.body, rewrite, { file, line: bodyLine })
 	);
 }
 
@@ -346,6 +421,16 @@ interface RedirectPlan {
 	after: string;
 	added: string[];
 	removed: string[];
+	mode?: number;
+}
+
+/** A file's permission bits, or undefined when it does not exist. */
+async function modeOf(filePath: string): Promise<number | undefined> {
+	try {
+		return (await stat(filePath)).mode & 0o7777;
+	} catch {
+		return undefined;
+	}
 }
 
 async function planRedirects(root: string, rules: string[], newUrls: string[]): Promise<RedirectPlan> {
@@ -367,6 +452,7 @@ async function planRedirects(root: string, rules: string[], newUrls: string[]): 
 
 	return {
 		file: REDIRECTS_FILE,
+		mode: await modeOf(target),
 		before,
 		after: [...kept, ...added].join('\n') + '\n',
 		added,
@@ -410,6 +496,12 @@ export async function renameCommand(
 	const oldStem = path.posix.basename(from).replace(/\.mdx?$/i, '');
 	const newStem = path.posix.basename(to).replace(/\.mdx?$/i, '');
 	const newExt = path.posix.extname(to);
+	if (!newStem || newStem.trim() !== newStem) {
+		throw failure(
+			'EREFUSED',
+			`${path.posix.basename(to)} is not a usable name: the part before the extension is ${newStem ? 'padded with whitespace' : 'empty'}`
+		);
+	}
 	if (/[[\]|#^]/.test(newStem)) {
 		throw failure(
 			'EREFUSED',
@@ -435,6 +527,12 @@ export async function renameCommand(
 				: `title left as "${oldTitle}": it differs from the old filename "${oldStem}"`,
 	};
 
+	// A page can declare its URL outright, and then no filename sets it.
+	const declaresUrl = collection === 'pages' && typeof data.url === 'string';
+	const unchangedBecause = declaresUrl
+		? 'this page declares its own url: in frontmatter, so the filename does not set it'
+		: 'the new filename does not change it';
+
 	// The URL decision.
 	let url: UrlPlan;
 	if (!entry) {
@@ -453,7 +551,7 @@ export async function renameCommand(
 				new: entry.urlPath,
 				removedPin: false,
 				redirects: [],
-				message: `URL stays ${entry.urlPath}; the new filename does not change it`,
+				message: `URL stays ${entry.urlPath}; ${unchangedBecause}`,
 			};
 		} else {
 			url = {
@@ -482,22 +580,57 @@ export async function renameCommand(
 				: [],
 			message: moved
 				? `URL moves from ${entry.urlPath} to ${urlPath}${hasPin ? ' (slug pin removed)' : ''}; 301 redirects added for it and its .md twin`
-				: `URL stays ${entry.urlPath}; the new filename does not change it${hasPin ? ' (slug pin removed)' : ''}`,
+				: `URL stays ${entry.urlPath}; ${unchangedBecause}${hasPin ? ' (slug pin removed)' : ''}`,
 		};
 	}
 
+	// Every markdown file under the content directories, published or not. A
+	// private note is invisible to the graph but its links go stale all the same,
+	// and its name can collide all the same.
+	const files = (
+		await Promise.all(
+			COLLECTIONS.map((name) =>
+				glob(`${CONTENT_DIRS[name]}/**/*.{md,mdx}`, { cwd: root, expandDirectories: false })
+			)
+		)
+	)
+		.flat()
+		.sort();
+	const published = new Set(entries.map((candidate) => candidate.file));
+	const everyone: ContentEntry[] = [...entries];
+	for (const file of files) {
+		if (published.has(file)) continue;
+		const fileCollection = collectionOf(file)!;
+		const { content, data: fm } = matter(file === from ? source : await readFile(path.join(root, file), 'utf8'));
+		const { slug, urlPath } = toUrlPath(file, fileCollection, fm);
+		everyone.push({
+			slug,
+			urlPath,
+			title: (fm.title as string) || slug,
+			collection: fileCollection,
+			aliases: (fm.aliases as string[]) || [],
+			tags: [],
+			status: 'seed',
+			updatedSource: 'none',
+			body: content,
+			frontmatter: fm,
+			file,
+		});
+	}
+	const subject = everyone.find((candidate) => candidate.file === from)!;
+
 	// Collisions: ask the graph's own duplicate-name rule what the rename would add.
-	if (entry) {
+	{
 		const renamed: ContentEntry = {
-			...entry,
+			...subject,
 			file: to,
-			title: title.to ?? entry.title,
-			urlPath: url.new ?? entry.urlPath,
-			slug: path.posix.basename(url.new ?? entry.urlPath),
+			title: title.to ?? subject.title,
+			urlPath: url.new ?? subject.urlPath,
+			slug: path.posix.basename(url.new ?? subject.urlPath),
 		};
 		const key = (d: { rule: string; target?: string }) => `${d.rule}|${d.target?.toLowerCase()}`;
-		const existing = new Set(findDuplicateNames(entries).map(key));
-		const introduced = findDuplicateNames(entries.map((e) => (e === entry ? renamed : e))).filter(
+		const existing = new Set(findDuplicateNames(everyone).map(key));
+		const introduced = findDuplicateNames(everyone.map((e) => (e === subject ? renamed : e))).filter(
 			(d) => !existing.has(key(d))
 		);
 		if (introduced.length) {
@@ -511,9 +644,14 @@ export async function renameCommand(
 	// Plan every edit in memory.
 	const byName = buildLinkLookup(entries);
 	const byUrl = buildUrlLookup(entries);
-	const basenames = buildBasenameLookup(entries);
+	const named = new Map<string, string[]>();
+	for (const file of files) {
+		const stem = path.posix.basename(file).replace(/\.mdx?$/i, '').toLowerCase();
+		named.set(stem, [...(named.get(stem) ?? []), file]);
+	}
 	const oldUrl = entry?.urlPath ?? '';
 	const stemKey = linkKey(oldStem);
+	const lowerFiles = new Map(files.map((file) => [file.toLowerCase(), file]));
 
 	const rewrite: Rewrite = {
 		oldUrl,
@@ -521,34 +659,42 @@ export async function renameCommand(
 		oldStem,
 		newStem,
 		newExt,
-		isOurs(link, fileLink) {
-			if (!entry) return false;
-			if (link.kind === 'url') return url.decision === 'moved' && byUrl.get(link.target)?.urlPath === oldUrl;
+		ambiguous: [],
+		isOurs(link, site) {
+			if (link.kind === 'url') {
+				return url.decision === 'moved' && byUrl.get(link.target)?.urlPath === oldUrl;
+			}
 			if (linkKey(link.target) !== stemKey) return false;
 
-			const named = basenames.get(oldStem.toLowerCase());
-			const byFile = named?.length === 1 && named[0].urlPath === oldUrl;
-			// A relative file link names a file, whatever any title says.
-			if (fileLink) return byFile;
+			const sharing = named.get(oldStem.toLowerCase()) ?? [];
+
+			if (site.destination !== undefined) {
+				// A relative file link names a path: read it against the directory of
+				// the file it is written in, and only then fall back to the basename.
+				let decoded = site.destination.replace(/^<|>$/g, '').split(/[#?]/)[0];
+				try {
+					decoded = decodeURIComponent(decoded);
+				} catch {
+					// keep the raw spelling
+				}
+				const joined = path.posix.normalize(path.posix.join(path.posix.dirname(site.file), decoded));
+				const exact = lowerFiles.get(joined.toLowerCase());
+				if (exact) return exact === from;
+				if (sharing.length === 1) return sharing[0] === from;
+				if (sharing.includes(from)) rewrite.ambiguous.push(`${site.file}:${site.line} ${site.destination}`);
+				return false;
+			}
+
 			const resolved = resolveLink({ kind: 'name', target: stemKey }, byName, byUrl);
-			return resolved ? resolved.urlPath === oldUrl : byFile;
+			if (resolved) return entry !== undefined && resolved.urlPath === oldUrl;
+			return sharing.length === 1 && sharing[0] === from;
 		},
 	};
-
-	const files = (
-		await Promise.all(
-			COLLECTIONS.map((name) =>
-				glob(`${CONTENT_DIRS[name]}/**/*.{md,mdx}`, { cwd: root, expandDirectories: false })
-			)
-		)
-	)
-		.flat()
-		.sort();
 
 	const edits: FileEdit[] = [];
 	for (const file of files) {
 		const before = file === from ? source : await readFile(path.join(root, file), 'utf8');
-		let after = entry ? rewriteFile(before, rewrite) : before;
+		let after = rewriteFile(before, rewrite, file);
 		const changes = diffLines(before, after);
 
 		if (file === from) {
@@ -570,19 +716,38 @@ export async function renameCommand(
 			if (parsed.title !== wantTitle || parsed.slug !== wantSlug) {
 				throw failure('EPARSE', `could not edit the frontmatter of ${from} safely; nothing was written`);
 			}
-			edits.push({ file: to, source: from, before, after, changes });
+			edits.push({ file: to, source: from, before, after, changes, mode: await modeOf(path.join(root, from)) });
 		} else if (changes.length) {
-			edits.push({ file, source: file, before, after, changes });
+			edits.push({ file, source: file, before, after, changes, mode: await modeOf(path.join(root, file)) });
 		}
+	}
+
+	if (rewrite.ambiguous.length) {
+		throw failure(
+			'EREFUSED',
+			`${oldStem}.md shares its name with another file, so these relative links cannot be told apart. Make each one name its folder, or rename the other file first:\n  ${rewrite.ambiguous.join('\n  ')}`
+		);
 	}
 
 	const urlPairs = url.decision === 'moved' ? [url.new!, toMarkdownHref(url.new!)] : [];
 	const redirects = url.redirects.length ? await planRedirects(root, url.redirects, urlPairs) : undefined;
 
+	// Never write over a file the author made read-only.
+	const protectedFiles = [
+		...edits.filter((edit) => edit.mode !== undefined && (edit.mode & 0o200) === 0).map((edit) => edit.source),
+		...(redirects?.mode !== undefined && (redirects.mode & 0o200) === 0 ? [redirects.file] : []),
+	];
+	if (protectedFiles.length) {
+		throw failure('EREFUSED', `${protectedFiles.join(', ')} ${protectedFiles.length === 1 ? 'is' : 'are'} read-only, so rename will not write over ${protectedFiles.length === 1 ? 'it' : 'them'}. Nothing was written.`);
+	}
+
+	// The same file under both names means a case-only rename on a case-insensitive disk.
+	const caseOnly = await sameFile(path.join(root, from), path.join(root, to));
+
 	const linkCount = edits.reduce((sum, edit) => sum + edit.changes.length, 0);
 
 	if (!dryRun) {
-		await apply(root, from, to, edits, redirects);
+		await applyPlan(root, from, to, edits, redirects, caseOnly);
 	}
 
 	if (json) {
@@ -645,58 +810,94 @@ export async function renameCommand(
 	return EXIT_OK;
 }
 
+/** The filesystem calls the write phase makes, so a test can watch which ones it does. */
+export interface WriteOps {
+	chmod: typeof chmod;
+	mkdir: typeof mkdir;
+	rename: typeof renameFile;
+	unlink: typeof unlink;
+	writeFile: typeof writeFile;
+}
+
+const REAL_OPS: WriteOps = { chmod, mkdir, rename: renameFile, unlink, writeFile };
+
 /**
  * Write the plan: stage every file beside its destination, rename the stages
- * into place, then remove the old file. A failure at any point restores what
- * was already replaced, so a half-done rename is not left behind.
+ * into place, then remove the old file. Anything that fails undoes what was
+ * already done, in reverse, so a half-done rename is not left behind.
+ *
+ * `caseOnly` is the one path that never unlinks the source. When `from` and
+ * `to` are one file under two spellings of its name, removing the old name
+ * removes the new one too, so the file is moved aside under a temporary name,
+ * moved to its new name, and then given its new content.
  */
-async function apply(
+export async function applyPlan(
 	root: string,
 	from: string,
 	to: string,
 	edits: FileEdit[],
-	redirects: RedirectPlan | undefined
+	redirects: RedirectPlan | undefined,
+	caseOnly: boolean,
+	ops: WriteOps = REAL_OPS
 ): Promise<void> {
-	const writes = edits.map((edit) => ({ path: path.join(root, edit.file), before: edit.before, content: edit.after, isNew: edit.file !== edit.source }));
+	const writes = edits.map((edit) => ({
+		path: path.join(root, edit.file),
+		before: edit.before,
+		content: edit.after,
+		mode: edit.mode,
+		isNew: edit.file !== edit.source,
+	}));
 	if (redirects) {
 		writes.push({
 			path: path.join(root, redirects.file),
 			before: redirects.before ?? '',
 			content: redirects.after,
+			mode: redirects.mode,
 			isNew: redirects.before === undefined,
 		});
 	}
 
 	const stages: string[] = [];
-	const done: { path: string; before: string; isNew: boolean }[] = [];
-	let removedOld = false;
+	const undo: (() => Promise<void>)[] = [];
+	const fromPath = path.join(root, from);
+	const toPath = path.join(root, to);
 
 	try {
 		for (const write of writes) {
-			await mkdir(path.dirname(write.path), { recursive: true });
+			await ops.mkdir(path.dirname(write.path), { recursive: true });
 			const stage = `${write.path}.commune-rename-${process.pid}`;
-			await writeFile(stage, write.content);
+			await ops.writeFile(stage, write.content);
 			stages.push(stage);
+			if (write.mode !== undefined) await ops.chmod(stage, write.mode);
 		}
+
 		for (const [index, write] of writes.entries()) {
-			await renameFile(stages[index], write.path);
-			done.push(write);
+			const moved = write.path === toPath;
+			if (moved && caseOnly) {
+				const aside = `${fromPath}.commune-rename-aside-${process.pid}`;
+				await ops.rename(fromPath, aside);
+				undo.push(() => ops.rename(aside, fromPath));
+				await ops.rename(aside, toPath);
+				undo.push(() => ops.rename(toPath, fromPath));
+				await ops.rename(stages[index], toPath);
+				undo.push(() => ops.writeFile(toPath, write.before));
+				continue;
+			}
+			await ops.rename(stages[index], write.path);
+			undo.push(() => (write.isNew ? ops.unlink(write.path) : ops.writeFile(write.path, write.before)));
 		}
-		// The old name goes last. On a case-insensitive disk a case-only rename
-		// has already replaced it, and the directory listing says so.
-		const oldPath = path.join(root, from);
-		const names = await readdir(path.dirname(oldPath));
-		if (names.includes(path.basename(oldPath)) && path.basename(oldPath) !== path.basename(to)) {
-			await unlink(oldPath);
-			removedOld = true;
+
+		if (!caseOnly) {
+			await ops.unlink(fromPath);
+			const original = edits.find((edit) => edit.source === from)!;
+			undo.push(async () => {
+				await ops.writeFile(fromPath, original.before);
+				if (original.mode !== undefined) await ops.chmod(fromPath, original.mode);
+			});
 		}
 	} catch (error) {
-		for (const stage of stages) await unlink(stage).catch(() => {});
-		for (const write of done.reverse()) {
-			if (write.isNew) await unlink(write.path).catch(() => {});
-			else await writeFile(write.path, write.before).catch(() => {});
-		}
-		if (removedOld) await writeFile(path.join(root, from), edits.find((edit) => edit.source === from)!.before).catch(() => {});
+		for (const stage of stages) await ops.unlink(stage).catch(() => {});
+		for (const step of undo.reverse()) await step().catch(() => {});
 		throw failure('EINTERNAL', `rename failed and was rolled back: ${error instanceof Error ? error.message : String(error)}`);
 	}
 }
