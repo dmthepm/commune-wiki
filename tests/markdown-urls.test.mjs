@@ -124,8 +124,7 @@ describe('the dev server', () => {
 	// `astro dev` never runs `astro:build:done`, which is where twins are
 	// written, so the dev server needs its own answer. This is the server a
 	// first run lands in, and its "view as markdown" link has to work there.
-	const PORT = 4391 + Math.floor(Math.random() * 500);
-	const BASE = `http://localhost:${PORT}`;
+	let base;
 	let server;
 
 	before(async () => {
@@ -133,29 +132,43 @@ describe('the dev server', () => {
 		const manifest = require.resolve('astro/package.json');
 		const astro = path.join(path.dirname(manifest), require(manifest).bin.astro);
 
-		// `--ignore-lock` keeps the server in the foreground and on this port.
-		// Without it, Astro 7 run under a coding agent (CI or a test run from
-		// Claude Code, Codex and the like) detaches into a background server,
-		// and one already running elsewhere answers instead of this one.
-		server = spawn(process.execPath, [astro, 'dev', '--port', String(PORT), '--ignore-lock'], {
+		// `--ignore-lock` keeps the server in the foreground. Without it, Astro 7
+		// run under a coding agent (a test run from Claude Code, Codex and the
+		// like) detaches into a background server. Port 0 lets the OS pick a
+		// free one, and the test reads the address Astro prints rather than
+		// guessing it, so a busy port can never point it at another server.
+		server = spawn(process.execPath, [astro, 'dev', '--port', '0', '--ignore-lock'], {
 			cwd: ROOT,
-			stdio: 'ignore',
+			stdio: ['ignore', 'pipe', 'pipe'],
 		});
 
-		const deadline = Date.now() + 60_000;
-		for (;;) {
-			try {
-				if ((await fetch(`${BASE}/`)).ok) break;
-			} catch {}
-			if (Date.now() > deadline) throw new Error(`astro dev did not answer on ${BASE}`);
-			await new Promise((resolve) => setTimeout(resolve, 250));
-		}
+		let output = '';
+		base = await new Promise((resolve, reject) => {
+			const timer = setTimeout(
+				() => reject(new Error(`astro dev printed no address within 60 s:\n${output.slice(-2000)}`)),
+				60_000
+			);
+			const read = (chunk) => {
+				output += chunk;
+				const address = output.match(/http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):\d+/);
+				if (address) {
+					clearTimeout(timer);
+					resolve(address[0]);
+				}
+			};
+			server.stdout.on('data', read);
+			server.stderr.on('data', read);
+			server.on('exit', (code) => {
+				clearTimeout(timer);
+				reject(new Error(`astro dev exited with ${code}:\n${output.slice(-2000)}`));
+			});
+		});
 	});
 
 	after(() => server?.kill());
 
 	test('serves a note’s .md byte-identical to the source file', async () => {
-		const response = await fetch(`${BASE}/notes/atomic-notes.md`);
+		const response = await fetch(`${base}/notes/atomic-notes.md`);
 		const source = await readFile(path.join(ROOT, 'src/content/notes/Atomic Notes.md'));
 
 		assert.equal(response.status, 200);
@@ -164,7 +177,7 @@ describe('the dev server', () => {
 	});
 
 	test('leaves a .md that is no entry’s twin to Astro’s 404', async () => {
-		const response = await fetch(`${BASE}/notes/no-such-note.md`);
+		const response = await fetch(`${base}/notes/no-such-note.md`);
 
 		assert.equal(response.status, 404);
 	});

@@ -110,7 +110,7 @@ async function findMarkdownTwin(root: string, pathname: string): Promise<string 
 
 	let requested: string;
 	try {
-		requested = decodeURIComponent(pathname).replace(/^\/+/, '');
+		requested = decodeURI(pathname).replace(/^\/+/, '');
 	} catch {
 		return undefined;
 	}
@@ -188,6 +188,9 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 					const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
 					if (request.method !== 'GET' && request.method !== 'HEAD') return next();
 					if (!pathname.endsWith('.md')) return next();
+					// Vite's own module and file requests are never twins, and each
+					// lookup reads the whole vault, so they skip it.
+					if (/^\/(?:src\/|node_modules\/|@)/.test(pathname)) return next();
 
 					findMarkdownTwin(root, pathname)
 						.then(async (file) => {

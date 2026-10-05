@@ -12,7 +12,7 @@ Start a wiki in one paste. You need Node 22.12 or newer, npm and Git.
 git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev
 ```
 
-Open the address Astro prints. The clone is only the source of the copy, and you can delete it afterward. To run the paste again, delete `commune-wiki` and `my-wiki` first, since both commands refuse to overwrite a folder. Run by a coding agent, Astro 7 starts the dev server in the background and prints its address as JSON. `npx astro dev stop` stops it. If you stop or have to guess, [tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
+Open the address Astro prints. The clone is only the source of the copy, and you can delete it afterward. To run the paste again, delete `commune-wiki` and `my-wiki` first, since both commands refuse to overwrite a folder. Run by a coding agent on macOS or Linux, Astro 7 starts the dev server in the background and prints its address as JSON. `npx astro dev stop` stops it. If you stop or have to guess, [tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
 
 ## Start a wiki
 
@@ -316,7 +316,7 @@ That installs all four skills into the current project for Claude Code and Codex
 
 `commune-write` asks one short round of editorial questions and waits for answers in `dumps/<slug>.answers.md`. It then drafts into the note and renders the original and draft side by side in `dumps/<slug>.review.html` for the author to review.
 
-On the author's instruction, `commune-ship` compares finding identities against the baseline, files an update, builds, gates and verifies each new href and destination file. It commits according to `WRITING.md`'s `dumps.commit` policy, opens a PR and records the receipt in `dumps/<slug>.ship.md`. That needs the wiki to be a Git repository with a GitHub remote and `gh` signed in. The starter copy is neither, so run `git init` in it and push it to a repository of your own first. The author approves the content. This skill never merges. That boundary governs authored content, while code maintenance follows the repository's contribution rules.
+On the author's instruction, `commune-ship` compares finding identities against the baseline, files an update, builds, gates and verifies each new href and destination file. It commits according to `WRITING.md`'s `dumps.commit` policy, opens a PR and records the receipt in `dumps/<slug>.ship.md`. That needs the wiki to be a Git repository with a GitHub remote and a way to open a pull request, such as `gh` signed in. The starter copy is neither, so run `git init` in it and push it to a repository of your own first. The author approves the content. This skill never merges. That boundary governs authored content, while code maintenance follows the repository's contribution rules.
 
 The four skills, their tests and the `WRITING.md` template ship today. An end to end run of the installed skills on a fresh starter wiki, from dictation to a gated commit, passed on October 1, 2026. Pushing and opening the pull request were not part of that run.
 
