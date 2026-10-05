@@ -18,7 +18,7 @@
  */
 
 import { glob } from 'tinyglobby';
-import { slug as githubSlug } from 'github-slugger';
+import GithubSlugger, { slug as githubSlug } from 'github-slugger';
 import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -813,7 +813,8 @@ export type DiagnosticRule =
 	| 'broken-link'
 	| 'ambiguous-target'
 	| 'duplicate-name'
-	| 'noncanonical-title';
+	| 'noncanonical-title'
+	| 'broken-anchor';
 
 /**
  * One finding, as data.
@@ -1295,6 +1296,105 @@ export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
 	return diagnostics;
 }
 
+/**
+ * The text of a heading as the page renders it, which is what its id is made from.
+ *
+ * `rehypeHeadingIds` slugs the heading's text content, so the markup around the
+ * words is gone by then: emphasis marks, code ticks, the destination of a link,
+ * tags. Slugging drops other punctuation itself, but an underscore is the one mark `github-slugger` keeps, so only one that
+ * opens or closes emphasis is dropped, never the one inside `snake_case`.
+ */
+function headingText(markdown: string): string {
+	return markdown
+		.replace(/\\([\\`*_{}[\]()#+\-.!~|<>])/g, '$1')
+		.replace(/!?\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_, name, label) => label ?? name)
+		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+		.replace(/\[([^\]]*)\]\[[^\]]*\]/g, '$1')
+		.replace(/(`+)(.+?)\1/g, '$2')
+		.replace(/<[^>\n]+>/g, '')
+		.replace(/(^|\W)_+|_+(?=\W|$)/g, '$1')
+		.replace(/&(amp|lt|gt|quot|#39);/g, (_, name) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" })[name as string]!)
+		.trim();
+}
+
+/**
+ * The id every ATX heading in a body gets on the rendered page.
+ *
+ * One `GithubSlugger` walked in document order, as the page does it: the second
+ * "Intro" is `intro-1`. Fenced code is skipped because a `# comment` in a shell
+ * block is not a heading. Setext headings (a line underlined with `===` or
+ * `---`) are not read, so a link to one is reported.
+ */
+export function headingSlugs(body: string): string[] {
+	const slugger = new GithubSlugger();
+	const slugs: string[] = [];
+	let fence: string | undefined;
+
+	for (const line of body.split('\n')) {
+		const marker = line.match(/^ {0,3}(`{3,}|~{3,})/)?.[1];
+		if (fence) {
+			if (marker && marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
+			continue;
+		}
+		if (marker) {
+			fence = marker;
+			continue;
+		}
+		const heading = line.match(/^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/);
+		if (!heading) continue;
+		slugs.push(slugger.slug(headingText(heading[1] ?? '')));
+	}
+
+	return slugs;
+}
+
+/**
+ * `[[Note#Heading]]` links whose note exists and has no such heading.
+ *
+ * The anchor is `splitWikilinkTarget`'s, so link and heading are slugged by the
+ * same call. A repeated heading is `-1`, `-2` on the page and the link by name
+ * reaches the first, so it is resolved. A link whose note does not resolve is
+ * `broken-link`'s business. `[[#Heading]]` is read against its own note. Block
+ * refs name no heading, and embeds (`![[Note#Heading]]`) are not heading links.
+ */
+export function findBrokenAnchors(entries: ContentEntry[]): Diagnostic[] {
+	const byName = buildLinkLookup(entries);
+	const byUrl = new Map(entries.map((entry) => [entry.urlPath, entry]));
+	const slugs = new Map<string, Set<string>>();
+	const slugsOf = (entry: ContentEntry): Set<string> => {
+		if (!slugs.has(entry.urlPath)) slugs.set(entry.urlPath, new Set(headingSlugs(entry.body)));
+		return slugs.get(entry.urlPath)!;
+	};
+
+	const diagnostics: Diagnostic[] = [];
+
+	for (const entry of entries) {
+		const seen = new Set<string>();
+		for (const match of stripCode(entry.body).matchAll(WIKILINK)) {
+			if (entry.body[match.index! - 1] === '!') continue;
+			const written = match[1].trim();
+			const { target, anchor } = splitWikilinkTarget(written);
+			if (!anchor || seen.has(written)) continue;
+			seen.add(written);
+
+			const resolved = target ? byUrl.get(byName.get(linkKey(target))?.urlPath ?? '') : entry;
+			if (!resolved || slugsOf(resolved).has(anchor)) continue;
+
+			diagnostics.push({
+				rule: 'broken-anchor',
+				severity: 'warning',
+				file: entry.file,
+				urlPath: entry.urlPath,
+				kind: 'name',
+				target: written,
+				message: `[[${written}]] points at a heading that does not exist (#${anchor})`,
+			});
+		}
+	}
+
+	return diagnostics;
+}
+
 /** A wikilink keeping its display text, which the canonical-title rule needs to see. */
 const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
@@ -1306,5 +1406,10 @@ const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
  * every entry in hand before they can fire.
  */
 export function checkEntries(entries: ContentEntry[], graph: Graph): Diagnostic[] {
-	return [...graph.diagnostics, ...findDuplicateNames(entries), ...findNoncanonicalTitles(entries)];
+	return [
+		...graph.diagnostics,
+		...findDuplicateNames(entries),
+		...findNoncanonicalTitles(entries),
+		...findBrokenAnchors(entries),
+	];
 }

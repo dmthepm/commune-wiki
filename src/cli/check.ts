@@ -26,6 +26,7 @@ const RULES: DiagnosticRule[] = [
 	'ambiguous-target',
 	'duplicate-name',
 	'noncanonical-title',
+	'broken-anchor',
 ];
 
 /** A finding as it appears in the payload: no internal rendering fields. */
