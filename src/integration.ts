@@ -10,7 +10,7 @@
  */
 
 import type { AstroIntegration } from 'astro';
-import { copyFile, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { access, copyFile, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -86,22 +86,73 @@ async function writeMarkdownFiles(
 	root: string,
 	outDir: string
 ): Promise<number> {
+	// Destination to the file it comes from. Two entries may not write one
+	// twin: the second would replace the first without a word, and a note's
+	// `.md` would quietly become another note's source. Canonical addresses go
+	// first, so when this does throw, the message names the route that moved
+	// onto an address rather than the address that moved onto the route.
+	const sources = new Map<string, string>();
+	const addresses = [
+		...entries.map((entry) => ({ entry, urlPath: entry.urlPath })),
+		...entries.flatMap((entry) => entry.routes.map((urlPath) => ({ entry, urlPath }))),
+	];
 	let written = 0;
 
-	for (const entry of entries) {
-		for (const urlPath of [entry.urlPath, ...entry.routes]) {
-			const destination = path.join(outDir, toMarkdownPath(urlPath));
-			await mkdir(path.dirname(destination), { recursive: true });
-			// `entry.file` is relative to the project root — the graph's promise —
-			// so the read is joined to that root and not left to the cwd. They are
-			// the same directory when someone runs `astro build` in their project
-			// and different the moment they do not.
-			await copyFile(path.join(root, entry.file), destination);
-			written += 1;
+	for (const { entry, urlPath } of addresses) {
+		const twin = toMarkdownPath(urlPath);
+		const claimed = sources.get(twin);
+		if (claimed !== undefined && claimed !== entry.file) {
+			throw new Error(
+				`${entry.file} would write ${twin} for ${urlPath}, but ${claimed} already does. ` +
+					'Two entries cannot share a markdown twin; change the route.'
+			);
 		}
+		sources.set(twin, entry.file);
+
+		const destination = path.join(outDir, twin);
+		await mkdir(path.dirname(destination), { recursive: true });
+		// `entry.file` is relative to the project root — the graph's promise —
+		// so the read is joined to that root and not left to the cwd. They are
+		// the same directory when someone runs `astro build` in their project
+		// and different the moment they do not.
+		await copyFile(path.join(root, entry.file), destination);
+		written += 1;
 	}
 
 	return written;
+}
+
+/**
+ * Warn about a route nothing renders.
+ *
+ * The integration writes the twin at a route but not the page: pages are the
+ * consumer's. A route with no `<route>/index.html` (or `<route>.html`, for
+ * `build.format: 'file'`) in the output is a declared address with a twin and
+ * no page, which is easy to do by forgetting the route file.
+ */
+async function warnUnrenderedRoutes(
+	entries: ContentEntry[],
+	outDir: string,
+	logger: Pick<Console, 'warn'>
+) {
+	for (const entry of entries) {
+		for (const route of entry.routes) {
+			const candidates = [path.join(outDir, route, 'index.html')];
+			if (route !== '/') candidates.push(path.join(outDir, `${route.replace(/\/$/, '')}.html`));
+			const rendered = await Promise.any(
+				candidates.map((candidate) => access(candidate))
+			).then(
+				() => true,
+				() => false
+			);
+			if (!rendered) {
+				logger.warn(
+					`${entry.file} declares the route ${route}, but the build has no page there. ` +
+						'Add a route that renders the entry, as the README\'s "Alias routes" shows.'
+				);
+			}
+		}
+	}
 }
 
 /**
@@ -114,7 +165,7 @@ async function writeMarkdownFiles(
  * the build writer uses, so dev and build cannot disagree about which URL is
  * which file. Anything that is not a twin falls through to Astro.
  */
-async function findMarkdownTwin(root: string, pathname: string): Promise<string | undefined> {
+export async function findMarkdownTwin(root: string, pathname: string): Promise<string | undefined> {
 	if (!pathname.endsWith('.md')) return undefined;
 
 	let requested: string;
@@ -125,17 +176,27 @@ async function findMarkdownTwin(root: string, pathname: string): Promise<string 
 	}
 
 	const entries = await loadContentEntries({ root });
-	const entry = entries.find((candidate) => {
-		try {
-			return [candidate.urlPath, ...candidate.routes].some(
-				(urlPath) => toMarkdownPath(urlPath) === requested
-			);
-		} catch {
-			return false;
-		}
-	});
+	const owners = entries.filter((candidate) =>
+		[candidate.urlPath, ...candidate.routes].some((urlPath) => {
+			try {
+				return toMarkdownPath(urlPath) === requested;
+			} catch {
+				return false;
+			}
+		})
+	);
 
-	return entry ? path.join(root, entry.file) : undefined;
+	// The build refuses this; the dev server must not hide it by answering with
+	// whichever entry happens to come first.
+	if (owners.length > 1) {
+		throw new Error(
+			`${requested} is the markdown twin of more than one entry: ${owners
+				.map((owner) => owner.file)
+				.join(', ')}. Run \`commune check\` for the route-collision.`
+		);
+	}
+
+	return owners.length ? path.join(root, owners[0].file) : undefined;
 }
 
 function summarize(graph: Graph): string {
@@ -235,6 +296,7 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 					await writeSiteFile(publicSite, site);
 
 					const written = await writeMarkdownFiles(entries, root, fileURLToPath(dir));
+					await warnUnrenderedRoutes(entries, fileURLToPath(dir), logger);
 
 					logger.info(`✅ Backlinks index written to /backlinks.json (dist + public)`);
 					logger.info(`📄 ${written} twins written as .md alongside their pages`);

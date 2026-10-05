@@ -205,14 +205,16 @@ routes: ["/"]
 
 The key is `routes`, not `aliases`. `aliases` already means the other names a `[[WikiLink]]` resolves to, and a name is not an address. Keeping the two apart means neither has to guess which one a value is.
 
-Each route has to be a site-absolute path in the form every canonical URL has: `/` for the home page, otherwise a leading and a trailing slash, as in `/start/`. `/start`, `start/`, `/a/../b/`, a query string or a fragment stops the build with an error that names the file and the spelling that would have worked.
+Each route has to be a site-absolute path in the form every canonical URL has: `/` for the home page, otherwise a leading and a trailing slash, as in `/start/`, with only letters, digits and `. _ ~ -` in each segment. `/start`, `start/`, `/a/../b/`, a query string, a fragment, a space or a `%` stops the build with an error that names the file and, where there is one, the spelling that would have worked.
 
 What the engine does with a route:
 
 - **One node.** `backlinks.json` and `site.json` keep one entry for the note, at its canonical URL. A route is a second address, not a second note.
 - **A twin at each route.** The build writes the source file at `toMarkdownPath` of every route, so `routes: ["/"]` gives `/index.md` as well as `/notes/my-working-notes.md`. Both are the file, byte for byte. The dev server answers them too.
 - **Listed on the entry.** `commune graph query --json` returns `routes` on each entry, empty when there are none.
-- **Checked.** `commune check` reports `route-collision` when a route is another entry's URL, or when two entries declare the same route. It is an error, because two pages would write the same file.
+- **Links resolve.** A markdown link to a route, `[start](/start/)`, reaches the note that renders there, and the edge lands on the one node at its canonical URL.
+- **Checked.** `commune check` reports `route-collision` when a route is another entry's URL, or when two entries declare the same route. Addresses are compared by the markdown twin they write, so `/` and `/index/` collide, and so do `/about/` and a page with `url: "/about"`. It is an error, because two entries would write the same file: the build refuses it with a message naming both files, the dev server refuses that `.md` request, `commune gate` fails, and `commune rename --move-url` will not create one.
+- **Warned when unrendered.** The build warns about a route that has no page in the output, since the engine writes the twin and not the page.
 
 The engine does not write the page at the route. Pages are yours, so the route is a page you write, and the one thing it has to get right is `rel=canonical`. Search engines treat two URLs with the same content as one page and pick a winner, and `rel=canonical` is how you pick it. `toCanonicalUrl` from `@dmthepm/commune/graph` builds the absolute URL from the entry's own `urlPath`, never from the route being served:
 
@@ -222,8 +224,9 @@ The engine does not write the page at the route. Pages are yours, so the route i
 import { getCollection, render } from 'astro:content';
 import { toCanonicalUrl, toMarkdownHref } from '@dmthepm/commune/graph';
 
-const notes = await getCollection('notes');
+const notes = await getCollection('notes', (note) => note.data.visibility === 'public');
 const home = notes.find((note) => note.data.routes.includes('/'));
+if (!home) throw new Error('No public note declares routes: ["/"]');
 const { Content } = await render(home);
 ---
 <head>
@@ -232,6 +235,8 @@ const { Content } = await render(home);
 <Content />
 <a href={toMarkdownHref('/')}>source</a>
 ```
+
+The `visibility` filter matters: without it a private note that declares `routes: ["/"]` would be published at `/`. The `/notes/${home.id}/` URL is for the notes collection; an entry in another collection uses its own `urlPath`. `toCanonicalUrl` throws when `site` is not set in the Astro config, and it does not support a `base` path: the canonical URL is built against the origin alone.
 
 Add `routes: z.array(z.string()).default([])` to the collection schema so `note.data.routes` exists. [`tests/fixtures/consumer`](tests/fixtures/consumer/src/pages/index.astro) is this page, built in CI.
 
