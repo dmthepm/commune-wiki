@@ -76,7 +76,8 @@ Visibility controls the generated site, not access to source files in Git. A pub
 
 - An engine/version error. Check that your terminal uses Node 22.12+ and npm 9.6.5+.
 - Install fails. Record the npm error and registry/network settings. The starter installs only published packages, with no monorepo paths.
-- A link fails the build. Run `npm run check`. Check spelling, unique titles, and the target note’s visibility.
+- A link renders as plain text. It points at nothing the wiki publishes. The build still succeeds and logs a broken-link warning, and `npm run check` lists every one. Check spelling, unique titles, and the target note’s visibility.
+- `npm run verify` fails after you edit the samples. It checks the shipped sample notes only, so this is expected. Use `npm run check` for your own content.
 - No second pane. Use a viewport at least 1024 pixels wide and allow JavaScript. Mobile navigation intentionally uses ordinary pages.
 - Search/backlinks are stale. Restart the dev server after changing content, or rebuild production output.
 
