@@ -36,6 +36,23 @@ test('starter copies from an unrelated cwd, including dotfiles and only publishe
   assert.equal(await readFile(path.join(destination, 'src/layouts/WikiLayout.astro'), 'utf8'), await readFile(path.join(source, 'src/layouts/WikiLayout.astro'), 'utf8'));
 });
 
+test('copier names the wiki the way it was asked for', async t => {
+  const cwd = await sandbox(t);
+  const { stdout: plain } = await exec(process.execPath, [copier, 'my-wiki'], { cwd });
+  assert.match(plain, /^Created my-wiki\n/);
+  assert.match(plain, /\n  cd my-wiki\n/);
+  const { stdout: spaced } = await exec(process.execPath, [copier, 'a wiki'], { cwd });
+  assert.match(spaced, /\n  cd 'a wiki'\n/);
+  const outside = await sandbox(t);
+  const elsewhere = path.join(outside, 'far');
+  const { stdout: absolute } = await exec(process.execPath, [copier, elsewhere], { cwd });
+  assert.ok(absolute.startsWith(`Created ${elsewhere}\n`), 'a destination outside the cwd stays absolute');
+  const { stdout: dashed } = await exec(process.execPath, [copier, './-wiki'], { cwd });
+  assert.match(dashed, /\n  cd \.\/-wiki\n/, 'a name starting with a dash is not read as an option');
+  const { stdout: dotted } = await exec(process.execPath, [copier, '..wiki'], { cwd });
+  assert.match(dotted, /\n  cd \.\.wiki\n/, 'a name starting with two dots is still inside the cwd');
+});
+
 test('copier refuses existing directories, files, and symlinks without overwriting', async t => {
   const cwd = await sandbox(t);
   await mkdir(path.join(cwd, 'empty'));

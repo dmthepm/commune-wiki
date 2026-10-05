@@ -47,8 +47,15 @@ if (args.length !== 1 || args[0].startsWith('-')) {
       await rm(destination, { recursive: true, force: true });
       throw error;
     }
-    const quoted = "'" + destination.replaceAll("'", "'\\''") + "'";
-    console.log(`Created ${destination}\n\nNext:\n  cd ${quoted}\n  npm install\n  npm run build\n  npm run verify\n  npm run dev\n\nNo dependencies were installed. Read README.md before publishing.`);
+    // Say where the wiki is the way the reader named it. A path inside the
+    // working directory prints relative, so `my-wiki` does not come back as a
+    // two-line absolute path. Anything outside it stays absolute.
+    const relative = path.relative(process.cwd(), destination);
+    const outside = relative === '' || relative.split(path.sep)[0] === '..' || path.isAbsolute(relative);
+    // `./` keeps a name that starts with a dash from reading as an option to `cd`.
+    const shown = outside ? destination : relative.startsWith('-') ? `.${path.sep}${relative}` : relative;
+    const quoted = /^[\w./-]+$/.test(shown) ? shown : "'" + shown.replaceAll("'", "'\\''") + "'";
+    console.log(`Created ${shown}\n\nNext:\n  cd ${quoted}\n  npm install\n  npm run build\n  npm run verify\n  npm run dev\n\nNo dependencies were installed. Read README.md before publishing.`);
   } catch (error) {
     console.error(`Could not create wiki: ${error.message}`);
     process.exitCode = 1;
