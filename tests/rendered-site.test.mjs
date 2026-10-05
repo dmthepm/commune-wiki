@@ -142,7 +142,8 @@ describe('the rendered site', () => {
 		// History navigation follows the fragment too (#113): Back and Forward
 		// hand the address bar's hash to the pane, a rebuilt page scrolls to it
 		// on load, and re-clicking the current fragment replaces its entry.
-		assert.match(html, /focusPane\(panes\[targetIndex\], window\.location\.hash\)/);
+		assert.match(html, /focusPane\(panes\[targetIndex\], window\.location\.hash, e\.state\?\.scrollTop\)/);
+		assert.match(html, /history\.replaceState\(\{ \.\.\.history\.state, scrollTop: scroller\.scrollTop \}, ''\)/);
 		assert.match(html, /scrollToHash\(firstPane, window\.location\.hash\)/);
 		assert.match(html, /history\[alreadyHere \? 'replaceState' : 'pushState'\]/);
 	});
