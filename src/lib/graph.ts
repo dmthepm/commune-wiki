@@ -1268,7 +1268,11 @@ export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
 
 	for (const entry of entries) {
 		for (const match of stripCode(entry.body).matchAll(LABELLED_WIKILINK)) {
-			const linked = match[1].trim();
+			const written = match[1].trim();
+			// A heading link names its note like any other: the title is judged
+			// on its own and the subpath rides along unchanged.
+			const linked = splitWikilinkTarget(written).target;
+			const subpath = written.slice(linked.length).trimStart();
 			const label = match[2]?.trim();
 			const exact = canonical.get(linked.toLowerCase());
 			if (!exact) continue; // unresolved links are `broken-link`'s business
@@ -1282,7 +1286,7 @@ export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
 					kind: 'name',
 					target: exact,
 					canonical: exact,
-					message: `[[${linked}${label ? `|${label}` : ''}]] should be [[${exact}]]`,
+					message: `[[${written}${label ? `|${label}` : ''}]] should be [[${exact}${subpath}]]`,
 				});
 			}
 		}

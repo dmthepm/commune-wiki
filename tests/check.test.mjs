@@ -9,7 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildGraph, checkEntries, loadContentEntries } from '../src/lib/graph.ts';
+import { buildGraph, checkEntries, findNoncanonicalTitles, loadContentEntries } from '../src/lib/graph.ts';
 import { commune, VAULT } from './helpers.mjs';
 
 async function findings(root) {
@@ -109,4 +109,25 @@ test('check on the engine reports 30 warnings and 0 errors', async () => {
 	assert.equal(summary.byRule['broken-link'], 30);
 	assert.equal(summary.entries, 12);
 	assert.equal(summary.edges, 45);
+});
+
+test('a heading link is held to the canonical title like any other link', () => {
+	// Two entries are enough: the rule reads only titles, aliases and the body.
+	const entry = (title, body, aliases = []) => ({
+		file: `src/content/notes/${title}.md`, title, aliases, body, urlPath: `/notes/${title.toLowerCase()}/`,
+	});
+	const found = findNoncanonicalTitles([
+		entry('Beta', '[[Beta#Intro]] [[#Here]] [[Beta^abc]]', ['B']),
+		entry('Gamma', '[[beta#Intro]] [[B#Intro]] [[Beta#Intro|start]] [[Beta |x]]'),
+	]);
+
+	assert.deepEqual(
+		found.map((finding) => finding.message),
+		[
+			'[[beta#Intro]] should be [[Beta#Intro]]',
+			'[[B#Intro]] should be [[Beta#Intro]]',
+			'[[Beta#Intro|start]] should be [[Beta#Intro]]',
+			'[[Beta|x]] should be [[Beta]]',
+		]
+	);
 });
