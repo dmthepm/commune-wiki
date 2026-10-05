@@ -9,8 +9,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildGraph, checkEntries, findNoncanonicalTitles, loadContentEntries } from '../src/lib/graph.ts';
-import { commune, VAULT } from './helpers.mjs';
+import { buildGraph, checkEntries, findBrokenAnchors, findNoncanonicalTitles, loadContentEntries } from '../src/lib/graph.ts';
+import { communeMarkdown } from '../src/markdown.ts';
+import { mkdtemp, cp, appendFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { BIN, commune, run, VAULT } from './helpers.mjs';
 
 async function findings(root) {
 	const entries = await loadContentEntries(root ? { root } : {});
@@ -21,17 +26,17 @@ function byRule(list, rule) {
 	return list.filter((finding) => finding.rule === rule);
 }
 
-test('every rule fires exactly once on the fixture vault', async () => {
+test('every rule but broken-anchor fires on the fixture vault, which has no heading links', async () => {
 	const list = await findings(VAULT);
 
 	assert.deepEqual(
 		Object.fromEntries(
-			['broken-link', 'ambiguous-target', 'duplicate-name', 'noncanonical-title'].map((rule) => [
+			['broken-link', 'ambiguous-target', 'duplicate-name', 'noncanonical-title', 'broken-anchor'].map((rule) => [
 				rule,
 				byRule(list, rule).length,
 			])
 		),
-		{ 'broken-link': 1, 'ambiguous-target': 1, 'duplicate-name': 2, 'noncanonical-title': 1 }
+		{ 'broken-link': 1, 'ambiguous-target': 1, 'duplicate-name': 2, 'noncanonical-title': 1, 'broken-anchor': 0 }
 	);
 });
 
@@ -92,6 +97,7 @@ test('check --json reports counts by rule and exits 0 despite findings', async (
 		'ambiguous-target': 1,
 		'duplicate-name': 2,
 		'noncanonical-title': 1,
+		'broken-anchor': 0,
 	});
 	assert.equal(payload.summary.errors, 4);
 	assert.equal(payload.summary.warnings, 1);
@@ -130,4 +136,104 @@ test('a heading link is held to the canonical title like any other link', () => 
 			'[[Beta|x]] should be [[Beta]]',
 		]
 	);
+});
+
+// Headings are read off the rendered page, with the processor `commune render`
+// uses, so these cases check the real ids and not a second reading of markdown.
+const renderer = await communeMarkdown({ root: VAULT, site: 'https://example.com' }).createRenderer({});
+
+async function headingIds(entry) {
+	const { code } = await renderer.render(entry.body, { frontmatter: entry.frontmatter });
+	return new Set([...code.matchAll(/<h[1-6]\b[^>]*?\sid="([^"]*)"/g)].map((match) => match[1]));
+}
+
+function anchorEntry(title, body) {
+	return {
+		file: `src/content/notes/${title}.md`, title, aliases: [], body, frontmatter: {},
+		urlPath: `/notes/${title.toLowerCase()}/`,
+	};
+}
+
+function anchors(beta, alpha = '', ids = headingIds) {
+	return findBrokenAnchors([anchorEntry('Beta', beta), anchorEntry('Alpha', alpha)], ids);
+}
+
+test('a link to a heading that is not there warns, and one to a real heading does not', async () => {
+	const [finding, ...rest] = await anchors('## Intro\n', '[[Beta#Intro]] [[Beta#No such heading]] [[Beta#intro]]');
+
+	assert.equal(rest.length, 0);
+	assert.equal(finding.rule, 'broken-anchor');
+	assert.equal(finding.severity, 'warning');
+	assert.equal(finding.file, 'src/content/notes/Alpha.md');
+	assert.equal(finding.target, 'Beta#No such heading');
+	assert.equal(finding.message, '[[Beta#No such heading]] points at a heading that does not exist (#no-such-heading)');
+});
+
+test('a repeated heading is reached by name at its first occurrence', async () => {
+	assert.equal((await anchors('## Intro\n\n## Intro\n', '[[Beta#Intro]]')).length, 0);
+});
+
+test('a heading the page gives an id never warns, whatever markup it is written in', async () => {
+	const headings = [
+		['## The `__init__` method', 'The __init__ method'],
+		['## The `<details>` element', 'The <details> element'],
+		['## `a &amp; b`', 'a &amp; b'],
+		['## _id field', '_id field'],
+		['## Underscore_in_middle_', 'Underscore_in_middle_'],
+		['> ## Quoted', 'Quoted'],
+		['- ## List heading', 'List heading'],
+		['Heading\n===', 'Heading'],
+		['Sub heading\n---', 'Sub heading'],
+		['## Autolink <https://example.com> here', 'Autolink <https://example.com> here'],
+		['## Fish &copy; chips', 'Fish © chips'],
+		['## *Really* **very** ~~bad~~ idea', 'Really very bad idea'],
+		['## A [link](https://example.com/x_y) here', 'A link here'],
+		['## Café au lait', 'Café au lait'],
+		['## 日本語の見出し', '日本語の見出し'],
+	];
+
+	for (const [markdown, text] of headings) {
+		assert.deepEqual(await anchors(`${markdown}\n`, `[[Beta#${text}]]`), [], markdown);
+	}
+});
+
+test('a heading that is not on the page warns, including one only inside a code fence', async () => {
+	assert.equal((await anchors('## Real\n', '[[Beta#Cafe]]')).length, 1);
+	assert.equal((await anchors('```sh\n# not a heading\n```\n\n## Real\n', '[[Beta#not a heading]]')).length, 1);
+});
+
+test('block refs, embeds, code, unresolved notes and same-note links', async () => {
+	assert.equal((await anchors('## Real\n', '[[Beta^abc]] [[Beta#^abc]] ![[Beta#Missing]] `[[Beta#Missing]]` [[Nowhere#Missing]]')).length, 0);
+	assert.deepEqual(
+		(await findBrokenAnchors([anchorEntry('Alpha', '## Here\n\n[[#Here]] [[#Gone]]')], headingIds)).map((finding) => finding.target),
+		['#Gone']
+	);
+});
+
+test('only notes an anchored link points at are rendered, each once, and one that throws is skipped', async () => {
+	const rendered = [];
+	const ids = async (entry) => {
+		rendered.push(entry.title);
+		if (entry.title === 'Beta') throw new Error('boom');
+		return headingIds(entry);
+	};
+
+	assert.deepEqual(await anchors('## Real\n', '[[Beta#A]] [[Beta#B]] [[Alpha]] [[Beta]]', ids), []);
+	assert.deepEqual(rendered, ['Beta']);
+});
+
+test('check finds a broken heading link with no Astro module loaded', async () => {
+	const dir = await mkdtemp(join(tmpdir(), 'commune-anchor-'));
+	try {
+		await cp(join(VAULT, 'src'), join(dir, 'src'), { recursive: true });
+		await appendFile(join(dir, 'src/content/notes/Beta.md'), '\n[[Beta#Gone]] [[Beta#Gone]] [[Beta]]\n');
+		const hook = fileURLToPath(new URL('./fixtures/no-astro-hook.mjs', import.meta.url));
+		const { stdout } = await run(process.execPath, ['--import', hook, BIN, '--root', dir, 'check', '--json']);
+
+		const { summary, findings } = JSON.parse(stdout);
+		assert.equal(summary.byRule['broken-anchor'], 1);
+		assert.equal(findings.find((finding) => finding.rule === 'broken-anchor').target, 'Beta#Gone');
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
 });

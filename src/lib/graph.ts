@@ -813,7 +813,8 @@ export type DiagnosticRule =
 	| 'broken-link'
 	| 'ambiguous-target'
 	| 'duplicate-name'
-	| 'noncanonical-title';
+	| 'noncanonical-title'
+	| 'broken-anchor';
 
 /**
  * One finding, as data.
@@ -1295,6 +1296,75 @@ export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
 	return diagnostics;
 }
 
+/**
+ * `[[Note#Heading]]` links whose note exists and has no such heading.
+ *
+ * Whether a heading exists is not something to re-derive from markdown: the id
+ * a heading gets depends on every plugin between the source and the page, and a
+ * scan of the source gets blockquotes, list items, setext headings, inline code
+ * and entities wrong in turn. So the answer is asked of the page. `headingIds`
+ * is handed each note that at least one anchored link points at, and returns the
+ * ids of its rendered `h1` to `h6`. When it returns `undefined` or throws, that
+ * note is not checked. It lives with the caller because rendering
+ * needs the markdown processor, which the graph core must not import.
+ *
+ * The anchor is `splitWikilinkTarget`'s, so link and heading are slugged by the
+ * same call. A repeated heading is `-1`, `-2` on the page and the link by name
+ * reaches the first, so it is found. A link whose note does not resolve is
+ * `broken-link`'s business. `[[#Heading]]` is read against its own note. Block
+ * refs name no heading, and embeds (`![[Note#Heading]]`) are not heading links.
+ */
+export async function findBrokenAnchors(
+	entries: ContentEntry[],
+	headingIds: (entry: ContentEntry) => Promise<Set<string> | undefined>
+): Promise<Diagnostic[]> {
+	const byName = buildLinkLookup(entries);
+	const byUrl = new Map(entries.map((entry) => [entry.urlPath, entry]));
+
+	const links: { entry: ContentEntry; written: string; anchor: string; to: ContentEntry }[] = [];
+	for (const entry of entries) {
+		const seen = new Set<string>();
+		for (const match of stripCode(entry.body).matchAll(WIKILINK)) {
+			if (entry.body[match.index! - 1] === '!') continue;
+			const written = match[1].trim();
+			const { target, anchor } = splitWikilinkTarget(written);
+			if (!anchor || seen.has(written)) continue;
+			seen.add(written);
+
+			const to = target ? byUrl.get(byName.get(linkKey(target))?.urlPath ?? '') : entry;
+			if (to) links.push({ entry, written, anchor, to });
+		}
+	}
+
+	// One render per note, however many links point at it, and none for a note
+	// nothing anchored points at.
+	const ids = new Map<string, Set<string> | undefined>();
+	for (const { to } of links) {
+		if (ids.has(to.urlPath)) continue;
+		// `check` reports on content and does not stop for a page that will not
+		// render: that note's anchors go unchecked.
+		ids.set(to.urlPath, await headingIds(to).catch(() => undefined));
+	}
+
+	const diagnostics: Diagnostic[] = [];
+	for (const { entry, written, anchor, to } of links) {
+		const found = ids.get(to.urlPath);
+		if (!found || found.has(anchor)) continue;
+
+		diagnostics.push({
+			rule: 'broken-anchor',
+			severity: 'warning',
+			file: entry.file,
+			urlPath: entry.urlPath,
+			kind: 'name',
+			target: written,
+			message: `[[${written}]] points at a heading that does not exist (#${anchor})`,
+		});
+	}
+
+	return diagnostics;
+}
+
 /** A wikilink keeping its display text, which the canonical-title rule needs to see. */
 const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
@@ -1303,7 +1373,8 @@ const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
  *
  * The graph's own diagnostics come first and in entry order, so the list reads
  * the same way the build log does, then the two whole-corpus rules that need
- * every entry in hand before they can fire.
+ * every entry in hand before they can fire. `broken-anchor` is the exception
+ * that has to render pages, so `check` adds it after this, with `findBrokenAnchors`.
  */
 export function checkEntries(entries: ContentEntry[], graph: Graph): Diagnostic[] {
 	return [...graph.diagnostics, ...findDuplicateNames(entries), ...findNoncanonicalTitles(entries)];

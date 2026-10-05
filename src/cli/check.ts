@@ -14,7 +14,9 @@
 import {
 	buildGraph,
 	checkEntries,
+	findBrokenAnchors,
 	loadContentEntries,
+	type ContentEntry,
 	type Diagnostic,
 	type DiagnosticRule,
 } from '../lib/graph.ts';
@@ -26,6 +28,7 @@ const RULES: DiagnosticRule[] = [
 	'ambiguous-target',
 	'duplicate-name',
 	'noncanonical-title',
+	'broken-anchor',
 ];
 
 /** A finding as it appears in the payload: no internal rendering fields. */
@@ -42,10 +45,39 @@ function toFinding(diagnostic: Diagnostic) {
 	};
 }
 
+/**
+ * The ids a note's headings have on the page, from rendering it with the
+ * processor `render` and the site use.
+ *
+ * `@astrojs/markdown-remark` is imported only when a link needs it, so a vault
+ * with no heading links never loads it. It is the unified pipeline, not the
+ * Astro runtime.
+ */
+function headingIdsOf(root: string) {
+	let renderer: Promise<{ render: (body: string, options: object) => Promise<{ code: string }> }> | undefined;
+
+	return async (entry: ContentEntry): Promise<Set<string>> => {
+		renderer ??= import('../markdown.ts').then(({ communeMarkdown }) =>
+			communeMarkdown({ root }).createRenderer({})
+		);
+		const { code } = await (await renderer).render(entry.body, { frontmatter: entry.frontmatter });
+		const ids = new Set<string>();
+		for (const match of code.matchAll(/<h[1-6]\b[^>]*?\sid="([^"]*)"/g)) {
+			ids.add(match[1]);
+			// A slug that came out percent-encoded is the same target once decoded.
+			try { ids.add(decodeURIComponent(match[1])); } catch { /* keep the raw id */ }
+		}
+		return ids;
+	};
+}
+
 export async function checkCommand(root: string, json: boolean): Promise<number> {
 	const entries = await loadContentEntries({ root });
 	const graph = buildGraph(entries);
-	const findings = checkEntries(entries, graph);
+	const findings = [
+		...checkEntries(entries, graph),
+		...(await findBrokenAnchors(entries, headingIdsOf(root))),
+	];
 
 	const byRule = Object.fromEntries(
 		RULES.map((rule) => [rule, findings.filter((finding) => finding.rule === rule).length])

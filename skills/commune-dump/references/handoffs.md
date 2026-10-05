@@ -69,7 +69,7 @@ baseline:                # check --json summary fields plus finding identities, 
   edges: 396
   errors: 1
   warnings: 0
-  byRule: { broken-link: 1, ambiguous-target: 0, duplicate-name: 0, noncanonical-title: 0 }
+  byRule: { broken-link: 1, ambiguous-target: 0, duplicate-name: 0, noncanonical-title: 0, broken-anchor: 0 }
   findings:
     - { rule: broken-link, file: src/content/notes/example.md, target: Missing }
 duplicate_name: []       # check findings whose candidates include the target; non-empty = stopped
