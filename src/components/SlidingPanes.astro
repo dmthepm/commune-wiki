@@ -188,14 +188,27 @@ if (window.wikiInitialized) {
     container.classList.toggle('multi-pane', paneCount > 1);
   };
 
+  // Ids repeat across open panes (every pane has its own "Intro"), so a
+  // fragment is only ever looked up inside the pane it belongs to.
+  const paneTarget = (pane, hash) => {
+    if (!hash || hash === '#') return null;
+    let id;
+    try { id = decodeURIComponent(hash.slice(1)); } catch { id = hash.slice(1); }
+    return pane.querySelector('#' + CSS.escape(id));
+  };
+  const scrollToHash = (pane, hash) => {
+    paneTarget(pane, hash)?.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'auto' });
+  };
+
   const openPane = async (url) => {
     const normalizedUrl = normalizeUrl(url);
+    const hash = new URL(url, window.location.origin).hash;
     // The address bar may only claim the note once the pane holding it
     // actually exists. Anything that stops that — a dead wikilink, a truncated
     // response, a timeout — hands the URL to the browser so the reader lands
     // on the real 404 instead of on a page that lies about which note it is
     // showing.
-    const recordVisit = () => history.pushState({ pane: normalizedUrl }, '', normalizedUrl);
+    const recordVisit = () => history.pushState({ pane: normalizedUrl }, '', normalizedUrl + hash);
     const giveUp = () => { window.location.href = url; };
 
     try {
@@ -205,7 +218,7 @@ if (window.wikiInitialized) {
       const existingPane = container.querySelector(`[data-url="${normalizedUrl}"]`);
       if (existingPane) {
         console.log('Pane already exists, focusing existing pane');
-        focusPane(existingPane);
+        focusPane(existingPane, hash);
         recordVisit();
         return;
       }
@@ -288,7 +301,7 @@ if (window.wikiInitialized) {
         window.updateRecentUpdateDates();
       }
 
-      setTimeout(() => focusPane(pane), 0);
+      setTimeout(() => focusPane(pane, hash), 0);
       console.log('Pane opened successfully');
     } catch (error) {
       // Includes the 10s AbortError: a click that produced nothing at all is
@@ -298,7 +311,7 @@ if (window.wikiInitialized) {
     }
   };
 
-  const focusPane = (pane) => {
+  const focusPane = (pane, hash) => {
     requestAnimationFrame(() => {
       if (document.activeElement && document.activeElement !== pane && document.activeElement.blur) {
         document.activeElement.blur();
@@ -309,6 +322,7 @@ if (window.wikiInitialized) {
       if (window.innerWidth >= 1024) {
         requestAnimationFrame(() => {
           pane.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });
+          scrollToHash(pane, hash);
         });
       }
     });
@@ -344,6 +358,20 @@ if (window.wikiInitialized) {
         // entry, so the URL only changes if the pane opened.
         e.preventDefault();
         openPane(a.href);
+        return;
+      }
+    }
+
+    // A fragment-only link names a heading in the pane it sits in. Left to the
+    // browser it would jump to the first pane that has that id.
+    const fragment = e.target?.closest?.('.pane a[href^="#"]');
+    if (fragment && !(e.ctrlKey || e.metaKey || e.shiftKey)) {
+      const pane = fragment.closest('.pane');
+      const hash = fragment.getAttribute('href');
+      if (paneTarget(pane, hash)) {
+        e.preventDefault();
+        scrollToHash(pane, hash);
+        if (pane.dataset.url) history.pushState({ pane: pane.dataset.url }, '', pane.dataset.url + hash);
         return;
       }
     }

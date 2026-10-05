@@ -4,6 +4,10 @@
  * Transforms:
  *   [[Atomic Notes]] → [Atomic Notes](/notes/atomic-notes/)
  *   [[Note Title|Display Text]] → [Display Text](/notes/note-title/)
+ *   [[Note Title#Some Heading]] → [Note Title#Some Heading](/notes/note-title/#some-heading)
+ *   [[#Some Heading]] → [#Some Heading](#some-heading), on the page it is written in
+ *
+ * A block ref (`[[Note Title^id]]`) links to the note and no further.
  *
  * This runs at build time during markdown compilation, before HTML generation.
  * Which content exists, and the URL each piece lives at, is decided by the
@@ -12,7 +16,7 @@
 
 import { visit } from 'unist-util-visit';
 import type { Root } from 'mdast';
-import { getLinkLookup, linkKey, type GraphOptions } from './lib/graph.ts';
+import { getLinkLookup, linkKey, splitWikilinkTarget, type GraphOptions } from './lib/graph.ts';
 
 export type WikiLinksOptions = GraphOptions;
 
@@ -60,14 +64,24 @@ export default function remarkWikiLinks({ root }: WikiLinksOptions = {}) {
 
 			// Resolve WikiLink to URL path
 			const trimmedLinkText = linkText.trim();
-			const resolved = lookup.get(linkKey(trimmedLinkText));
+			const { target, anchor } = splitWikilinkTarget(trimmedLinkText);
+			const resolved = target ? lookup.get(linkKey(target)) : undefined;
+			// `[[#Heading]]` names no note: it points inside the page it is written on.
+			const sameNote = !target && anchor !== undefined;
 
-			if (resolved) {
+			if (sameNote) {
+				newNodes.push({
+					type: 'link',
+					url: `#${anchor}`,
+					children: [{ type: 'text', value: displayText?.trim() || trimmedLinkText }],
+					data: { hProperties: { class: 'wikilink' } },
+				});
+			} else if (resolved) {
 				// Create a proper link node with correct URL for collection
 				// Add data-collection attribute to identify research links for styling
 				const linkNode: any = {
 					type: 'link',
-					url: resolved.urlPath,
+					url: anchor ? `${resolved.urlPath}#${anchor}` : resolved.urlPath,
 					children: [
 						{
 							type: 'text',
