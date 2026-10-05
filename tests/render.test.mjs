@@ -138,3 +138,62 @@ test('--site has to be an origin', async () => {
 	assert.equal(code, 2);
 	assert.match(stderr, /--site takes an origin/);
 });
+
+test('a wikilink to a heading lands on that heading', async () => {
+	const { stdout } = await render('See [[Beta#Second section]].\n');
+
+	assert.match(
+		stdout,
+		/<a href="\/notes\/beta\/#second-section" class="wikilink">Beta#Second section<\/a>/
+	);
+});
+
+test('a heading link, a piped one and an aliased one all keep the fragment', async () => {
+	const { stdout } = await render("[[Beta#Intro|start]], [[B#Intro]] and [[Beta's twin#Intro]].\n");
+
+	assert.equal(stdout.match(/href="\/notes\/beta\/#intro"/g).length, 3);
+});
+
+test('the anchor is the id the heading is given, punctuation and apostrophes included', async () => {
+	const headings = ["Don't stop: really?", 'Second section', 'Q&A (draft) – v2', 'Café'];
+	const note = [
+		...headings.map((heading) => `## ${heading}\n`),
+		...headings.map((heading) => `[[Beta#${heading}]]\n`),
+	].join('\n');
+	const { stdout } = await render(note);
+
+	const ids = [...stdout.matchAll(/<h2 id="([^"]*)"/g)].map((match) => match[1]);
+	// A fragment is percent-decoded before a browser matches it to an id, so
+	// `#caf%C3%A9` and `id="café"` are the same target.
+	const anchors = [...stdout.matchAll(/href="\/notes\/beta\/#([^"]*)"/g)].map((match) =>
+		decodeURIComponent(match[1])
+	);
+
+	assert.equal(ids.length, headings.length);
+	// Both sides come out of smartypants, so the straight apostrophe the
+	// author typed and the curly one in the rendered heading must slug alike.
+	assert.deepEqual(anchors, ids);
+	assert.equal(ids[0], 'dont-stop-really');
+});
+
+test('a heading link to the page it is written on points at the fragment alone', async () => {
+	const { stdout } = await render('## Here\n\nSee [[#Here]].\n');
+
+	assert.match(stdout, /<h2 id="here">/);
+	assert.match(stdout, /<a href="#here" class="wikilink">#Here<\/a>/);
+});
+
+test('a block ref links to the note and no further, and a heading link to nothing stays text', async () => {
+	const { stdout } = await render('[[Beta^abc123]] and [[Nowhere#Heading]] and [[#^abc123]].\n');
+
+	assert.match(stdout, /<a href="\/notes\/beta\/" class="wikilink">Beta\^abc123<\/a>/);
+	assert.match(stdout, /and Nowhere#Heading and #\^abc123\./);
+});
+
+test('check counts a heading link as resolved', async () => {
+	const { stdout } = await render('[[Beta#Second section]] and [[Nowhere#Heading]].\n', '--json');
+	const payload = JSON.parse(stdout);
+
+	assert.deepEqual(payload.links.map((link) => link.target), ['Beta', 'Nowhere']);
+	assert.deepEqual(payload.unresolved, ['Nowhere']);
+});

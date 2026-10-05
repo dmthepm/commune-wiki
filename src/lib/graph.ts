@@ -695,6 +695,26 @@ function stripSubpath(text: string): string {
 	return text.split(/[#^]/)[0].trim();
 }
 
+/**
+ * Split a wikilink's target from the heading it points at.
+ *
+ * `target` is what `stripSubpath` leaves, and `anchor` is the id that heading
+ * has on the rendered page: the same `github-slugger` call `rehypeHeadingIds`
+ * makes, so a link and its heading cannot disagree. A block ref (`^id`) has no
+ * heading to land on and yields no anchor; nested `Note#H1#H2` lands on the
+ * last heading, which is the one Obsidian opens. A repeated heading is
+ * numbered by the page (`-1`, `-2`), and only the first is reachable by name.
+ */
+export function splitWikilinkTarget(text: string): { target: string; anchor?: string } {
+	const target = stripSubpath(text);
+	const subpath = text.slice(text.search(/[#^]|$/));
+	if (!subpath.startsWith('#')) return { target };
+
+	const heading = subpath.split('#').pop()!.split('^')[0].trim();
+	const anchor = heading ? githubSlug(heading) : '';
+	return anchor ? { target, anchor } : { target };
+}
+
 /** Drop repeated edges, keeping first-seen order. */
 function dedupe(links: ExtractedLink[]): ExtractedLink[] {
 	const seen = new Set<string>();

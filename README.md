@@ -130,6 +130,7 @@ That route is a starting point, not an interface. The package ships the mechanis
 ## What ships
 
 - **WikiLinks.** Connect notes with `[[Title]]`, using the target title verbatim and rewriting the sentence around it. The renderer also resolves aliases and `[[Title|Display text]]`, but `check` and `gate` report these noncanonical spellings. A link that resolves to nothing stays plain text instead of rendering a dead anchor.
+- **Heading links.** `[[Title#Some heading]]` lands on that heading: the link ends in `#some-heading`, the same id every heading on the page is given. `[[#Some heading]]` links within the page it is written on. Block references (`[[Title^id]]`) are not supported: they link to the note and no further. When two headings in a note share a name, the link reaches the first.
 - **Backlinks.** The build writes `backlinks.json` — every entry with its inbound and outbound edges — to `dist/` and `public/`. `Backlinks.astro` renders it on a page.
 - **Markdown twins.** Every published content entry gets its source written beside it, so `/notes/hello/` also answers at `/notes/hello.md`. Entries in the content directories only — a hand-written route under `src/pages/` has no source file to twin. Agents and readers get the same document without scraping HTML.
 - **External links.** Anything off your `site` origin gets `target="_blank" rel="noopener noreferrer"` without you marking it up.
