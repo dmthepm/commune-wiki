@@ -42,8 +42,9 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
 
     steps:
-      # v4 is the current major (googleapis/release-please-action, read
-      # 2026-09-03). Manifest mode rather than the `release-type` input, so the
+      # v5 is the current major (googleapis/release-please-action, read
+      # 2026-10-04; its one breaking change from v4 is the node24 runtime).
+      # Manifest mode rather than the `release-type` input, so the
       # release configuration is a reviewable file in the repo rather than a
       # line of YAML: `release-please-config.json` and
       # `.release-please-manifest.json`, both at the root and both the action's
