@@ -23,6 +23,10 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
   file name and title disagreed shipping a 404. Step 5 is what catches that.
 - Pre-existing findings are the baseline, not your problem. **New** findings
   are, and they stop the ship.
+- Rename or move a note only with `$COMMUNE rename <from> <to>`, never `mv`,
+  `git mv`, `obsidian rename` or a file tool. Those leave every `[[link]]` to
+  the old name broken; `rename` rewrites them and keeps the URL. Add
+  `--dry-run` first.
 - Never install anything.
 
 ## Steps

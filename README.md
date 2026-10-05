@@ -277,6 +277,7 @@ npx commune graph related src/content/notes/welcome.md
 echo "a rough dump that mentions Connected notes" | npx commune graph related -
 npx commune render src/content/notes/welcome.md
 echo '[[Connected notes]]' | npx commune render -
+npx commune rename "src/content/notes/Old Title.md" "src/content/notes/New Title.md" --dry-run
 npx commune gate
 ```
 
@@ -286,6 +287,7 @@ npx commune gate
 | `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. Titles are matched across whitespace and case, so a dictated "noon tide" still finds `Noontide`. |
 | `render <path\|->` | The markdown as HTML, through the site's own pipeline: WikiLinks resolved, external links marked. Takes stdin, so you can see a draft before it is a page. |
 | `update` | Scaffold a dated update entry from what changed. Prints it; `--write` files it. |
+| `rename <from> <to>` | Move a note and rewrite every link to it, in every form the graph reads. The URL stays unless `--move-url`. `--dry-run` prints the plan. |
 | `check` | Broken links, broken heading links, duplicate names, ambiguous targets, non-canonical titles. |
 | `gate` | Run after a build, against the built site. |
 
@@ -298,6 +300,8 @@ Every verb takes `--json` and emits one document on stdout with everything else 
 `render` is the site's own markdown processor with no Astro process around it — the same `communeMarkdown()` the config hands to `markdown.processor`, so the HTML is the page's HTML rather than a lookalike. It needs the site's origin to decide which links are external: `--site` says it, and without one the Astro config is read for a `site` declaration, falling back to `https://example.com` with a line on stderr saying so. `--json` adds the document's links and the names among them that resolve to nothing, which the HTML cannot tell you — an unresolved WikiLink renders as plain text, exactly as it does on the site.
 
 `update` is the only verb that can write, and it only does so when asked: without `--write` the entry goes to stdout, and with it the command refuses to overwrite an update that already exists. `summary` comes out empty — summarizing a week is a judgement, and the CLI has none.
+
+`rename` is the second verb that writes, and the only safe way to rename a note: a file's name is its link target, so `mv`, `git mv`, an editor or `obsidian rename` leave every `[[Old Name]]` pointing at nothing. It rewrites `[[Old]]`, `[[Old|label]]`, `[[Old#Heading]]`, `[[Old^block]]`, `![[Old]]`, relative file links and frontmatter `links:` to the new name, keeping each link's label, subpath and embed `!`. Links spelled through an alias still resolve and are left alone, and code is never touched. If the title was the old filename it follows the new one; otherwise it is left as it is, and the output says so. Renaming is also a URL decision. By default the URL stays: when the new name would move it, a `slug:` pin holding the old slug is added to the note. With `--move-url` the URL follows the name, any pin is removed, and `/old-url/ /new-url/ 301` lines (plus the `.md` twin) are appended to `public/_redirects`, which is created if missing. It refuses if `<to>` exists, if `<from>` is not a content entry, if `<to>` leaves the collection, or if the new name would collide with another entry's title or alias. It plans everything first, and `--dry-run` stops there.
 
 Exit codes report whether the command finished, never what it found — `0` finished, `1` could not finish, `2` invalid invocation. Findings live in the payload. A command that exits non-zero because it *found* something is indistinguishable, to a shell, from one that crashed. `gate` is the one deliberate exception: a gate's entire job is a yes/no and a build has to stop on it, so `gate` exits `1` when the build it checked is wrong.
 

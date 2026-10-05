@@ -24,6 +24,10 @@ questions only the wiki's owner can answer.
 - **Rules only.** `WRITING.md` gets nothing that does not change what an agent
   writes. History, positioning and plans stay wherever they are, or get deleted
   with the file they were in.
+- Rename or move a note only with `$COMMUNE rename <from> <to>`, never `mv`,
+  `git mv`, `obsidian rename` or a file tool. Those leave every `[[link]]` to
+  the old name broken; `rename` rewrites them and keeps the URL. Add
+  `--dry-run` first.
 - Never install anything.
 
 ## Steps

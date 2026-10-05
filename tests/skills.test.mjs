@@ -51,7 +51,7 @@ const SKILLS = path.join(ROOT, 'skills');
 const EXPECTED = ['commune-dump', 'commune-write', 'commune-ship', 'commune-setup'];
 
 /** Every verb the CLI routes, longest first — `src/cli/main.ts` ROUTES. */
-const ROUTES = ['graph query', 'graph related', 'check', 'gate', 'update', 'render'];
+const ROUTES = ['graph query', 'graph related', 'check', 'gate', 'update', 'render', 'rename'];
 
 /** Files duplicated across skills on purpose; ADR 0001 explains why. */
 const SHARED = [
