@@ -371,7 +371,13 @@ if (window.wikiInitialized) {
       if (paneTarget(pane, hash)) {
         e.preventDefault();
         scrollToHash(pane, hash);
-        if (pane.dataset.url) history.pushState({ pane: pane.dataset.url }, '', pane.dataset.url + hash);
+        if (pane.dataset.url) {
+          // Clicking the heading the address bar already names is not a new
+          // place to go back to, so it replaces the entry instead of stacking
+          // a duplicate on top of it.
+          const alreadyHere = normalizeUrl(window.location.href) === pane.dataset.url && window.location.hash === hash;
+          history[alreadyHere ? 'replaceState' : 'pushState']({ pane: pane.dataset.url }, '', pane.dataset.url + hash);
+        }
         return;
       }
     }
@@ -401,7 +407,7 @@ if (window.wikiInitialized) {
         panes[i].remove();
       }
       updateContainerLayout();
-      focusPane(panes[targetIndex]);
+      focusPane(panes[targetIndex], window.location.hash);
     } else {
       window.location.reload();
     }
@@ -415,6 +421,10 @@ if (window.wikiInitialized) {
     // stop inside the note, so the skip link and the header controls were only
     // reachable by tabbing backwards.
     updateContainerLayout();
+    // A reload (Forward into a pane that was closed rebuilds the page this
+    // way) lands on the note's URL with its fragment. The pane scrolls, not
+    // the page, so the heading is brought into view here.
+    scrollToHash(firstPane, window.location.hash);
   }
 
   // --- SINGLE EVENT DELEGATION SETUP ---
