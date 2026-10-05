@@ -16,10 +16,11 @@
  * search-index gate, which this file has no business asserting on.
  */
 
-import { test, before, describe } from 'node:test';
+import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { loadContentEntries, toMarkdownHref, toMarkdownPath, toUrlPath } from '../src/lib/graph.ts';
@@ -116,5 +117,55 @@ describe('the built site', () => {
 
 			assert.deepEqual(built, source, `${entry.urlPath} does not match ${entry.file}`);
 		}
+	});
+});
+
+describe('the dev server', () => {
+	// `astro dev` never runs `astro:build:done`, which is where twins are
+	// written, so the dev server needs its own answer. This is the server a
+	// first run lands in, and its "view as markdown" link has to work there.
+	const PORT = 4391 + Math.floor(Math.random() * 500);
+	const BASE = `http://localhost:${PORT}`;
+	let server;
+
+	before(async () => {
+		const require = createRequire(import.meta.url);
+		const manifest = require.resolve('astro/package.json');
+		const astro = path.join(path.dirname(manifest), require(manifest).bin.astro);
+
+		// `--ignore-lock` keeps the server in the foreground and on this port.
+		// Without it, Astro 7 run under a coding agent (CI or a test run from
+		// Claude Code, Codex and the like) detaches into a background server,
+		// and one already running elsewhere answers instead of this one.
+		server = spawn(process.execPath, [astro, 'dev', '--port', String(PORT), '--ignore-lock'], {
+			cwd: ROOT,
+			stdio: 'ignore',
+		});
+
+		const deadline = Date.now() + 60_000;
+		for (;;) {
+			try {
+				if ((await fetch(`${BASE}/`)).ok) break;
+			} catch {}
+			if (Date.now() > deadline) throw new Error(`astro dev did not answer on ${BASE}`);
+			await new Promise((resolve) => setTimeout(resolve, 250));
+		}
+	});
+
+	after(() => server?.kill());
+
+	test('serves a note’s .md byte-identical to the source file', async () => {
+		const response = await fetch(`${BASE}/notes/atomic-notes.md`);
+		const source = await readFile(path.join(ROOT, 'src/content/notes/Atomic Notes.md'));
+
+		assert.equal(response.status, 200);
+		assert.match(response.headers.get('content-type') ?? '', /^text\/markdown/);
+		assert.deepEqual(Buffer.from(await response.arrayBuffer()), source);
+	});
+
+	test('leaves a .md that is no entry’s twin to Astro’s 404', async () => {
+		const response = await fetch(`${BASE}/notes/no-such-note.md`);
+
+		assert.equal(response.status, 404);
 	});
 });
