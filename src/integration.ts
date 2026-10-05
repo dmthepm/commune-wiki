@@ -10,7 +10,7 @@
  */
 
 import type { AstroIntegration } from 'astro';
-import { copyFile, writeFile, mkdir } from 'node:fs/promises';
+import { copyFile, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -95,6 +95,38 @@ async function writeMarkdownFiles(
 	return entries.length;
 }
 
+/**
+ * The dev server's answer to a `<url>.md` request: the same source file the
+ * build copies, read on each request so an edit shows up without a restart.
+ *
+ * The build writes twins in `astro:build:done`, which `astro dev` never runs,
+ * so without this a page's "view as markdown" link 404s in exactly the server
+ * a first run lands in. The lookup goes through `toMarkdownPath`, the mapping
+ * the build writer uses, so dev and build cannot disagree about which URL is
+ * which file. Anything that is not a twin falls through to Astro.
+ */
+async function findMarkdownTwin(root: string, pathname: string): Promise<string | undefined> {
+	if (!pathname.endsWith('.md')) return undefined;
+
+	let requested: string;
+	try {
+		requested = decodeURIComponent(pathname).replace(/^\/+/, '');
+	} catch {
+		return undefined;
+	}
+
+	const entries = await loadContentEntries({ root });
+	const entry = entries.find((candidate) => {
+		try {
+			return toMarkdownPath(candidate.urlPath) === requested;
+		} catch {
+			return false;
+		}
+	});
+
+	return entry ? path.join(root, entry.file) : undefined;
+}
+
 function summarize(graph: Graph): string {
 	return `📊 ${graph.totalBacklinks} total backlinks across ${Object.keys(graph.nodes).length} entries`;
 }
@@ -150,6 +182,26 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 					logger.error(String(error));
 					throw error;
 				}
+			},
+			'astro:server:setup': ({ server, logger }) => {
+				server.middlewares.use((request, response, next) => {
+					const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
+					if (request.method !== 'GET' && request.method !== 'HEAD') return next();
+					if (!pathname.endsWith('.md')) return next();
+
+					findMarkdownTwin(root, pathname)
+						.then(async (file) => {
+							if (!file) return next();
+							const source = await readFile(file);
+							response.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+							response.setHeader('Content-Length', source.byteLength);
+							response.end(request.method === 'HEAD' ? undefined : source);
+						})
+						.catch((error) => {
+							logger.error(`Failed to serve ${pathname}: ${String(error)}`);
+							next(error);
+						});
+				});
 			},
 			'astro:build:done': async ({ dir, logger }) => {
 				logger.info('🔗 Building backlinks index...');
