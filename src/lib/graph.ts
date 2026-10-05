@@ -18,7 +18,7 @@
  */
 
 import { glob } from 'tinyglobby';
-import GithubSlugger, { slug as githubSlug } from 'github-slugger';
+import { slug as githubSlug } from 'github-slugger';
 import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -1297,77 +1297,31 @@ export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
 }
 
 /**
- * The text of a heading as the page renders it, which is what its id is made from.
- *
- * `rehypeHeadingIds` slugs the heading's text content, so the markup around the
- * words is gone by then: emphasis marks, code ticks, the destination of a link,
- * tags. Slugging drops other punctuation itself, but an underscore is the one mark `github-slugger` keeps, so only one that
- * opens or closes emphasis is dropped, never the one inside `snake_case`.
- */
-function headingText(markdown: string): string {
-	return markdown
-		.replace(/\\([\\`*_{}[\]()#+\-.!~|<>])/g, '$1')
-		.replace(/!?\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_, name, label) => label ?? name)
-		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-		.replace(/\[([^\]]*)\]\[[^\]]*\]/g, '$1')
-		.replace(/(`+)(.+?)\1/g, '$2')
-		.replace(/<[^>\n]+>/g, '')
-		.replace(/(^|\W)_+|_+(?=\W|$)/g, '$1')
-		.replace(/&(amp|lt|gt|quot|#39);/g, (_, name) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" })[name as string]!)
-		.trim();
-}
-
-/**
- * The id every ATX heading in a body gets on the rendered page.
- *
- * One `GithubSlugger` walked in document order, as the page does it: the second
- * "Intro" is `intro-1`. Fenced code is skipped because a `# comment` in a shell
- * block is not a heading. Setext headings (a line underlined with `===` or
- * `---`) are not read, so a link to one is reported.
- */
-export function headingSlugs(body: string): string[] {
-	const slugger = new GithubSlugger();
-	const slugs: string[] = [];
-	let fence: string | undefined;
-
-	for (const line of body.split('\n')) {
-		const marker = line.match(/^ {0,3}(`{3,}|~{3,})/)?.[1];
-		if (fence) {
-			if (marker && marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
-			continue;
-		}
-		if (marker) {
-			fence = marker;
-			continue;
-		}
-		const heading = line.match(/^ {0,3}#{1,6}(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/);
-		if (!heading) continue;
-		slugs.push(slugger.slug(headingText(heading[1] ?? '')));
-	}
-
-	return slugs;
-}
-
-/**
  * `[[Note#Heading]]` links whose note exists and has no such heading.
+ *
+ * Whether a heading exists is not something to re-derive from markdown: the id
+ * a heading gets depends on every plugin between the source and the page, and a
+ * scan of the source gets blockquotes, list items, setext headings, inline code
+ * and entities wrong in turn. So the answer is asked of the page. `headingIds`
+ * is handed each note that at least one anchored link points at, and returns the
+ * ids of its rendered `h1` to `h6`. When it returns `undefined` or throws, that
+ * note is not checked. It lives with the caller because rendering
+ * needs the markdown processor, which the graph core must not import.
  *
  * The anchor is `splitWikilinkTarget`'s, so link and heading are slugged by the
  * same call. A repeated heading is `-1`, `-2` on the page and the link by name
- * reaches the first, so it is resolved. A link whose note does not resolve is
+ * reaches the first, so it is found. A link whose note does not resolve is
  * `broken-link`'s business. `[[#Heading]]` is read against its own note. Block
  * refs name no heading, and embeds (`![[Note#Heading]]`) are not heading links.
  */
-export function findBrokenAnchors(entries: ContentEntry[]): Diagnostic[] {
+export async function findBrokenAnchors(
+	entries: ContentEntry[],
+	headingIds: (entry: ContentEntry) => Promise<Set<string> | undefined>
+): Promise<Diagnostic[]> {
 	const byName = buildLinkLookup(entries);
 	const byUrl = new Map(entries.map((entry) => [entry.urlPath, entry]));
-	const slugs = new Map<string, Set<string>>();
-	const slugsOf = (entry: ContentEntry): Set<string> => {
-		if (!slugs.has(entry.urlPath)) slugs.set(entry.urlPath, new Set(headingSlugs(entry.body)));
-		return slugs.get(entry.urlPath)!;
-	};
 
-	const diagnostics: Diagnostic[] = [];
-
+	const links: { entry: ContentEntry; written: string; anchor: string; to: ContentEntry }[] = [];
 	for (const entry of entries) {
 		const seen = new Set<string>();
 		for (const match of stripCode(entry.body).matchAll(WIKILINK)) {
@@ -1377,19 +1331,35 @@ export function findBrokenAnchors(entries: ContentEntry[]): Diagnostic[] {
 			if (!anchor || seen.has(written)) continue;
 			seen.add(written);
 
-			const resolved = target ? byUrl.get(byName.get(linkKey(target))?.urlPath ?? '') : entry;
-			if (!resolved || slugsOf(resolved).has(anchor)) continue;
-
-			diagnostics.push({
-				rule: 'broken-anchor',
-				severity: 'warning',
-				file: entry.file,
-				urlPath: entry.urlPath,
-				kind: 'name',
-				target: written,
-				message: `[[${written}]] points at a heading that does not exist (#${anchor})`,
-			});
+			const to = target ? byUrl.get(byName.get(linkKey(target))?.urlPath ?? '') : entry;
+			if (to) links.push({ entry, written, anchor, to });
 		}
+	}
+
+	// One render per note, however many links point at it, and none for a note
+	// nothing anchored points at.
+	const ids = new Map<string, Set<string> | undefined>();
+	for (const { to } of links) {
+		if (ids.has(to.urlPath)) continue;
+		// `check` reports on content and does not stop for a page that will not
+		// render: that note's anchors go unchecked.
+		ids.set(to.urlPath, await headingIds(to).catch(() => undefined));
+	}
+
+	const diagnostics: Diagnostic[] = [];
+	for (const { entry, written, anchor, to } of links) {
+		const found = ids.get(to.urlPath);
+		if (!found || found.has(anchor)) continue;
+
+		diagnostics.push({
+			rule: 'broken-anchor',
+			severity: 'warning',
+			file: entry.file,
+			urlPath: entry.urlPath,
+			kind: 'name',
+			target: written,
+			message: `[[${written}]] points at a heading that does not exist (#${anchor})`,
+		});
 	}
 
 	return diagnostics;
@@ -1403,13 +1373,9 @@ const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
  *
  * The graph's own diagnostics come first and in entry order, so the list reads
  * the same way the build log does, then the two whole-corpus rules that need
- * every entry in hand before they can fire.
+ * every entry in hand before they can fire. `broken-anchor` is the exception
+ * that has to render pages, so `check` adds it after this, with `findBrokenAnchors`.
  */
 export function checkEntries(entries: ContentEntry[], graph: Graph): Diagnostic[] {
-	return [
-		...graph.diagnostics,
-		...findDuplicateNames(entries),
-		...findNoncanonicalTitles(entries),
-		...findBrokenAnchors(entries),
-	];
+	return [...graph.diagnostics, ...findDuplicateNames(entries), ...findNoncanonicalTitles(entries)];
 }
