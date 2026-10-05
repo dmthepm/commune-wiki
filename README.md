@@ -12,7 +12,7 @@ Start a wiki in one paste. You need Node 22.12 or newer, npm and Git.
 git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev
 ```
 
-Open the address Astro prints. The clone is only the source of the copy, and you can delete it afterward. If you stop or have to guess, [tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
+Open the address Astro prints. The clone is only the source of the copy, and you can delete it afterward. To run the paste again, delete `commune-wiki` and `my-wiki` first, since both commands refuse to overwrite a folder. Run by a coding agent on macOS or Linux, Astro 7 starts the dev server in the background and prints its address as JSON. `npx astro dev stop` stops it. If you stop or have to guess, [tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
 
 ## Start a wiki
 
@@ -265,16 +265,18 @@ export async function GET(context) {
 
 Find connections and check your notes while you write, without building the site. The `commune` executable reads markdown directly from disk and answers without an Astro process running.
 
+In a wiki, the executable lives in `node_modules/.bin`, so run it through `npx`. The paths below are the starter's sample notes.
+
 ```bash
-commune check
-commune graph query --collection notes --orphans
-commune graph query --recent 7d
-commune update --recent 7d
-commune graph related src/content/notes/hello.md
-echo "a rough dump that mentions World" | commune graph related -
-commune render src/content/notes/hello.md
-echo '[[World]]' | commune render -
-commune gate
+npx commune check
+npx commune graph query --collection notes --orphans
+npx commune graph query --recent 7d
+npx commune update --recent 7d
+npx commune graph related src/content/notes/welcome.md
+echo "a rough dump that mentions Connected notes" | npx commune graph related -
+npx commune render src/content/notes/welcome.md
+echo '[[Connected notes]]' | npx commune render -
+npx commune gate
 ```
 
 | Verb | What it answers |
@@ -305,16 +307,16 @@ Exit codes report whether the command finished, never what it found — `0` fini
 These optional skills require an existing Commune wiki and access to Claude Code or Codex. They do not install the engine or scaffold a site. Install the four authoring skills from this repository.
 
 ```bash
-npx skills add dmthepm/commune-wiki
+npx skills add dmthepm/commune-wiki -a claude-code codex -s '*' -y
 ```
 
-The skills install for Claude Code and Codex, globally or into one project. They call the wiki's existing `node_modules/.bin/commune` directly, so authoring and publishing use the same CLI. They require version 0.4.0 or newer, check it first and install nothing themselves.
+That installs all four skills into the current project for Claude Code and Codex without prompts. Without the flags the installer asks, starts with no skills selected and lists Claude Code unticked among dozens of agents. Add `-g` to install for every project instead. They call the wiki's existing `node_modules/.bin/commune` directly, so authoring and publishing use the same CLI. They require version 0.4.0 or newer, check it first and install nothing themselves.
 
 `commune-setup` runs once per wiki and writes its `WRITING.md` rules. `commune-dump` saves dictated or pasted text verbatim to `dumps/<slug>.md` and records connection candidates and the check baseline in `dumps/<slug>.connect.md`. Here `<slug>` includes the capture date.
 
 `commune-write` asks one short round of editorial questions and waits for answers in `dumps/<slug>.answers.md`. It then drafts into the note and renders the original and draft side by side in `dumps/<slug>.review.html` for the author to review.
 
-On the author's instruction, `commune-ship` compares finding identities against the baseline, files an update, builds, gates and verifies each new href and destination file. It commits according to `WRITING.md`'s `dumps.commit` policy, opens a PR and records the receipt in `dumps/<slug>.ship.md`. The author approves the content. This skill never merges. That boundary governs authored content, while code maintenance follows the repository's contribution rules.
+On the author's instruction, `commune-ship` compares finding identities against the baseline, files an update, builds, gates and verifies each new href and destination file. It commits according to `WRITING.md`'s `dumps.commit` policy, opens a PR and records the receipt in `dumps/<slug>.ship.md`. That needs the wiki to be a Git repository with a GitHub remote and a way to open a pull request, such as `gh` signed in. The starter copy is neither, so run `git init` in it and push it to a repository of your own first. The author approves the content. This skill never merges. That boundary governs authored content, while code maintenance follows the repository's contribution rules.
 
 The four skills, their tests and the `WRITING.md` template ship today. An end to end run of the installed skills on a fresh starter wiki, from dictation to a gated commit, passed on October 1, 2026. Pushing and opening the pull request were not part of that run.
 

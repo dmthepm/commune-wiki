@@ -72,7 +72,7 @@ test('a built project that satisfies all three assertions passes', async () => {
 
 		assert.equal(code, 0);
 		assert.equal(stdout, '');
-		assert.equal(stderr, 'PASS: 1 standalone page indexed for search and linked from notes\n');
+		assert.equal(stderr, "PASS: 2 entries checked, every resolved WikiLink uses its target's exact title, 1 standalone page indexed for search and linked from notes\n");
 	});
 });
 

@@ -179,7 +179,14 @@ export async function gateCommand(root: string, dist: string, json: boolean): Pr
 	];
 
 	const passed = failures.length === 0;
-	const summary = `${pages.length} standalone page${pages.length === 1 ? '' : 's'} indexed for search and linked from notes`;
+	// Name what was checked, not only the standalone-page count. A starter
+	// wiki has no standalone pages, and "0 pages indexed" alone reads as if
+	// the gate looked at nothing.
+	const checked = `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} checked, every resolved WikiLink uses its target's exact title`;
+	const indexed = pages.length
+		? `${pages.length} standalone page${pages.length === 1 ? '' : 's'} indexed for search and linked from notes`
+		: 'no standalone pages to index';
+	const summary = `${checked}, ${indexed}`;
 
 	if (json) {
 		writeJson({ schema: SCHEMA, passed, failures });

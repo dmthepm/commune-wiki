@@ -17,7 +17,7 @@
  *   - which link forms count as an edge, and how each one resolves
  */
 
-import { globby } from 'globby';
+import { glob } from 'tinyglobby';
 import { slug as githubSlug } from 'github-slugger';
 import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
@@ -306,9 +306,12 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 	const history = await readContentHistory(root, Object.values(CONTENT_DIRS));
 
 	for (const collection of COLLECTIONS) {
-		// `cwd` keeps globby's results root-relative, which is exactly the
+		// `cwd` keeps tinyglobby's results root-relative, which is exactly the
 		// spelling `ContentEntry.file` promises; only the read needs the join.
-		const files = await globby(`${CONTENT_DIRS[collection]}/**/*.{md,mdx}`, { cwd: root });
+		const files = await glob(`${CONTENT_DIRS[collection]}/**/*.{md,mdx}`, {
+			cwd: root,
+			expandDirectories: false,
+		});
 		files.sort();
 
 		for (const file of files) {
