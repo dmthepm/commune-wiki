@@ -393,7 +393,7 @@ test('--help lists --version', async () => {
 	assert.match(stdout, /--version/);
 });
 
-test('no Astro module is loaded on the CLI path', async () => {
+test('no Astro runtime module is loaded on the CLI path', async () => {
 	const hook = fileURLToPath(new URL('./fixtures/no-astro-hook.mjs', import.meta.url));
 	const { stdout } = await run(process.execPath, [
 		'--import', hook, BIN, '--root', VAULT, 'graph', 'query', '--json',
