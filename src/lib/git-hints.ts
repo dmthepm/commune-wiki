@@ -6,7 +6,9 @@
  * all. Both are advisory. Git is optional here: no `git` on the PATH, no
  * repository, no commits yet, a timeout or any other failure returns nothing
  * and the caller behaves exactly as it does without git. Nothing in this file
- * writes to the work tree, the real index or the history.
+ * writes to the work tree, the real index or the history. Hooks are disabled
+ * on every call, and nothing inside `.git` changes except, at most, the empty
+ * blob object that an intent-to-add entry needs.
  *
  * `git` is always run with `execFile`, never through a shell, with `cwd` set to
  * the project root.
@@ -25,7 +27,8 @@ const run = promisify(execFile);
 const TIMEOUT_MS = 5000;
 
 async function git(root: string, args: string[], env: NodeJS.ProcessEnv = {}): Promise<string> {
-	const { stdout } = await run('git', args, {
+	// Hooks never run from here: a read-only look must not execute the user's scripts.
+	const { stdout } = await run('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
 		cwd: root,
 		timeout: TIMEOUT_MS,
 		maxBuffer: 16 * 1024 * 1024,
@@ -99,7 +102,9 @@ export async function detectRenames(root: string): Promise<RenamedFile[]> {
 			// the diff does not re-read every note to learn it is unchanged.
 			const index = path.resolve(root, (await git(root, ['rev-parse', '--git-path', 'index'])).trim());
 			await copyFile(index, env.GIT_INDEX_FILE);
-			await git(root, ['add', '--intent-to-add', '--all', '--', ...dirs], env);
+			// splitIndex off, or a split-index repository gets a sharedindex file written
+			// beside the real one.
+			await git(root, ['-c', 'core.splitIndex=false', 'add', '--intent-to-add', '--all', '--', ...dirs], env);
 			return parseRenames(await git(root, [...DIFF, 'HEAD', '--', ...dirs], env));
 		} catch {
 			// Not a repository, no commits yet, no git, or a git that refused.
@@ -147,14 +152,43 @@ export async function addRenameHints(root: string, findings: Diagnostic[]): Prom
 	const renames = await detectRenames(root);
 	if (!renames.length) return;
 
-	const byStem = new Map<string, RenamedFile>();
+	// A stem shared by renames in two places (two collections, say) is ambiguous:
+	// the finding does not say which collection it meant, so it gets no hint
+	// rather than a guess. The same rename seen twice is not ambiguous.
+	const byStem = new Map<string, RenamedFile | null>();
 	for (const rename of renames) {
 		const key = linkKey(stemOf(rename.from));
-		if (!byStem.has(key)) byStem.set(key, rename);
+		const seen = byStem.get(key);
+		if (seen === undefined) byStem.set(key, rename);
+		else if (seen && (seen.from !== rename.from || seen.to !== rename.to)) byStem.set(key, null);
 	}
 
 	for (const finding of broken) {
 		const rename = byStem.get(linkKey(finding.target!));
 		if (rename) finding.hint = describe(rename);
 	}
+}
+
+/** Single-quote a string for a POSIX shell: nothing inside it is expanded. */
+export function shellQuote(text: string): string {
+	return `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * The `git mv -f` line for a case-only rename, or undefined when none is due.
+ *
+ * Only when the disk treated both names as one file (`caseOnly`, from the
+ * rename itself): on a case-sensitive disk git sees a plain delete and add,
+ * and `git mv -f` would fail with "bad source". `-C` carries the root, so the
+ * line works from any directory.
+ */
+export async function caseOnlyMoveHint(
+	root: string,
+	from: string,
+	to: string,
+	caseOnly: boolean
+): Promise<string | undefined> {
+	if (!caseOnly || from.toLowerCase() !== to.toLowerCase()) return undefined;
+	if (!(await insideGitWorkTree(root))) return undefined;
+	return `git -C ${shellQuote(path.resolve(root))} mv -f ${shellQuote(from)} ${shellQuote(to)}`;
 }

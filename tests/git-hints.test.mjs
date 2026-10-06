@@ -12,10 +12,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { commune, run } from './helpers.mjs';
+import { caseOnlyMoveHint, shellQuote } from '../src/lib/git-hints.ts';
 
 const NOTES = 'src/content/notes';
 
@@ -148,22 +149,76 @@ async function caseInsensitive() {
 	}
 }
 
-test('a case-only rename inside a repository prints the git mv line on stderr', async () => {
+test('a case-only rename inside a repository prints a git mv line that works, on a case-insensitive disk only', async () => {
 	const root = await vault({ repo: true });
 	try {
 		const result = await commune('--root', root, 'rename', `${NOTES}/Old.md`, `${NOTES}/old.md`);
 		assert.equal(result.code, 0, result.stderr);
-		assert.match(result.stderr, /git mv -f "src\/content\/notes\/Old\.md" "src\/content\/notes\/old\.md"/);
 		assert.doesNotMatch(result.stdout, /git mv/);
 
-		// The printed line is the one that works, wherever the disk is case-insensitive.
-		if (await caseInsensitive()) {
-			await run('sh', ['-c', 'git mv -f "$0" "$1"', `${NOTES}/Old.md`, `${NOTES}/old.md`], { cwd: root });
-			const { stdout } = await git(root, 'ls-files');
-			assert.match(stdout, /notes\/old\.md/);
+		if (!(await caseInsensitive())) {
+			// A case-sensitive disk sees a plain delete and add, and git mv -f would fail.
+			assert.doesNotMatch(result.stderr, /git mv/);
+			return;
 		}
+		const line = result.stderr.match(/Run: (git -C .* mv -f .*)\n/)?.[1];
+		assert.ok(line, result.stderr);
+		assert.match(line, /^git -C '.*' mv -f 'src\/content\/notes\/Old\.md' 'src\/content\/notes\/old\.md'$/);
+
+		// Run from somewhere else entirely: the line carries its own root.
+		await run('sh', ['-c', line], { cwd: tmpdir() });
+		const { stdout } = await git(root, 'ls-files');
+		assert.match(stdout, /notes\/old\.md/);
 	} finally {
 		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test('the git mv line is gated on the disk having treated both names as one file', async () => {
+	const root = await vault({ repo: true });
+	const bare = await vault({ repo: false });
+	try {
+		const from = `${NOTES}/Old.md`;
+		const to = `${NOTES}/old.md`;
+		assert.equal(await caseOnlyMoveHint(root, from, to, false), undefined, 'case-sensitive disk');
+		assert.equal(await caseOnlyMoveHint(root, from, `${NOTES}/Other.md`, true), undefined, 'not a case-only move');
+		assert.equal(await caseOnlyMoveHint(bare, from, to, true), undefined, 'not a repository');
+		assert.match(await caseOnlyMoveHint(root, from, to, true), /^git -C '.*' mv -f 'src\/content\/notes\/Old\.md' 'src\/content\/notes\/old\.md'$/);
+	} finally {
+		await Promise.all([root, bare].map((dir) => rm(dir, { recursive: true, force: true })));
+	}
+});
+
+test('the git mv line survives a filename with $(x), a quote and a backtick', async () => {
+	try {
+		const from = "src/content/notes/A $(touch pwned) 'q' `id`.md";
+		const to = from.toLowerCase();
+		assert.equal(
+			shellQuote(from),
+			`'src/content/notes/A $(touch pwned) '\\''q'\\'' \`id\`.md'`
+		);
+
+		// Run the printed line through a shell, in a repository where it can succeed.
+		const repo = await mkdtemp(path.join(tmpdir(), 'commune-quote-'));
+		try {
+			await put(repo, from, note());
+			await git(repo, 'init', '-q');
+			await git(repo, 'config', 'user.email', 'test@example.com');
+			await git(repo, 'config', 'user.name', 'Test');
+			await git(repo, 'add', '.');
+			await git(repo, 'commit', '-q', '-m', 'init');
+			if (await caseInsensitive()) await rename(path.join(repo, from), path.join(repo, to));
+			const line = await caseOnlyMoveHint(repo, from, to, true);
+			assert.ok(line);
+			await run('sh', ['-c', line], { cwd: tmpdir() });
+			const { stdout } = await git(repo, 'ls-files');
+			assert.ok(stdout.includes(to), stdout);
+			assert.equal(await run('test', ['-e', path.join(tmpdir(), 'pwned')]).then(() => true, () => false), false);
+		} finally {
+			await rm(repo, { recursive: true, force: true });
+		}
+	} finally {
+		await rm(path.join(tmpdir(), 'pwned'), { force: true });
 	}
 });
 
@@ -185,5 +240,118 @@ test('a case-only rename prints nothing for git on a dry run, outside a reposito
 		assert.doesNotMatch(normal.stderr, /git mv/);
 	} finally {
 		await Promise.all([dry, bare, plain].map((root) => rm(root, { recursive: true, force: true })));
+	}
+});
+
+/** A repository holding `files` (path to text), committed, with `sub` as the project root. */
+async function repoWith(files, sub = '') {
+	const top = await mkdtemp(path.join(tmpdir(), 'commune-git-hints-'));
+	for (const [file, text] of Object.entries(files)) await put(top, path.join(sub, file), text);
+	await git(top, 'init', '-q');
+	await git(top, 'config', 'user.email', 'test@example.com');
+	await git(top, 'config', 'user.name', 'Test');
+	await git(top, 'add', '.');
+	await git(top, 'commit', '-q', '-m', 'init');
+	return { top, root: path.join(top, sub) };
+}
+
+async function hints(root) {
+	const { broken } = await brokenLinks(root);
+	return Object.fromEntries(broken.map((finding) => [finding.target, finding.hint]));
+}
+
+async function exists(file) {
+	return stat(file).then(() => true, () => false);
+}
+
+test('check reads a rename for non-ASCII names, .mdx files and a move to another directory', async () => {
+	const { top, root } = await repoWith({
+		[`${NOTES}/Ünï Café.md`]: note('Accents.'),
+		[`${NOTES}/Page.mdx`]: note('Component.'),
+		[`${NOTES}/Mover.md`]: note('Will move.'),
+		[`${NOTES}/Linker.md`]: note('[[Ünï Café]] [[Page]] [[Mover]]'),
+		'src/content/research/.keep': '',
+	});
+	try {
+		await rename(path.join(root, NOTES, 'Ünï Café.md'), path.join(root, NOTES, 'Ñew Café.md'));
+		await rename(path.join(root, NOTES, 'Page.mdx'), path.join(root, NOTES, 'Fresh.mdx'));
+		await rename(path.join(root, NOTES, 'Mover.md'), path.join(root, 'src/content/research/Moved.md'));
+
+		assert.deepEqual(await hints(root), {
+			'Ünï Café': '`Ünï Café.md` looks renamed to `Ñew Café.md`',
+			Page: '`Page.mdx` looks renamed to `Fresh.mdx`',
+			Mover: '`Mover.md` looks renamed to `src/content/research/Moved.md`',
+		});
+	} finally {
+		await rm(top, { recursive: true, force: true });
+	}
+});
+
+test('check works when the project root is a subdirectory of the repository', async () => {
+	const { top, root } = await repoWith(
+		{ [`${NOTES}/Old.md`]: note('Old.'), [`${NOTES}/Linker.md`]: note('[[Old]]') },
+		'site'
+	);
+	try {
+		await rename(path.join(root, NOTES, 'Old.md'), path.join(root, NOTES, 'New.md'));
+		assert.deepEqual(await hints(root), { Old: '`Old.md` looks renamed to `New.md`' });
+	} finally {
+		await rm(top, { recursive: true, force: true });
+	}
+});
+
+test('check gives no hint when one old name was renamed to two places', async () => {
+	const { top, root } = await repoWith({
+		[`${NOTES}/Old.md`]: note('In notes.'),
+		'src/content/research/Old.md': note('In research.'),
+		[`${NOTES}/Linker.md`]: note('[[Old]]'),
+	});
+	try {
+		await rename(path.join(root, NOTES, 'Old.md'), path.join(root, NOTES, 'A.md'));
+		await rename(path.join(root, 'src/content/research/Old.md'), path.join(root, 'src/content/research/B.md'));
+		assert.deepEqual(await hints(root), { Old: undefined });
+	} finally {
+		await rm(top, { recursive: true, force: true });
+	}
+});
+
+/** Every path under `.git` except the object store, which a commit legitimately grows. */
+async function gitListing(top) {
+	const out = [];
+	const walk = async (dir) => {
+		for (const entry of await readdir(dir, { withFileTypes: true })) {
+			const full = path.join(dir, entry.name);
+			if (full === path.join(top, '.git', 'objects')) continue;
+			out.push(path.relative(top, full));
+			if (entry.isDirectory()) await walk(full);
+		}
+	};
+	await walk(path.join(top, '.git'));
+	return out.sort();
+}
+
+test('check never runs a hook and leaves .git alone, split index included', async () => {
+	const { top, root } = await repoWith({ [`${NOTES}/Old.md`]: note('Old.'), [`${NOTES}/Linker.md`]: note('[[Old]]') });
+	try {
+		await git(top, 'config', 'core.splitIndex', 'true');
+		await git(top, 'update-index', '--split-index');
+		const marker = path.join(top, 'hook-ran');
+		const hook = path.join(top, '.git', 'hooks', 'post-index-change');
+		await writeFile(hook, `#!/bin/sh\ntouch '${marker}'\n`);
+		await chmod(hook, 0o755);
+
+		await rename(path.join(root, NOTES, 'Old.md'), path.join(root, NOTES, 'New.md'));
+		const before = await gitListing(top);
+		assert.deepEqual(await hints(root), { Old: '`Old.md` looks renamed to `New.md`' });
+
+		assert.equal(await exists(marker), false, 'the hook ran');
+		assert.deepEqual(await gitListing(top), before, 'something under .git changed');
+		assert.ok(before.some((file) => file.includes('sharedindex')), 'the repository really uses a split index');
+
+		// Control: the same hook does fire when git is asked to change the index.
+		await run('git', ['add', '-A'], { cwd: top });
+		assert.equal(await exists(marker), true, 'the control hook never fires, so the test proves nothing');
+	} finally {
+		await rm(top, { recursive: true, force: true });
 	}
 });
