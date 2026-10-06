@@ -223,7 +223,39 @@ test('only notes an anchored link points at are rendered, each once, and one tha
 	assert.deepEqual(rendered, ['Beta']);
 });
 
-test('check finds a broken heading link with no Astro module loaded', async () => {
+test('findBrokenAnchors says how many notes it could not read', async () => {
+	const told = [];
+	const ids = async (entry) => {
+		if (entry.title === 'Beta') throw new Error('boom');
+		return headingIds(entry);
+	};
+	const entries = [anchorEntry('Beta', '## Real\n'), anchorEntry('Alpha', '[[Beta#A]] [[Alpha#B]]')];
+
+	await findBrokenAnchors(entries, ids, (notes) => told.push(notes));
+	assert.deepEqual(told, [1]);
+});
+
+test('check says on stderr that anchors went unchecked when the renderer cannot load, and exits as before', async () => {
+	const dir = await mkdtemp(join(tmpdir(), 'commune-anchor-'));
+	try {
+		await cp(join(VAULT, 'src'), join(dir, 'src'), { recursive: true });
+		await appendFile(join(dir, 'src/content/notes/Beta.md'), '\n[[Beta#Gone]] [[Alpha#Gone]]\n');
+		const hook = fileURLToPath(new URL('./fixtures/no-renderer-hook.mjs', import.meta.url));
+		const args = ['--root', dir, 'check', '--json'];
+		const normal = await run(process.execPath, [BIN, ...args]);
+		const broken = await run(process.execPath, ['--import', hook, BIN, ...args]);
+
+		// `run` rejects on a non-zero exit, so reaching here means both exited 0.
+		assert.match(broken.stderr, /^broken-anchor: 2 notes not checked \(the markdown renderer could not load\)$/m);
+		assert.equal(JSON.parse(broken.stdout).summary.byRule['broken-anchor'], 0);
+		assert.doesNotMatch(broken.stdout, /not checked/);
+		assert.doesNotMatch(normal.stderr, /not checked/);
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+test('check finds a broken heading link with no Astro runtime module loaded', async () => {
 	const dir = await mkdtemp(join(tmpdir(), 'commune-anchor-'));
 	try {
 		await cp(join(VAULT, 'src'), join(dir, 'src'), { recursive: true });

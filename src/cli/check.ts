@@ -55,12 +55,16 @@ function toFinding(diagnostic: Diagnostic) {
  * Astro runtime.
  */
 function headingIdsOf(root: string) {
+	const state = { loadFailed: false };
 	let renderer: Promise<{ render: (body: string, options: object) => Promise<{ code: string }> }> | undefined;
 
-	return async (entry: ContentEntry): Promise<Set<string>> => {
-		renderer ??= import('../markdown.ts').then(({ communeMarkdown }) =>
-			communeMarkdown({ root }).createRenderer({})
-		);
+	const headingIds = async (entry: ContentEntry): Promise<Set<string>> => {
+		renderer ??= import('../markdown.ts')
+			.then(({ communeMarkdown }) => communeMarkdown({ root }).createRenderer({}))
+			.catch((error) => {
+				state.loadFailed = true;
+				throw error;
+			});
 		const { code } = await (await renderer).render(entry.body, { frontmatter: entry.frontmatter });
 		const ids = new Set<string>();
 		for (const match of code.matchAll(/<h[1-6]\b[^>]*?\sid="([^"]*)"/g)) {
@@ -70,15 +74,19 @@ function headingIdsOf(root: string) {
 		}
 		return ids;
 	};
+	return Object.assign(headingIds, { state });
 }
 
 export async function checkCommand(root: string, json: boolean): Promise<number> {
 	const entries = await loadContentEntries({ root });
 	const graph = buildGraph(entries);
-	const findings = [
-		...checkEntries(entries, graph),
-		...(await findBrokenAnchors(entries, headingIdsOf(root))),
-	];
+	const headingIds = headingIdsOf(root);
+	const anchors = await findBrokenAnchors(entries, headingIds, (notes) => {
+		// stderr in both modes, so `--json` stays what a parser expects on stdout.
+		const why = headingIds.state.loadFailed ? 'the markdown renderer could not load' : 'a note failed to render';
+		process.stderr.write(`broken-anchor: ${notes} ${notes === 1 ? 'note' : 'notes'} not checked (${why})\n`);
+	});
+	const findings = [...checkEntries(entries, graph), ...anchors];
 
 	const byRule = Object.fromEntries(
 		RULES.map((rule) => [rule, findings.filter((finding) => finding.rule === rule).length])

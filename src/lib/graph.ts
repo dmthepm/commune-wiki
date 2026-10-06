@@ -1482,7 +1482,7 @@ export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
  * and entities wrong in turn. So the answer is asked of the page. `headingIds`
  * is handed each note that at least one anchored link points at, and returns the
  * ids of its rendered `h1` to `h6`. When it returns `undefined` or throws, that
- * note is not checked. It lives with the caller because rendering
+ * note is not checked, and `onUnchecked` is told how many notes that was. It lives with the caller because rendering
  * needs the markdown processor, which the graph core must not import.
  *
  * The anchor is `splitWikilinkTarget`'s, so link and heading are slugged by the
@@ -1493,7 +1493,8 @@ export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
  */
 export async function findBrokenAnchors(
 	entries: ContentEntry[],
-	headingIds: (entry: ContentEntry) => Promise<Set<string> | undefined>
+	headingIds: (entry: ContentEntry) => Promise<Set<string> | undefined>,
+	onUnchecked?: (notes: number) => void
 ): Promise<Diagnostic[]> {
 	const byName = buildLinkLookup(entries);
 	const byUrl = new Map(entries.map((entry) => [entry.urlPath, entry]));
@@ -1522,6 +1523,11 @@ export async function findBrokenAnchors(
 		// render: that note's anchors go unchecked.
 		ids.set(to.urlPath, await headingIds(to).catch(() => undefined));
 	}
+
+	// Said aloud, because a note that could not be read looks the same as a note
+	// with nothing wrong in it.
+	const unchecked = [...ids.values()].filter((found) => !found).length;
+	if (unchecked > 0) onUnchecked?.(unchecked);
 
 	const diagnostics: Diagnostic[] = [];
 	for (const { entry, written, anchor, to } of links) {
