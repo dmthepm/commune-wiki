@@ -12,7 +12,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmod, mkdir, mkdtemp, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { commune, run } from './helpers.mjs';
@@ -327,6 +328,9 @@ async function gitListing(top) {
 		}
 	};
 	await walk(path.join(top, '.git'));
+	// Names alone miss a rewrite of the real index in place, so hash its bytes too.
+	const index = await readFile(path.join(top, '.git', 'index')).catch(() => Buffer.alloc(0));
+	out.push('index sha256 ' + createHash('sha256').update(index).digest('hex'));
 	return out.sort();
 }
 
@@ -353,5 +357,179 @@ test('check never runs a hook and leaves .git alone, split index included', asyn
 		assert.equal(await exists(marker), true, 'the control hook never fires, so the test proves nothing');
 	} finally {
 		await rm(top, { recursive: true, force: true });
+	}
+});
+
+const titled = (title, body = '') => `---\ntitle: ${title}\nvisibility: public\nstatus: seed\n---\n\n${body}\n`;
+
+test('check matches the title the old file carried in frontmatter, in the starter layout, after a plain mv that changes it', async () => {
+	const { top, root } = await repoWith({
+		[`${NOTES}/connected-notes.md`]: titled('Connected notes', 'Old.'),
+		[`${NOTES}/a.md`]: titled('A', '[[Connected notes]]'),
+		[`${NOTES}/b.md`]: titled('B', '[[Connected notes]]'),
+		[`${NOTES}/c.md`]: titled('C', '[[connected notes]] and [[Nowhere]]'),
+	});
+	try {
+		await rename(path.join(root, NOTES, 'connected-notes.md'), path.join(root, NOTES, 'linked-ideas.md'));
+		await put(root, `${NOTES}/linked-ideas.md`, titled('Linked ideas', 'Old.'));
+
+		const { broken } = await brokenLinks(root);
+		const named = broken.filter((finding) => /connected notes/i.test(finding.target));
+		assert.equal(named.length, 3);
+		for (const finding of named) assert.equal(finding.hint, '`connected-notes.md` looks renamed to `linked-ideas.md`');
+		assert.equal(broken.find((finding) => finding.target === 'Nowhere').hint, undefined);
+	} finally {
+		await rm(top, { recursive: true, force: true });
+	}
+});
+
+test('check reads the old title from HEAD~1 once the rename is committed', async () => {
+	const { top, root } = await repoWith({
+		[`${NOTES}/connected-notes.md`]: titled('Connected notes', 'Old.'),
+		[`${NOTES}/a.md`]: titled('A', '[[Connected notes]]'),
+	});
+	try {
+		await git(top, 'mv', `${NOTES}/connected-notes.md`, `${NOTES}/linked-ideas.md`);
+		await put(root, `${NOTES}/linked-ideas.md`, titled('Linked ideas', 'Old.'));
+		await git(top, 'add', '.');
+		await git(top, 'commit', '-q', '-m', 'rename');
+		assert.deepEqual(await hints(root), { 'Connected notes': '`connected-notes.md` looks renamed to `linked-ideas.md`' });
+	} finally {
+		await rm(top, { recursive: true, force: true });
+	}
+});
+
+test('check gives no hint when an old title is claimed by two renames', async () => {
+	const { top, root } = await repoWith({
+		[`${NOTES}/one.md`]: titled('Shared', 'One.'),
+		'src/content/research/two.md': titled('Shared', 'Two.'),
+		[`${NOTES}/a.md`]: titled('A', '[[Shared]]'),
+	});
+	try {
+		await rename(path.join(root, NOTES, 'one.md'), path.join(root, NOTES, 'uno.md'));
+		await put(root, `${NOTES}/uno.md`, titled('Uno', 'One.'));
+		await rename(path.join(root, 'src/content/research/two.md'), path.join(root, 'src/content/research/dos.md'));
+		await put(root, 'src/content/research/dos.md', titled('Dos', 'Two.'));
+		assert.deepEqual(await hints(root), { Shared: undefined });
+	} finally {
+		await rm(top, { recursive: true, force: true });
+	}
+});
+
+test('check ignores an old file whose frontmatter is not valid YAML', async () => {
+	const { top, root } = await repoWith({
+		[`${NOTES}/bad.md`]: '---\ntitle: [unclosed\n---\n\nBody.\n',
+		[`${NOTES}/a.md`]: titled('A', '[[Gone]]'),
+	});
+	try {
+		await rename(path.join(root, NOTES, 'bad.md'), path.join(root, NOTES, 'worse.md'));
+		await put(root, `${NOTES}/worse.md`, titled('Worse', 'Body.'));
+		assert.deepEqual(await hints(root), { Gone: undefined });
+	} finally {
+		await rm(top, { recursive: true, force: true });
+	}
+});
+
+test('check hints a broken url link from the old path, and from an old slug or url', async () => {
+	const { top, root } = await repoWith({
+		[`${NOTES}/plain.md`]: titled('Plain', 'P.'),
+		[`${NOTES}/Pinned.md`]: `---\ntitle: Pinned\nslug: pin-me\nvisibility: public\nstatus: seed\n---\n\nP.\n`,
+		'src/content/pages/about.md': `---\ntitle: About\nurl: /about-us/\nvisibility: public\nstatus: seed\n---\n\nA.\n`,
+		[`${NOTES}/linker.md`]: titled('Linker', '[a](/notes/plain/) [b](/notes/pin-me/) [c](/about-us/) [d](/notes/never/)'),
+	});
+	try {
+		await rename(path.join(root, NOTES, 'plain.md'), path.join(root, NOTES, 'fresh.md'));
+		await rename(path.join(root, NOTES, 'Pinned.md'), path.join(root, NOTES, 'Moved.md'));
+		await put(root, `${NOTES}/Moved.md`, titled('Pinned', 'P.'));
+		await rename(path.join(root, 'src/content/pages/about.md'), path.join(root, 'src/content/pages/who.md'));
+		await put(root, 'src/content/pages/who.md', titled('About', 'A.'));
+
+		const { broken } = await brokenLinks(root);
+		const byTarget = Object.fromEntries(broken.map((finding) => [finding.target, finding]));
+		assert.equal(byTarget['/notes/plain/'].hint, '`plain.md` looks renamed to `fresh.md`');
+		assert.equal(byTarget['/notes/pin-me/'].hint, '`Pinned.md` looks renamed to `Moved.md`');
+		assert.equal(byTarget['/about-us/'].hint, '`about.md` looks renamed to `who.md`');
+		assert.equal(byTarget['/notes/never/'].hint, undefined);
+	} finally {
+		await rm(top, { recursive: true, force: true });
+	}
+});
+
+test('check reads old titles and urls when the project root is a subdirectory of the repository', async () => {
+	const { top, root } = await repoWith(
+		{
+			[`${NOTES}/connected-notes.md`]: titled('Connected notes', 'Old.'),
+			[`${NOTES}/Pinned.md`]: `---\ntitle: Pinned\nslug: pin-me\nvisibility: public\nstatus: seed\n---\n\nP.\n`,
+			[`${NOTES}/linker.md`]: titled('Linker', '[[Connected notes]] [p](/notes/pin-me/)'),
+		},
+		'site'
+	);
+	try {
+		await rename(path.join(root, NOTES, 'connected-notes.md'), path.join(root, NOTES, 'linked-ideas.md'));
+		await put(root, `${NOTES}/linked-ideas.md`, titled('Linked ideas', 'Old.'));
+		await rename(path.join(root, NOTES, 'Pinned.md'), path.join(root, NOTES, 'Moved.md'));
+		await put(root, `${NOTES}/Moved.md`, titled('Pinned', 'P.'));
+
+		assert.deepEqual(await hints(root), {
+			'Connected notes': '`connected-notes.md` looks renamed to `linked-ideas.md`',
+			'/notes/pin-me/': '`Pinned.md` looks renamed to `Moved.md`',
+		});
+	} finally {
+		await rm(top, { recursive: true, force: true });
+	}
+});
+
+/** A `git` on the PATH that logs its arguments, one line per process, then runs the real one. */
+async function loggingGit() {
+	const dir = await mkdtemp(path.join(tmpdir(), 'commune-fake-git-'));
+	const log = path.join(dir, 'calls.log');
+	const real = (await run('which', ['git'])).stdout.trim();
+	const script = path.join(dir, 'git');
+	await writeFile(script, `#!/bin/sh\necho "$@" >> '${log}'\nexec '${real}' "$@"\n`);
+	await chmod(script, 0o755);
+	return { dir, log };
+}
+
+test('check reads every old blob through one git process, however many renames there are', async () => {
+	const files = { [`${NOTES}/linker.md`]: titled('Linker', '[[Nothing here]]') };
+	for (let i = 0; i < 40; i++) files[`${NOTES}/n${i}.md`] = titled(`Note ${i}`, `Body ${i}.`);
+	const { top, root } = await repoWith(files);
+	const spy = await loggingGit();
+	try {
+		for (let i = 0; i < 40; i++) {
+			await mkdir(path.join(root, NOTES, 'moved'), { recursive: true });
+			await rename(path.join(root, NOTES, `n${i}.md`), path.join(root, NOTES, 'moved', `n${i}.md`));
+		}
+		const { stdout } = await run(process.execPath, [path.join(import.meta.dirname, '..', 'bin', 'commune.mjs'), '--root', root, 'check', '--json'], {
+			env: { ...process.env, PATH: `${spy.dir}${path.delimiter}${process.env.PATH}` },
+		});
+		const broken = JSON.parse(stdout).findings.filter((finding) => finding.rule === 'broken-link');
+		assert.equal(broken.length, 1);
+		const calls = (await readFile(spy.log, 'utf8')).split('\n').filter(Boolean);
+		assert.equal(calls.filter((call) => /\bcat-file\b/.test(call)).length, 1, calls.join('\n'));
+		assert.equal(calls.filter((call) => /\bshow\b/.test(call)).length, 0, calls.join('\n'));
+	} finally {
+		await rm(top, { recursive: true, force: true });
+		await rm(spy.dir, { recursive: true, force: true });
+	}
+});
+
+test('check starts no read process when the filenames already explain every broken link', async () => {
+	const { top, root } = await repoWith({
+		[`${NOTES}/Old.md`]: titled('Elsewhere', 'Old.'),
+		[`${NOTES}/Linker.md`]: titled('Linker', '[[Old]]'),
+	});
+	const spy = await loggingGit();
+	try {
+		await rename(path.join(root, NOTES, 'Old.md'), path.join(root, NOTES, 'New.md'));
+		const { stdout } = await run(process.execPath, [path.join(import.meta.dirname, '..', 'bin', 'commune.mjs'), '--root', root, 'check', '--json'], {
+			env: { ...process.env, PATH: `${spy.dir}${path.delimiter}${process.env.PATH}` },
+		});
+		const broken = JSON.parse(stdout).findings.filter((finding) => finding.rule === 'broken-link');
+		assert.equal(broken[0].hint, '`Old.md` looks renamed to `New.md`');
+		assert.doesNotMatch(await readFile(spy.log, 'utf8'), /cat-file|\bshow\b/);
+	} finally {
+		await rm(top, { recursive: true, force: true });
+		await rm(spy.dir, { recursive: true, force: true });
 	}
 });

@@ -8,18 +8,21 @@
  * and the caller behaves exactly as it does without git. Nothing in this file
  * writes to the work tree, the real index or the history. Hooks are disabled
  * on every call, and nothing inside `.git` changes except, at most, the empty
- * blob object that an intent-to-add entry needs.
+ * blob object that an intent-to-add entry needs. The work-tree diff, like
+ * `git status`, does run the repository's configured clean filter (git-lfs,
+ * for example) to compare content; `core.hooksPath` does not switch that off.
  *
  * `git` is always run with `execFile`, never through a shell, with `cwd` set to
  * the project root.
  */
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { copyFile, mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { CONTENT_DIRS, linkKey, type Diagnostic } from './graph.ts';
+import { parseFrontmatter } from './frontmatter.ts';
+import { CONTENT_DIRS, linkKey, toUrlPath, type CollectionName, type Diagnostic } from './graph.ts';
 
 const run = promisify(execFile);
 
@@ -51,17 +54,19 @@ export interface RenamedFile {
 	from: string;
 	/** Root-relative path it has now. */
 	to: string;
+	/** The commit that still holds the old file: `HEAD` for the work tree, `HEAD~1` for the last commit. */
+	rev?: 'HEAD' | 'HEAD~1';
 }
 
 /** Parse `git diff --name-status -z` output into its renames. */
-function parseRenames(output: string): RenamedFile[] {
+function parseRenames(output: string, rev: RenamedFile['rev']): RenamedFile[] {
 	const fields = output.split('\0');
 	const renames: RenamedFile[] = [];
 	for (let i = 0; i < fields.length; i++) {
 		const status = fields[i];
 		if (!status) continue;
 		if (status[0] === 'R' || status[0] === 'C') {
-			if (status[0] === 'R') renames.push({ from: fields[i + 1], to: fields[i + 2] });
+			if (status[0] === 'R') renames.push({ from: fields[i + 1], to: fields[i + 2], rev });
 			i += 2;
 		} else {
 			i += 1;
@@ -105,7 +110,7 @@ export async function detectRenames(root: string): Promise<RenamedFile[]> {
 			// splitIndex off, or a split-index repository gets a sharedindex file written
 			// beside the real one.
 			await git(root, ['-c', 'core.splitIndex=false', 'add', '--intent-to-add', '--all', '--', ...dirs], env);
-			return parseRenames(await git(root, [...DIFF, 'HEAD', '--', ...dirs], env));
+			return parseRenames(await git(root, [...DIFF, 'HEAD', '--', ...dirs], env), 'HEAD');
 		} catch {
 			// Not a repository, no commits yet, no git, or a git that refused.
 			return [];
@@ -115,7 +120,7 @@ export async function detectRenames(root: string): Promise<RenamedFile[]> {
 	};
 	const lastCommit = async (): Promise<RenamedFile[]> => {
 		try {
-			return parseRenames(await git(root, [...DIFF, 'HEAD~1', 'HEAD', '--', ...dirs]));
+			return parseRenames(await git(root, [...DIFF, 'HEAD~1', 'HEAD', '--', ...dirs]), 'HEAD~1');
 		} catch {
 			// A single-commit history has no HEAD~1.
 			return [];
@@ -137,34 +142,137 @@ function describe(rename: RenamedFile): string {
 	return `\`${from}\` looks renamed to \`${to}\``;
 }
 
+/** The collection a root-relative path lives in, or undefined outside the content directories. */
+function collectionOf(file: string): CollectionName | undefined {
+	return (Object.keys(CONTENT_DIRS) as CollectionName[]).find((name) => file.startsWith(`${CONTENT_DIRS[name]}/`));
+}
+
 /**
- * Attach a `hint` to each broken name link whose target is the stem of a
- * renamed file, matched the way the graph matches titles (`linkKey`).
+ * Read old blobs through one `git cat-file --batch` process: each `specs` entry
+ * (`<rev>:./<path>`) goes in on stdin, and each answer is either
+ * `<oid> <type> <size>\n<content>\n` or `<spec> missing\n`. Returns the text of
+ * each blob in order, `undefined` for a missing or non-blob object. `cat-file`
+ * never converts content, so no textconv or clean filter is involved.
+ *
+ * No shell, hooks disabled, killed on the timeout. Any failure gives an empty
+ * result, which the caller treats as "nothing to match".
+ */
+export async function readBlobs(root: string, specs: string[]): Promise<Array<string | undefined>> {
+	const none = specs.map(() => undefined);
+	if (!specs.length || specs.some((spec) => spec.includes('\n'))) return none;
+	try {
+		const output = await new Promise<Buffer>((resolve, reject) => {
+			const child = spawn('git', ['-c', 'core.hooksPath=/dev/null', 'cat-file', '--batch'], {
+				cwd: root,
+				env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
+				stdio: ['pipe', 'pipe', 'ignore'],
+			});
+			const chunks: Buffer[] = [];
+			const timer = setTimeout(() => {
+				child.kill('SIGKILL');
+				reject(new Error('timeout'));
+			}, TIMEOUT_MS);
+			child.on('error', (error) => {
+				clearTimeout(timer);
+				reject(error);
+			});
+			child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+			child.stdin.on('error', () => {});
+			child.on('close', () => {
+				clearTimeout(timer);
+				resolve(Buffer.concat(chunks));
+			});
+			child.stdin.end(specs.join('\n') + '\n');
+		});
+		const texts: Array<string | undefined> = [];
+		let at = 0;
+		for (let i = 0; i < specs.length; i++) {
+			const eol = output.indexOf(0x0a, at);
+			if (eol === -1) return none;
+			const header = output.toString('utf8', at, eol).split(' ');
+			at = eol + 1;
+			if (header[header.length - 1] === 'missing' || header.length !== 3) {
+				texts.push(undefined);
+				continue;
+			}
+			const size = Number(header[2]);
+			if (!Number.isSafeInteger(size) || at + size > output.length) return none;
+			texts.push(header[1] === 'blob' ? output.toString('utf8', at, at + size) : undefined);
+			at += size + 1;
+		}
+		return texts;
+	} catch {
+		return none;
+	}
+}
+
+/**
+ * Attach a `hint` to each broken link whose target names a renamed file,
+ * matched the way the graph matches titles (`linkKey`). A name link matches the
+ * old file's stem or the `title` its old frontmatter carried. A url link
+ * matches the URL the old file had, computed by the graph's own `toUrlPath`
+ * from the old path and old frontmatter.
  *
  * Does nothing, and never calls git, when there is no broken link to explain.
+ * Old blobs are read only while some broken link is still unexplained by the
+ * filenames, all through one `git cat-file --batch` process.
  */
 export async function addRenameHints(root: string, findings: Diagnostic[]): Promise<void> {
-	const broken = findings.filter(
-		(finding) => finding.rule === 'broken-link' && finding.kind !== 'url' && finding.target !== undefined
-	);
+	const broken = findings.filter((finding) => finding.rule === 'broken-link' && finding.target !== undefined);
 	if (!broken.length) return;
 
 	const renames = await detectRenames(root);
 	if (!renames.length) return;
 
-	// A stem shared by renames in two places (two collections, say) is ambiguous:
+	// A name shared by renames in two places (two collections, say) is ambiguous:
 	// the finding does not say which collection it meant, so it gets no hint
 	// rather than a guess. The same rename seen twice is not ambiguous.
-	const byStem = new Map<string, RenamedFile | null>();
-	for (const rename of renames) {
-		const key = linkKey(stemOf(rename.from));
-		const seen = byStem.get(key);
-		if (seen === undefined) byStem.set(key, rename);
-		else if (seen && (seen.from !== rename.from || seen.to !== rename.to)) byStem.set(key, null);
+	const claim = (table: Map<string, RenamedFile | null>, key: string, rename: RenamedFile) => {
+		const seen = table.get(key);
+		if (seen === undefined) table.set(key, rename);
+		else if (seen && (seen.from !== rename.from || seen.to !== rename.to)) table.set(key, null);
+	};
+
+	const byName = new Map<string, RenamedFile | null>();
+	const byUrl = new Map<string, RenamedFile | null>();
+	for (const rename of renames) claim(byName, linkKey(stemOf(rename.from)), rename);
+
+	// Reading old blobs is worth it only for a name link the stems left
+	// unexplained, or for a url link, which a filename cannot explain at all.
+	// When only names are left, a rename whose stem already explains a link
+	// need not be read. All reads go through one `git cat-file --batch`.
+	const wantsName = broken.some((f) => f.kind !== 'url' && !byName.get(linkKey(f.target!)));
+	const wantsUrl = broken.some((f) => f.kind === 'url');
+	if (wantsName || wantsUrl) {
+		const brokenNames = new Set(broken.filter((f) => f.kind !== 'url').map((f) => linkKey(f.target!)));
+		const seen = new Set<string>();
+		const toRead: Array<{ rename: RenamedFile; collection: CollectionName }> = [];
+		for (const rename of renames) {
+			const collection = collectionOf(rename.from);
+			const id = `${rename.from}\0${rename.to}`;
+			if (!collection || seen.has(id)) continue;
+			seen.add(id);
+			if (!wantsUrl && brokenNames.has(linkKey(stemOf(rename.from)))) continue;
+			toRead.push({ rename, collection });
+		}
+		const blobs = await readBlobs(
+			root,
+			toRead.map(({ rename }) => `${rename.rev ?? 'HEAD'}:./${rename.from}`)
+		);
+		toRead.forEach(({ rename, collection }, i) => {
+			let data: Record<string, unknown> = {};
+			try {
+				data = blobs[i] === undefined ? {} : parseFrontmatter(blobs[i]!).data;
+			} catch {
+				// Invalid YAML in the old file: nothing to match.
+			}
+			if (wantsName && typeof data.title === 'string' && data.title.trim()) claim(byName, linkKey(data.title), rename);
+			if (wantsUrl) claim(byUrl, toUrlPath(rename.from, collection, data).urlPath, rename);
+		});
 	}
 
 	for (const finding of broken) {
-		const rename = byStem.get(linkKey(finding.target!));
+		const rename = finding.kind === 'url' ? byUrl.get(finding.target!) : byName.get(linkKey(finding.target!));
 		if (rename) finding.hint = describe(rename);
 	}
 }
