@@ -1405,9 +1405,12 @@ export function findRouteCollisions(entries: ContentEntry[]): Diagnostic[] {
 				file: owner.entry.file,
 				urlPath: owner.entry.urlPath,
 				candidates: urls,
-				message: `${list.length} entries have URLs that write the same markdown twin (${urls.join(
-					', '
-				)}), so the build refuses it`,
+				message:
+					new Set(urls).size === 1
+						? `${list.length} entries share the URL ${urls[0]}, so the build refuses their markdown twin`
+						: `${list.length} entries have URLs that write the same markdown twin (${urls.join(
+								', '
+							)}), so the build refuses it`,
 			});
 			continue;
 		}
@@ -1501,8 +1504,9 @@ export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
  * and entities wrong in turn. So the answer is asked of the page. `headingIds`
  * is handed each note that at least one anchored link points at, and returns the
  * ids of its rendered `h1` to `h6`. When it returns `undefined` or throws, that
- * note is not checked, and `onUnchecked` is told how many notes that was. It lives with the caller because rendering
- * needs the markdown processor, which the graph core must not import.
+ * note is not checked, and `onUnchecked` is told how many notes that was. It
+ * lives with the caller because rendering needs the markdown processor, which
+ * the graph core must not import.
  *
  * The anchor is `splitWikilinkTarget`'s, so link and heading are slugged by the
  * same call. A repeated heading is `-1`, `-2` on the page and the link by name
