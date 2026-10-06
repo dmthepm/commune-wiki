@@ -1360,7 +1360,8 @@ function twinKey(urlPath: string): string {
  * entries would write the same page and the same `.md`, and the build refuses
  * it. Reported once per contested address, against the first entry that
  * declares a route there, since that is the line to change. Two entries whose
- * canonical URLs alone collide are not this rule's business.
+ * own URLs alone map to one twin, such as `/about` and `/about/`, are reported
+ * too, against the first of them, because the build refuses that as well.
  *
  * An entry repeating its own canonical URL as a route is not a collision, only
  * redundant, and `loadContentEntries` has already dropped repeats within one
@@ -1392,10 +1393,26 @@ export function findRouteCollisions(entries: ContentEntry[]): Diagnostic[] {
 	for (const list of claims.values()) {
 		if (list.length < 2) continue;
 		const declared = list.filter((claimant) => claimant.route !== undefined);
-		if (declared.length === 0) continue;
+		const urls = list.map(({ entry }) => entry.urlPath).sort();
+
+		// No route is involved: the entries' own URLs map to one twin, such as
+		// `/about` and `/about/`. The build refuses that the same way.
+		if (declared.length === 0) {
+			const [owner] = list;
+			diagnostics.push({
+				rule: 'route-collision',
+				severity: 'error',
+				file: owner.entry.file,
+				urlPath: owner.entry.urlPath,
+				candidates: urls,
+				message: `${list.length} entries have URLs that write the same markdown twin (${urls.join(
+					', '
+				)}), so the build refuses it`,
+			});
+			continue;
+		}
 
 		const [first] = declared;
-		const urls = list.map(({ entry }) => entry.urlPath).sort();
 		diagnostics.push({
 			rule: 'route-collision',
 			severity: 'error',
