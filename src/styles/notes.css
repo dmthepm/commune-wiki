@@ -62,6 +62,13 @@
 		padding-top: 2rem;
 		border-top: 1px solid var(--c-border);
 	}
+
+	/* The page scrolls under the sticky header here, so a fragment target
+	   stops short of it by the header's measured height. Wide screens scroll
+	   inside each pane and need no offset. */
+	.prose [id] {
+		scroll-margin-top: calc(var(--header-height, 73px) + 0.5rem);
+	}
 }
 
 /* Scroll lock when panes or modal are open */
