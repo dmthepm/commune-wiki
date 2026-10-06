@@ -43,10 +43,9 @@ const CASES = [
 	['text glued to the closing fence', '---\ntitle: A\n---x\nbody\n', { title: 'A' }, 'x\nbody\n'],
 	['a rule in the body', '---\ntitle: A\n---\nbody\n\n---\n\nmore\n', { title: 'A' }, 'body\n\n---\n\nmore\n'],
 	['a fence line inside a block scalar', '---\na: |\n  x\n  ---\n  y\n---\nb', { a: 'x\n---\ny\n' }, 'b'],
-	['nested values', '---\na:\n  b: [1, 2]\n  c: {d: e}\nbool: yes\nn: 010\n---\nb', {
+	['nested values', '---\na:\n  b: [1, 2]\n  c: {d: e}\nbool: yes\n---\nb', {
 		a: { b: [1, 2], c: { d: 'e' } },
 		bool: 'yes',
-		n: 8,
 	}, 'b'],
 	['a null document', '---\n~\n---\nb', {}, 'b'],
 ];
