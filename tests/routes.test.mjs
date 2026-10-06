@@ -14,7 +14,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import commune, { findMarkdownTwin } from '../src/integration.ts';
+import commune from '../src/integration.ts';
+import { findMarkdownTwin } from '../src/lib/markdown-twin.ts';
 import {
 	buildGraph,
 	checkEntries,
@@ -188,6 +189,43 @@ test('check reports a route two entries both declare, once', async () => {
 			assert.equal(found.length, 1);
 			assert.equal(found[0].target, '/');
 			assert.deepEqual(found[0].candidates, ['/notes/a/', '/notes/b/']);
+		}
+	);
+});
+
+test('check reports two entries whose own URLs write one markdown twin', async () => {
+	const page = (title, url) => `---\ntitle: ${title}\nurl: "${url}"\nvisibility: public\n---\n\n${title}.\n`;
+	await withVault(
+		{ 'pages/About.md': page('About', '/about'), 'pages/About Us.md': page('About Us', '/about/') },
+		async (dir) => {
+			const entries = await loadContentEntries({ root: dir });
+			const found = checkEntries(entries, buildGraph(entries)).filter((f) => f.rule === 'route-collision');
+
+			assert.equal(found.length, 1);
+			assert.equal(found[0].severity, 'error');
+			assert.equal(found[0].candidates.length, 2);
+
+			const { stdout } = await runCommune('--root', dir, 'check', '--json');
+			assert.equal(JSON.parse(stdout).summary.byRule['route-collision'], 1);
+
+			// The gate reads the search index a build writes; an empty one lets it
+			// reach the route assertion without building.
+			await mkdir(join(dir, 'public'), { recursive: true });
+			await writeFile(join(dir, 'public/backlinks.json'), '{}');
+			const gate = await runCommune('--root', dir, 'gate');
+			assert.notEqual(gate.code, 0);
+			assert.match(gate.stderr + gate.stdout, /routes must not share an address/);
+		}
+	);
+});
+
+test('check does not report entries whose own URLs write different twins', async () => {
+	const page = (title, url) => `---\ntitle: ${title}\nurl: "${url}"\nvisibility: public\n---\n\n${title}.\n`;
+	await withVault(
+		{ 'pages/About.md': page('About', '/about/'), 'pages/Contact.md': page('Contact', '/contact/') },
+		async (dir) => {
+			const entries = await loadContentEntries({ root: dir });
+			assert.deepEqual(checkEntries(entries, buildGraph(entries)).filter((f) => f.rule === 'route-collision'), []);
 		}
 	);
 });
