@@ -32,7 +32,9 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
 - Rename or move a note only with `$COMMUNE rename <from> <to>`, never `mv`,
   `git mv`, `obsidian rename` or a file tool. Those leave every `[[link]]` to
   the old name broken; `rename` rewrites them and keeps the URL. Add
-  `--dry-run` first.
+  `--dry-run` first. When `rename` only changes a name's case in a git
+  repository, it prints a `git mv -f` line on stderr; run that line so git
+  records the new case.
 - Never install anything. Do not commit the draft; `commune-ship` commits it.
   The one exception is refine, which commits each correction on its own so a
   verdict can be reverted alone (`references/refine.md`).

@@ -942,6 +942,8 @@ export interface Diagnostic {
 	candidates?: string[];
 	/** The spelling a `noncanonical-title` finding should have used. */
 	canonical?: string;
+	/** A broken-link's likely cause, from git's rename detection. Set by `check` only. */
+	hint?: string;
 }
 
 /** The resolved content graph. */

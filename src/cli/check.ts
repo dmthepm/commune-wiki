@@ -20,6 +20,7 @@ import {
 	type Diagnostic,
 	type DiagnosticRule,
 } from '../lib/graph.ts';
+import { addRenameHints } from '../lib/git-hints.ts';
 import { SCHEMA, writeJson, writeLines } from './output.ts';
 import { EXIT_OK } from './errors.ts';
 
@@ -43,6 +44,7 @@ function toFinding(diagnostic: Diagnostic) {
 		...(diagnostic.target !== undefined ? { target: diagnostic.target } : {}),
 		...(diagnostic.candidates ? { candidates: diagnostic.candidates } : {}),
 		...(diagnostic.canonical !== undefined ? { canonical: diagnostic.canonical } : {}),
+		...(diagnostic.hint !== undefined ? { hint: diagnostic.hint } : {}),
 	};
 }
 
@@ -87,6 +89,8 @@ export async function checkCommand(root: string, json: boolean): Promise<number>
 		process.stderr.write(`broken-anchor: ${notes} ${notes === 1 ? 'note' : 'notes'} not checked (${why})\n`);
 	});
 	const findings = [...checkEntries(entries, graph), ...anchors];
+	// Advisory and best effort: without git, or if git fails, the findings are untouched.
+	await addRenameHints(root, findings);
 
 	const byRule = Object.fromEntries(
 		RULES.map((rule) => [rule, findings.filter((finding) => finding.rule === rule).length])
@@ -108,7 +112,7 @@ export async function checkCommand(root: string, json: boolean): Promise<number>
 
 	writeLines([
 		...findings.map(
-			(finding) => `${finding.severity}\t${finding.rule}\t${finding.file}\t${finding.message}`
+			(finding) => `${finding.severity}\t${finding.rule}\t${finding.file}\t${finding.message}${finding.hint ? ` (${finding.hint})` : ''}`
 		),
 		`${summary.entries} entries, ${summary.edges} edges, ${summary.errors} errors, ${summary.warnings} warnings`,
 	]);
