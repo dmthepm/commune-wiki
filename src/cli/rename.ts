@@ -47,6 +47,7 @@ import {
 	type ContentEntry,
 	type ExtractedLink,
 } from '../lib/graph.ts';
+import { insideGitWorkTree } from '../lib/git-hints.ts';
 import { SCHEMA, writeJson, writeLines } from './output.ts';
 import { EXIT_OK, failure } from './errors.ts';
 
@@ -774,6 +775,14 @@ export async function renameCommand(
 
 	if (!dryRun) {
 		await applyPlan(root, from, to, edits, redirects, caseOnly);
+	}
+
+	// A case-only move leaves git's index on the old spelling when core.ignorecase
+	// is true. Said on stderr, so neither output mode changes.
+	if (!dryRun && from.toLowerCase() === to.toLowerCase() && (await insideGitWorkTree(root))) {
+		process.stderr.write(
+			`git: only the case changed, and git may not record it. Run: git mv -f ${JSON.stringify(from)} ${JSON.stringify(to)}\n`
+		);
 	}
 
 	if (json) {
