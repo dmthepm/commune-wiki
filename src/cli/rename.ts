@@ -348,6 +348,9 @@ function diffLines(before: string, after: string): LineChange[] {
 	return changes;
 }
 
+/** Text a YAML 1.1 parser could take for a number, sexagesimal included. */
+const NUMERIC_LOOKING = /^[-+.\d][\d:_.eE+-]*$/;
+
 /** A YAML scalar that parses back to exactly `value`. */
 function yamlString(value: string, quote: string): string {
 	if (quote === "'") return `'${value.replace(/'/g, "''")}'`;
@@ -356,7 +359,9 @@ function yamlString(value: string, quote: string): string {
 	const plain = value;
 	try {
 		const parsed = parseFrontmatter(`---\nk: ${plain}\n---\n`).data.k;
-		if (parsed === value && /^[\w(]/.test(value)) return plain;
+		// Numeric-looking text (`1_000`, `1:20`, `08`) is quoted: YAML 1.1 readers such
+		// as PyYAML or older Obsidian parsers read it as a number.
+		if (parsed === value && /^[\w(]/.test(value) && !NUMERIC_LOOKING.test(value)) return plain;
 	} catch {
 		// Not valid plain; quote it.
 	}

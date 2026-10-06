@@ -12,6 +12,9 @@
  *   - a block with nothing but blank lines and comments is `{}`;
  *   - a fence that never closes takes the rest of the file, as it always has.
  *
+ * A language tag (`---yaml`, `---toml`, `---json`) is skipped and the block is
+ * always read as YAML.
+ *
  * js-yaml's default schema is what Astro's content layer parses with, and it
  * reads `2024-01-02` and full timestamps as `Date` objects.
  */
@@ -51,9 +54,6 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
 		if (content.startsWith('\r')) content = content.slice(1);
 		if (content.startsWith('\n')) content = content.slice(1);
 	}
-
-	const withoutComments = block.replace(/^\s*#[^\n]+/gm, '').trim();
-	if (withoutComments === '') return { data: {}, content };
 
 	const data = load(block);
 	return { data: (data ?? {}) as Record<string, unknown>, content };

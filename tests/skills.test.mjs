@@ -41,7 +41,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import matter from 'gray-matter';
+import { parseFrontmatter } from '../src/lib/frontmatter.ts';
 
 const execFileAsync = promisify(execFile);
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -65,7 +65,7 @@ const WRITING_SECTIONS = ['Sentences', 'Titles', 'Notes', 'Frontmatter', 'Avoid'
 async function skillFile(name) {
 	const file = path.join(SKILLS, name, 'SKILL.md');
 	const raw = await readFile(file, 'utf8');
-	return { file, raw, parsed: matter(raw) };
+	return { file, raw, parsed: parseFrontmatter(raw) };
 }
 
 test('the tree holds exactly the four skills, each with a SKILL.md', async () => {
@@ -80,8 +80,8 @@ test('the tree holds exactly the four skills, each with a SKILL.md', async () =>
 
 for (const name of EXPECTED) {
 	test(`${name}: SKILL.md parses, and its frontmatter is the contract`, async () => {
-		// gray-matter throws on the YAML the installer throws on, which is the
-		// point: an unquoted colon in a description skips the skill silently.
+		// parseFrontmatter throws on invalid YAML, as the installer does. That is
+		// the point: an unquoted colon in a description skips the skill silently.
 		const { parsed } = await skillFile(name);
 		const data = parsed.data;
 
@@ -168,7 +168,7 @@ test('commune-setup is user-invoked in both harnesses, and the loop skills are n
 	// allow_implicit_invocation to true, so without this file the skill would be
 	// user-invoked in Claude Code and model-invoked in Codex.
 	const yaml = await readFile(path.join(SKILLS, 'commune-setup', 'agents', 'openai.yaml'), 'utf8');
-	const mirrored = matter(`---\n${yaml}\n---\n`).data;
+	const mirrored = parseFrontmatter(`---\n${yaml}\n---\n`).data;
 	assert.equal(mirrored.policy?.allow_implicit_invocation, false);
 
 	for (const name of ['commune-dump', 'commune-write', 'commune-ship']) {

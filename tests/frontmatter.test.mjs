@@ -48,6 +48,8 @@ const CASES = [
 		bool: 'yes',
 	}, 'b'],
 	['a null document', '---\n~\n---\nb', {}, 'b'],
+	['a language tag on the opening fence', '---yaml\ntitle: A\n---\nb', { title: 'A' }, 'b'],
+	['comments only, no blank lines', '---\n# one\n# two\n---\nb', {}, 'b'],
 ];
 
 for (const [name, source, data, content] of CASES) {
@@ -90,6 +92,28 @@ test('frontmatter: an unparseable file reaches the user as "cannot parse frontma
 		await rm(dir, { recursive: true, force: true });
 	}
 });
+
+// A title that follows the filename is written plain when that is safe. Text a
+// YAML 1.1 reader takes for a number is not safe, whatever js-yaml 4 says.
+for (const title of ['1_000', '1:20', '08']) {
+	test(`frontmatter: rename quotes the title ${title}, which looks numeric`, async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), 'commune-fm-'));
+		try {
+			await mkdir(path.join(dir, 'src/content/notes'), { recursive: true });
+			await writeFile(
+				path.join(dir, 'src/content/notes/Old name.md'),
+				'---\ntitle: Old name\nvisibility: public\n---\nBody.\n'
+			);
+			const target = `src/content/notes/${title}.md`;
+			const { code } = await commune('--root', dir, 'rename', 'src/content/notes/Old name.md', target);
+			assert.equal(code, 0);
+			const written = await readFile(path.join(dir, target), 'utf8');
+			assert.match(written, new RegExp(`^title: ["']${title}["']$`, 'm'));
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+}
 
 test('frontmatter: rename writes the same bytes as it did with gray-matter', async () => {
 	const dir = await mkdtemp(path.join(tmpdir(), 'commune-fm-'));
