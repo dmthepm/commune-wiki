@@ -54,6 +54,21 @@
 	transition: all 0.15s ease;
 }
 
+/* The header is sticky at every width, so wherever the page itself scrolls a
+   fragment target stops short of it by the header's measured height. The
+   fallback covers pages that do not load the panes' :root default. */
+.prose [id] {
+	scroll-margin-top: calc(var(--header-height, 73px) + 0.5rem);
+}
+
+/* Desktop panes scroll inside their own .body-wrapper, below the header. The
+   fallback layout lets the page scroll, so it keeps the margin. */
+@media (min-width: 1024px) {
+	body:not(.wiki-fallback-mode) .pane .prose [id] {
+		scroll-margin-top: 0;
+	}
+}
+
 /* Mobile responsiveness */
 @media (max-width: 1023px) {
 	.backlinks, .related-notes {
@@ -61,13 +76,6 @@
 		margin-top: 3rem;
 		padding-top: 2rem;
 		border-top: 1px solid var(--c-border);
-	}
-
-	/* The page scrolls under the sticky header here, so a fragment target
-	   stops short of it by the header's measured height. Wide screens scroll
-	   inside each pane and need no offset. */
-	.prose [id] {
-		scroll-margin-top: calc(var(--header-height, 73px) + 0.5rem);
 	}
 }
 
