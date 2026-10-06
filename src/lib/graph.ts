@@ -19,7 +19,7 @@
 
 import { glob } from 'tinyglobby';
 import { slug as githubSlug } from 'github-slugger';
-import matter from 'gray-matter';
+import { parseFrontmatter } from './frontmatter.ts';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -383,7 +383,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 
 		for (const file of files) {
 			const source = await readFile(path.join(root, file), 'utf8');
-			const { content, data } = matter(source);
+			const { content, data } = parseFrontmatter(source);
 
 			if (!isPublic(collection, data)) continue;
 
@@ -648,7 +648,7 @@ const LINK_KEYS = new Set(['links']);
  * internal markdown links, and `frontmatterLinks`. Code is excluded.
  *
  * Frontmatter is passed separately because it is already parsed by the time it
- * reaches here — `loadContentEntries()` splits it off with gray-matter, so the
+ * reaches here — `loadContentEntries()` splits it off, so the
  * body alone can never contain it.
  */
 export function extractLinks(

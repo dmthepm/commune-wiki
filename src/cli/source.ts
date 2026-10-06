@@ -15,7 +15,7 @@
 
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import matter from 'gray-matter';
+import { parseFrontmatter } from '../lib/frontmatter.ts';
 import { failure } from './errors.ts';
 
 export interface Source {
@@ -59,7 +59,7 @@ export async function readSource(
 	{ allowText }: ReadSourceOptions
 ): Promise<Source> {
 	if (input === '-') {
-		const { content, data } = matter(await readStdin());
+		const { content, data } = parseFrontmatter(await readStdin());
 		return { kind: 'stdin', text: content, frontmatter: data };
 	}
 
@@ -77,7 +77,7 @@ export async function readSource(
 
 		let parsed;
 		try {
-			parsed = matter(source);
+			parsed = parseFrontmatter(source);
 		} catch (error) {
 			throw failure(
 				'EPARSE',
