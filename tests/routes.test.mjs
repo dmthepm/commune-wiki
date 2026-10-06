@@ -219,6 +219,23 @@ test('check reports two entries whose own URLs write one markdown twin', async (
 	);
 });
 
+test('check reports two entries that declare the identical URL, once', async () => {
+	const page = (title, url) => `---\ntitle: ${title}\nurl: "${url}"\nvisibility: public\n---\n\n${title}.\n`;
+	await withVault(
+		{ 'pages/About.md': page('About', '/about/'), 'pages/About Us.md': page('About Us', '/about/') },
+		async (dir) => {
+			const entries = await loadContentEntries({ root: dir });
+			const findings = checkEntries(entries, buildGraph(entries));
+			const found = findings.filter((f) => f.rule === 'route-collision');
+
+			assert.equal(found.length, 1);
+			assert.equal(found[0].severity, 'error');
+			assert.match(found[0].message, /^2 entries share the URL \/about\/, so the build refuses their markdown twin$/);
+			assert.equal(findings.filter((f) => f.rule === 'duplicate-name').length, 0);
+		}
+	);
+});
+
 test('check does not report entries whose own URLs write different twins', async () => {
 	const page = (title, url) => `---\ntitle: ${title}\nurl: "${url}"\nvisibility: public\n---\n\n${title}.\n`;
 	await withVault(
