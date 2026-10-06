@@ -26,7 +26,7 @@
 import { chmod, mkdir, readFile, stat, unlink, writeFile, rename as renameFile } from 'node:fs/promises';
 import path from 'node:path';
 import { glob } from 'tinyglobby';
-import matter from 'gray-matter';
+import { parseFrontmatter } from '../lib/frontmatter.ts';
 import {
 	CONTENT_DIRS,
 	COLLECTIONS,
@@ -355,7 +355,7 @@ function yamlString(value: string, quote: string): string {
 
 	const plain = value;
 	try {
-		const parsed = matter(`---\nk: ${plain}\n---\n`).data.k;
+		const parsed = parseFrontmatter(`---\nk: ${plain}\n---\n`).data.k;
 		if (parsed === value && /^[\w(]/.test(value)) return plain;
 	} catch {
 		// Not valid plain; quote it.
@@ -511,7 +511,7 @@ export async function renameCommand(
 	}
 
 	const source = await readFile(path.join(root, from), 'utf8');
-	const data = matter(source).data as Record<string, unknown>;
+	const data = parseFrontmatter(source).data as Record<string, unknown>;
 	const hasPin = typeof data.slug === 'string' && data.slug !== '';
 
 	// Title: follow the filename only when it was the filename.
@@ -602,7 +602,7 @@ export async function renameCommand(
 	for (const file of files) {
 		if (published.has(file)) continue;
 		const fileCollection = collectionOf(file)!;
-		const { content, data: fm } = matter(file === from ? source : await readFile(path.join(root, file), 'utf8'));
+		const { content, data: fm } = parseFrontmatter(file === from ? source : await readFile(path.join(root, file), 'utf8'));
 		const { slug, urlPath } = toUrlPath(file, fileCollection, fm);
 		everyone.push({
 			slug,
@@ -731,7 +731,7 @@ export async function renameCommand(
 					: after;
 
 			// Whatever was edited by line has to parse back to what the plan says.
-			const parsed = matter(after).data as Record<string, unknown>;
+			const parsed = parseFrontmatter(after).data as Record<string, unknown>;
 			const wantTitle = title.updated ? newStem : data.title;
 			const wantSlug = url.pinnedSlug ?? (url.removedPin ? undefined : data.slug);
 			if (parsed.title !== wantTitle || parsed.slug !== wantSlug) {
