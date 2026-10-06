@@ -19,7 +19,8 @@ import { copyFile, mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { CONTENT_DIRS, linkKey, type Diagnostic } from './graph.ts';
+import { parseFrontmatter } from './frontmatter.ts';
+import { CONTENT_DIRS, linkKey, toUrlPath, type CollectionName, type Diagnostic } from './graph.ts';
 
 const run = promisify(execFile);
 
@@ -51,17 +52,19 @@ export interface RenamedFile {
 	from: string;
 	/** Root-relative path it has now. */
 	to: string;
+	/** The commit that still holds the old file: `HEAD` for the work tree, `HEAD~1` for the last commit. */
+	rev?: 'HEAD' | 'HEAD~1';
 }
 
 /** Parse `git diff --name-status -z` output into its renames. */
-function parseRenames(output: string): RenamedFile[] {
+function parseRenames(output: string, rev: RenamedFile['rev']): RenamedFile[] {
 	const fields = output.split('\0');
 	const renames: RenamedFile[] = [];
 	for (let i = 0; i < fields.length; i++) {
 		const status = fields[i];
 		if (!status) continue;
 		if (status[0] === 'R' || status[0] === 'C') {
-			if (status[0] === 'R') renames.push({ from: fields[i + 1], to: fields[i + 2] });
+			if (status[0] === 'R') renames.push({ from: fields[i + 1], to: fields[i + 2], rev });
 			i += 2;
 		} else {
 			i += 1;
@@ -105,7 +108,7 @@ export async function detectRenames(root: string): Promise<RenamedFile[]> {
 			// splitIndex off, or a split-index repository gets a sharedindex file written
 			// beside the real one.
 			await git(root, ['-c', 'core.splitIndex=false', 'add', '--intent-to-add', '--all', '--', ...dirs], env);
-			return parseRenames(await git(root, [...DIFF, 'HEAD', '--', ...dirs], env));
+			return parseRenames(await git(root, [...DIFF, 'HEAD', '--', ...dirs], env), 'HEAD');
 		} catch {
 			// Not a repository, no commits yet, no git, or a git that refused.
 			return [];
@@ -115,7 +118,7 @@ export async function detectRenames(root: string): Promise<RenamedFile[]> {
 	};
 	const lastCommit = async (): Promise<RenamedFile[]> => {
 		try {
-			return parseRenames(await git(root, [...DIFF, 'HEAD~1', 'HEAD', '--', ...dirs]));
+			return parseRenames(await git(root, [...DIFF, 'HEAD~1', 'HEAD', '--', ...dirs]), 'HEAD~1');
 		} catch {
 			// A single-commit history has no HEAD~1.
 			return [];
@@ -137,34 +140,75 @@ function describe(rename: RenamedFile): string {
 	return `\`${from}\` looks renamed to \`${to}\``;
 }
 
+/** The collection a root-relative path lives in, or undefined outside the content directories. */
+function collectionOf(file: string): CollectionName | undefined {
+	return (Object.keys(CONTENT_DIRS) as CollectionName[]).find((name) => file.startsWith(`${CONTENT_DIRS[name]}/`));
+}
+
 /**
- * Attach a `hint` to each broken name link whose target is the stem of a
- * renamed file, matched the way the graph matches titles (`linkKey`).
+ * The old file's frontmatter, read from the commit that still held it. One
+ * `git show` per call. `./` makes the path relative to the project root, which
+ * is where git runs. Empty on any failure, a missing block or invalid YAML.
+ */
+async function oldFrontmatter(root: string, rename: RenamedFile): Promise<Record<string, unknown>> {
+	try {
+		const blob = await git(root, ['show', `${rename.rev ?? 'HEAD'}:./${rename.from}`]);
+		return parseFrontmatter(blob).data;
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Attach a `hint` to each broken link whose target names a renamed file,
+ * matched the way the graph matches titles (`linkKey`). A name link matches the
+ * old file's stem or the `title` its old frontmatter carried. A url link
+ * matches the URL the old file had, computed by the graph's own `toUrlPath`
+ * from the old path and old frontmatter.
  *
  * Does nothing, and never calls git, when there is no broken link to explain.
+ * The old blob is read only while some broken link is still unexplained by the
+ * filenames, and then once per rename.
  */
 export async function addRenameHints(root: string, findings: Diagnostic[]): Promise<void> {
-	const broken = findings.filter(
-		(finding) => finding.rule === 'broken-link' && finding.kind !== 'url' && finding.target !== undefined
-	);
+	const broken = findings.filter((finding) => finding.rule === 'broken-link' && finding.target !== undefined);
 	if (!broken.length) return;
 
 	const renames = await detectRenames(root);
 	if (!renames.length) return;
 
-	// A stem shared by renames in two places (two collections, say) is ambiguous:
+	// A name shared by renames in two places (two collections, say) is ambiguous:
 	// the finding does not say which collection it meant, so it gets no hint
 	// rather than a guess. The same rename seen twice is not ambiguous.
-	const byStem = new Map<string, RenamedFile | null>();
-	for (const rename of renames) {
-		const key = linkKey(stemOf(rename.from));
-		const seen = byStem.get(key);
-		if (seen === undefined) byStem.set(key, rename);
-		else if (seen && (seen.from !== rename.from || seen.to !== rename.to)) byStem.set(key, null);
+	const claim = (table: Map<string, RenamedFile | null>, key: string, rename: RenamedFile) => {
+		const seen = table.get(key);
+		if (seen === undefined) table.set(key, rename);
+		else if (seen && (seen.from !== rename.from || seen.to !== rename.to)) table.set(key, null);
+	};
+
+	const byName = new Map<string, RenamedFile | null>();
+	const byUrl = new Map<string, RenamedFile | null>();
+	for (const rename of renames) claim(byName, linkKey(stemOf(rename.from)), rename);
+
+	// A `git show` is worth it only for a name link the stems left unexplained,
+	// or for a url link, which a filename cannot explain at all.
+	const wantsName = broken.some((f) => f.kind !== 'url' && !byName.get(linkKey(f.target!)));
+	const wantsUrl = broken.some((f) => f.kind === 'url');
+	if (wantsName || wantsUrl) {
+		const read = new Set<string>();
+		for (const rename of renames) {
+			const collection = collectionOf(rename.from);
+			const id = `${rename.from}\0${rename.to}`;
+			if (!collection || read.has(id)) continue;
+			read.add(id);
+			const data = await oldFrontmatter(root, rename);
+			if (wantsName && typeof data.title === 'string' && data.title.trim()) claim(byName, linkKey(data.title), rename);
+			if (wantsUrl) claim(byUrl, toUrlPath(rename.from, collection, data).urlPath, rename);
+		}
 	}
 
 	for (const finding of broken) {
-		const rename = byStem.get(linkKey(finding.target!));
+		const rename = finding.kind === 'url' ? byUrl.get(finding.target!) : byName.get(linkKey(finding.target!));
 		if (rename) finding.hint = describe(rename);
 	}
 }
