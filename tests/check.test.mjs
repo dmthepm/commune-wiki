@@ -99,6 +99,7 @@ test('check --json reports counts by rule and exits 0 despite findings', async (
 		'noncanonical-title': 1,
 		'broken-anchor': 0,
 		'route-collision': 0,
+		'frontmatter-warning': 0,
 	});
 	assert.equal(payload.summary.errors, 4);
 	assert.equal(payload.summary.warnings, 1);
