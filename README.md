@@ -12,7 +12,7 @@ Start a wiki in one paste. You need Node 22.12 or newer, npm and Git. Node 22.19
 git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev
 ```
 
-Open the address Astro prints. The clone is only the source of the copy, and you can delete it afterward. To run the paste again, delete `commune-wiki` and `my-wiki` first, since both commands refuse to overwrite a folder. Run by a coding agent on macOS or Linux, Astro 7 starts the dev server in the background and prints its address as JSON. `npx astro dev stop` stops it. If you stop or have to guess, [tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
+Open the address Astro prints. If the release that the clone pins is not on npm yet, the copy uses the latest published version and says so. The clone is only the source of the copy, and you can delete it afterward. To run the paste again, delete `commune-wiki` and `my-wiki` first, since both commands refuse to overwrite a folder. Run by a coding agent on macOS or Linux, Astro 7 starts the dev server in the background and prints its address as JSON. `npx astro dev stop` stops it. If you stop or have to guess, [tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
 
 ## Start a wiki
 

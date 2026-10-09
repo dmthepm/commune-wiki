@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { mkdtemp, readFile, readdir, mkdir, writeFile, symlink, rm, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,6 +12,22 @@ const exec = promisify(execFile);
 const copier = fileURLToPath(new URL('../scripts/create-wiki.mjs', import.meta.url));
 const source = fileURLToPath(new URL('../examples/starter/', import.meta.url));
 const root = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+// A stand-in `npm` first on PATH, so no test here asks the real registry.
+// FAKE_NPM picks the answer: "exists" serves any version, "missing" answers
+// E404 for a pinned version and 0.0.9 as latest, "fail" cannot be reached.
+const fakeBin = mkdtempSync(path.join(tmpdir(), 'commune-fake-npm-'));
+process.on('exit', () => rmSync(fakeBin, { recursive: true, force: true }));
+writeFileSync(path.join(fakeBin, 'npm'), `#!${process.execPath}
+const [, , command, spec, field] = process.argv;
+const mode = process.env.FAKE_NPM;
+if (command !== 'view' || mode === 'fail') { console.error('npm error network'); process.exit(1); }
+if (field === 'dist-tags.latest') { console.log(JSON.stringify('0.0.9')); process.exit(0); }
+if (mode === 'missing') { console.log(JSON.stringify({ error: { code: 'E404' } })); process.exit(1); }
+console.log(JSON.stringify(spec.split('@').pop()));
+`, { mode: 0o755 });
+function npmEnv(mode) {
+  return { ...process.env, PATH: fakeBin + path.delimiter + process.env.PATH, FAKE_NPM: mode };
+}
 async function sandbox(t) {
   const directory = await mkdtemp(path.join(tmpdir(), 'commune-starter-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -19,7 +36,7 @@ async function sandbox(t) {
 
 test('starter copies from an unrelated cwd, including dotfiles and only published dependencies', async t => {
   const cwd = await sandbox(t);
-  const { stdout } = await exec(process.execPath, [copier, 'a wiki'], { cwd });
+  const { stdout } = await exec(process.execPath, [copier, 'a wiki'], { cwd, env: npmEnv("fail") });
   assert.match(stdout, /No dependencies were installed/);
   const destination = path.join(cwd, 'a wiki');
   const manifest = JSON.parse(await readFile(path.join(destination, 'package.json'), 'utf8'));
@@ -38,19 +55,44 @@ test('starter copies from an unrelated cwd, including dotfiles and only publishe
 
 test('copier names the wiki the way it was asked for', async t => {
   const cwd = await sandbox(t);
-  const { stdout: plain } = await exec(process.execPath, [copier, 'my-wiki'], { cwd });
+  const { stdout: plain } = await exec(process.execPath, [copier, 'my-wiki'], { cwd, env: npmEnv("fail") });
   assert.match(plain, /^Created my-wiki\n/);
   assert.match(plain, /\n  cd my-wiki\n/);
-  const { stdout: spaced } = await exec(process.execPath, [copier, 'a wiki'], { cwd });
+  const { stdout: spaced } = await exec(process.execPath, [copier, 'a wiki'], { cwd, env: npmEnv("fail") });
   assert.match(spaced, /\n  cd 'a wiki'\n/);
   const outside = await sandbox(t);
   const elsewhere = path.join(outside, 'far');
-  const { stdout: absolute } = await exec(process.execPath, [copier, elsewhere], { cwd });
+  const { stdout: absolute } = await exec(process.execPath, [copier, elsewhere], { cwd, env: npmEnv("fail") });
   assert.ok(absolute.startsWith(`Created ${elsewhere}\n`), 'a destination outside the cwd stays absolute');
-  const { stdout: dashed } = await exec(process.execPath, [copier, './-wiki'], { cwd });
+  const { stdout: dashed } = await exec(process.execPath, [copier, './-wiki'], { cwd, env: npmEnv("fail") });
   assert.match(dashed, /\n  cd \.\/-wiki\n/, 'a name starting with a dash is not read as an option');
-  const { stdout: dotted } = await exec(process.execPath, [copier, '..wiki'], { cwd });
+  const { stdout: dotted } = await exec(process.execPath, [copier, '..wiki'], { cwd, env: npmEnv("fail") });
   assert.match(dotted, /\n  cd \.\.wiki\n/, 'a name starting with two dots is still inside the cwd');
+});
+
+test('copier keeps the pin when the registry has it', async t => {
+  const cwd = await sandbox(t);
+  const { stdout } = await exec(process.execPath, [copier, 'wiki'], { cwd, env: npmEnv('exists') });
+  assert.doesNotMatch(stdout, /not on npm yet/);
+  const manifest = JSON.parse(await readFile(path.join(cwd, 'wiki/package.json'), 'utf8'));
+  assert.equal(manifest.dependencies['@dmthepm/commune'], root.version);
+});
+
+test('copier writes the registry latest when the pinned version is not published yet', async t => {
+  const cwd = await sandbox(t);
+  const { stdout } = await exec(process.execPath, [copier, 'wiki'], { cwd, env: npmEnv('missing') });
+  assert.ok(stdout.startsWith(`@dmthepm/commune ${root.version} is not on npm yet, using 0.0.9\n`));
+  const manifest = JSON.parse(await readFile(path.join(cwd, 'wiki/package.json'), 'utf8'));
+  assert.equal(manifest.dependencies['@dmthepm/commune'], '0.0.9');
+  assert.equal(manifest.dependencies.astro, JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8')).dependencies.astro);
+});
+
+test('copier keeps the pin and says nothing when the registry cannot be asked', async t => {
+  const cwd = await sandbox(t);
+  const { stdout, stderr } = await exec(process.execPath, [copier, 'wiki'], { cwd, env: npmEnv('fail') });
+  assert.doesNotMatch(stdout + stderr, /not on npm yet/);
+  const manifest = JSON.parse(await readFile(path.join(cwd, 'wiki/package.json'), 'utf8'));
+  assert.equal(manifest.dependencies['@dmthepm/commune'], root.version);
 });
 
 test('copier refuses existing directories, files, and symlinks without overwriting', async t => {
@@ -59,7 +101,7 @@ test('copier refuses existing directories, files, and symlinks without overwriti
   await writeFile(path.join(cwd, 'existing'), 'keep me');
   await symlink(path.join(cwd, 'empty'), path.join(cwd, 'alias'));
   for (const target of ['empty', 'existing', 'alias']) {
-    await assert.rejects(exec(process.execPath, [copier, target], { cwd }), /Could not create wiki/);
+    await assert.rejects(exec(process.execPath, [copier, target], { cwd, env: npmEnv("fail") }), /Could not create wiki/);
   }
   assert.equal(await readFile(path.join(cwd, 'existing'), 'utf8'), 'keep me');
   assert.deepEqual(await readdir(path.join(cwd, 'empty')), []);
@@ -68,12 +110,12 @@ test('copier refuses existing directories, files, and symlinks without overwriti
 test('copier requires exactly one destination and rejects copying inside its source', async t => {
   const cwd = await sandbox(t);
   for (const args of [[], ['--help'], ['one', 'two'], [path.join(source, 'nested-copy')]]) {
-    await assert.rejects(exec(process.execPath, [copier, ...args], { cwd }));
+    await assert.rejects(exec(process.execPath, [copier, ...args], { cwd, env: npmEnv("fail") }));
   }
   await assert.rejects(lstat(path.join(source, 'nested-copy')), { code: 'ENOENT' });
   assert.deepEqual(await readdir(cwd), []);
   await symlink(source, path.join(cwd, 'source-alias'));
-  await assert.rejects(exec(process.execPath, [copier, 'source-alias/another-copy'], { cwd }), /outside examples\/starter/);
+  await assert.rejects(exec(process.execPath, [copier, 'source-alias/another-copy'], { cwd, env: npmEnv("fail") }), /outside examples\/starter/);
   await assert.rejects(lstat(path.join(source, 'another-copy')), { code: 'ENOENT' });
 });
 
