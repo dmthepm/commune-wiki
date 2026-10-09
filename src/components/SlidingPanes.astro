@@ -203,15 +203,38 @@ if (window.wikiInitialized) {
   // The scroller is the pane's .body-wrapper, not the .pane itself.
   const paneScroller = (pane) => pane?.querySelector('.body-wrapper');
 
+  // The scroller of the pane that owns the address bar's note.
+  const currentScroller = () => {
+    const url = normalizeUrl(window.location.href);
+    return paneScroller(Array.from(container.querySelectorAll('.pane')).findLast(p => p.dataset.url === url));
+  };
+
   // A history entry has no idea where its pane was scrolled to. Before the
   // address bar moves on, the entry being left remembers it in its state, so
   // Back can put the reader where they were, including a place they scrolled
   // to by hand, which no URL records.
   const saveScroll = () => {
-    const url = normalizeUrl(window.location.href);
-    const pane = Array.from(container.querySelectorAll('.pane')).findLast(p => p.dataset.url === url);
-    const scroller = paneScroller(pane);
+    const scroller = currentScroller();
     if (scroller) history.replaceState({ ...history.state, scrollTop: scroller.scrollTop }, '');
+  };
+
+  // saveScroll only runs when the page itself moves the address bar. Back
+  // and Forward move it first, so by the time popstate fires the entry being
+  // left is already out of reach. The current entry therefore keeps its
+  // position up to date as the reader scrolls, once they pause: replaceState is
+  // rate limited (Safari throws past about 100 calls in 30 s), so never once
+  // per scroll event.
+  let scrollTimer;
+  const handleScroll = (e) => {
+    const scroller = e.target;
+    if (!scroller?.classList?.contains('body-wrapper')) return;
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      // Only the pane that owns the address bar's note. Scrolling another pane
+      // says nothing about this entry, and the reader may have moved on since.
+      if (scroller !== currentScroller()) return;
+      history.replaceState({ ...history.state, scrollTop: scroller.scrollTop }, '');
+    }, 200);
   };
 
   const openPane = async (url) => {
@@ -355,7 +378,6 @@ if (window.wikiInitialized) {
   const closePane = (pane) => {
     if (pane === container.firstElementChild) return;
     const previousPane = pane.previousElementSibling;
-    saveScroll();
     pane.remove();
     updateContainerLayout();
     if (previousPane && previousPane.classList.contains('pane')) {
@@ -451,8 +473,15 @@ if (window.wikiInitialized) {
     updateContainerLayout();
     // A reload (Forward into a pane that was closed rebuilds the page this
     // way) lands on the note's URL with its fragment. The pane scrolls, not
-    // the page, so the heading is brought into view here.
-    scrollToHash(firstPane, window.location.hash);
+    // the page, so the heading is brought into view here. A position the
+    // entry remembered beats the fragment, as in focusPane.
+    const remembered = history.state?.scrollTop;
+    if (typeof remembered === 'number') {
+      const scroller = paneScroller(firstPane);
+      if (scroller) scroller.scrollTop = remembered;
+    } else {
+      scrollToHash(firstPane, window.location.hash);
+    }
   }
 
   // --- SINGLE EVENT DELEGATION SETUP ---
@@ -461,6 +490,8 @@ if (window.wikiInitialized) {
   document.removeEventListener('mouseleave', handlePreviewLeave, true);
   container.removeEventListener('click', handleWikiClick);
   window.removeEventListener('popstate', handlePopstate);
+  // scroll does not bubble, so it is caught on the way down.
+  container.removeEventListener('scroll', handleScroll, true);
 
   // Add hover preview listeners ONLY on desktop (>= 1024px)
   // This prevents the brief preview flash on mobile/tablet when tapping links
@@ -472,6 +503,7 @@ if (window.wikiInitialized) {
   // Add navigation listeners on all devices
   container.addEventListener('click', handleWikiClick);
   window.addEventListener('popstate', handlePopstate);
+  container.addEventListener('scroll', handleScroll, true);
 
   // Mark as successfully initialized
   window.wikiInitialized = true;
