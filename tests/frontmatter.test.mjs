@@ -76,6 +76,30 @@ test('frontmatter: an unclosed block takes the whole file and throws on prose', 
 	assert.throws(() => parseFrontmatter('---\ntitle: A\nbody\n'));
 });
 
+test('frontmatter: YAML 1.2 core schema, as Astro reads it', () => {
+	const read = (yaml) => parseFrontmatter(`---\n${yaml}\n---\nb`).data;
+	assert.deepEqual(read('a: yes\nb: 010\nc: 0o10'), { a: 'yes', b: 10, c: 8 });
+	assert.deepEqual(read('a: 0b11'), { a: '0b11' });
+	assert.deepEqual(read('base: &b {x: 1}\nd:\n  <<: *b\n  y: 2'), { base: { x: 1 }, d: { x: 1, y: 2 } });
+});
+
+test('frontmatter: a block that is not a mapping or a list is {}', () => {
+	assert.deepEqual(parseFrontmatter('---\njust text\n---\nb').data, {});
+	assert.deepEqual(parseFrontmatter('---\n42\n---\nb').data, {});
+});
+
+test('frontmatter: an unknown tag reads as the plain value', () => {
+	assert.deepEqual(parseFrontmatter('---\na: !foo 1\n---\nb').data, { a: '1' });
+});
+
+test('frontmatter: a null key becomes the empty key', () => {
+	assert.deepEqual(parseFrontmatter('---\n~: 1\n---\nb').data, { '': 1 });
+});
+
+test('frontmatter: a list block stays a list, as in Astro', () => {
+	assert.deepEqual(parseFrontmatter('---\n- a\n- b\n---\nb').data, ['a', 'b']);
+});
+
 test('frontmatter: duplicate keys throw', () => {
 	assert.throws(() => parseFrontmatter('---\na: 1\na: 2\n---\nb'));
 });
@@ -95,7 +119,7 @@ test('frontmatter: an unparseable file reaches the user as "cannot parse frontma
 
 // A title that follows the filename is written plain when that is safe. Text a
 // YAML 1.1 reader takes for a number is not safe, whatever js-yaml 4 says.
-for (const title of ['1_000', '1:20', '08']) {
+for (const title of ['1_000', '1:20', '08', '0b11', '0o17', '0x1F']) {
 	test(`frontmatter: rename quotes the title ${title}, which looks numeric`, async () => {
 		const dir = await mkdtemp(path.join(tmpdir(), 'commune-fm-'));
 		try {

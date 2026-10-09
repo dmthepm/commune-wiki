@@ -15,11 +15,25 @@
  * A language tag (`---yaml`, `---toml`, `---json`) is skipped and the block is
  * always read as YAML.
  *
- * js-yaml's default schema is what Astro's content layer parses with, and it
- * reads `2024-01-02` and full timestamps as `Date` objects.
+ * The YAML is read the way Astro's content layer reads it. As of
+ * `@astrojs/internal-helpers` 0.12.0 that is the `yaml` package (before it,
+ * js-yaml), through `parseYaml` in `dist/yaml.js` and `parseFrontmatter` in
+ * `dist/frontmatter.js` of that package (#148):
+ *
+ *   parseDocument(source, { schema: 'core', merge: true, customTags: ['timestamp'] })
+ *
+ * The core schema is YAML 1.2, so `yes`/`no` are strings and `010` is 10. The
+ * `timestamp` tag keeps `2024-01-02` and full timestamps as `Date` objects, which
+ * is what the content collections' `z.date()` expects. `merge: true` honours
+ * `<<` keys. Duplicate keys and any other parse error throw, as `yaml`'s
+ * defaults (`uniqueKeys`, `maxAliasCount: 100`) are left alone. A block with no
+ * contents (empty or comments only), or one that is not a mapping or a list, is `{}`.
+ *
+ * Astro's own helper splits the block with a looser regex and also accepts
+ * `+++` TOML. The split rules above are kept as they are.
  */
 
-import { load } from 'js-yaml';
+import { parseDocument } from 'yaml';
 
 export interface ParsedFrontmatter {
 	/** The parsed block. `{}` when there is no block or it holds nothing but comments. */
@@ -46,7 +60,9 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
 	if (/^[ \t]*[A-Za-z][\w-]*[ \t]*\r?$/.test(firstLine)) text = text.slice(firstLine.length);
 
 	const closeIndex = text.indexOf('\n' + FENCE);
-	const block = closeIndex === -1 ? text : text.slice(0, closeIndex);
+	// The newline before the closing fence stays in the block, as in Astro's helper.
+	// `yaml` reads a final `\r` without its `\n` as part of the last value.
+	const block = closeIndex === -1 ? text : text.slice(0, closeIndex + 1);
 
 	let content = '';
 	if (closeIndex !== -1) {
@@ -55,6 +71,19 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
 		if (content.startsWith('\n')) content = content.slice(1);
 	}
 
-	const data = load(block);
-	return { data: (data ?? {}) as Record<string, unknown>, content };
+	return { data: parseYaml(block), content };
+}
+
+/** Mirrors `parseYaml` in `@astrojs/internal-helpers` 0.12.0 (`dist/yaml.js`). */
+function parseYaml(source: string): Record<string, unknown> {
+	const document = parseDocument(source, {
+		customTags: ['timestamp'],
+		merge: true,
+		schema: 'core',
+	});
+	const [error] = document.errors;
+	if (error) throw error;
+	if (document.contents === null) return {};
+	const value: unknown = document.toJS();
+	return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
