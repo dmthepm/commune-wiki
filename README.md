@@ -107,7 +107,9 @@ const { Content } = await render(note);
 
 Both are minimal examples. [`examples/starter`](examples/starter) provides a separate wiki project. [`tests/fixtures/consumer`](tests/fixtures/consumer) tests integration against this repository through a local file dependency; it is a development fixture, not a portable starter.
 
-Notes go in `src/content/notes/`. Two frontmatter fields are load-bearing:
+Notes go in `src/content/notes/`. `commune check` and the graph read frontmatter with the `yaml` package, the way Astro 7.3.8 and newer do. On older Astro the site reads it with js-yaml, so a handful of unusual values (`0b11`, unknown tags) can read differently in the site and in `commune check`; use Astro 7.3.8 or newer.
+
+Two frontmatter fields are load-bearing:
 
 ```markdown
 ---

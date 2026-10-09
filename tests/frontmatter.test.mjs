@@ -88,6 +88,18 @@ test('frontmatter: a block that is not a mapping or a list is {}', () => {
 	assert.deepEqual(parseFrontmatter('---\n42\n---\nb').data, {});
 });
 
+test('frontmatter: an unknown tag reads as the plain value', () => {
+	assert.deepEqual(parseFrontmatter('---\na: !foo 1\n---\nb').data, { a: '1' });
+});
+
+test('frontmatter: a null key becomes the empty key', () => {
+	assert.deepEqual(parseFrontmatter('---\n~: 1\n---\nb').data, { '': 1 });
+});
+
+test('frontmatter: a list block stays a list, as in Astro', () => {
+	assert.deepEqual(parseFrontmatter('---\n- a\n- b\n---\nb').data, ['a', 'b']);
+});
+
 test('frontmatter: duplicate keys throw', () => {
 	assert.throws(() => parseFrontmatter('---\na: 1\na: 2\n---\nb'));
 });
