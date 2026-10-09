@@ -29,17 +29,31 @@
  * defaults (`uniqueKeys`, `maxAliasCount: 100`) are left alone. A block with no
  * contents (empty or comments only), or one that is not a mapping or a list, is `{}`.
  *
+ * `yaml` reports problems that are not errors, such as an unresolved tag
+ * (`!include x.md` reads as the plain string `x.md`), as `document.warnings`.
+ * Astro drops them. They are returned in `warnings` and change no value, so
+ * `commune check` can tell the author (#150).
+ *
  * Astro's own helper splits the block with a looser regex and also accepts
  * `+++` TOML. The split rules above are kept as they are.
  */
 
 import { parseDocument } from 'yaml';
 
+/** A warning `yaml` raised while reading a block. It did not change any value. */
+export interface FrontmatterWarning {
+	message: string;
+	/** The line in the file. The block starts on the opening fence's line, so a block line is a file line. */
+	line?: number;
+}
+
 export interface ParsedFrontmatter {
 	/** The parsed block. `{}` when there is no block or it holds nothing but comments. */
 	data: Record<string, unknown>;
 	/** Everything after the closing fence, with the one newline that ends the fence removed. */
 	content: string;
+	/** What `yaml` warned about. Empty when it had nothing to say. */
+	warnings: FrontmatterWarning[];
 }
 
 const FENCE = '---';
@@ -49,7 +63,7 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
 	let text = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
 
 	if (!text.startsWith(FENCE) || text.charAt(FENCE.length) === '-') {
-		return { data: {}, content: text };
+		return { data: {}, content: text, warnings: [] };
 	}
 	text = text.slice(FENCE.length);
 
@@ -71,11 +85,11 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
 		if (content.startsWith('\n')) content = content.slice(1);
 	}
 
-	return { data: parseYaml(block), content };
+	return { ...parseYaml(block), content };
 }
 
 /** Mirrors `parseYaml` in `@astrojs/internal-helpers` 0.12.0 (`dist/yaml.js`). */
-function parseYaml(source: string): Record<string, unknown> {
+function parseYaml(source: string): { data: Record<string, unknown>; warnings: FrontmatterWarning[] } {
 	const document = parseDocument(source, {
 		customTags: ['timestamp'],
 		merge: true,
@@ -83,7 +97,14 @@ function parseYaml(source: string): Record<string, unknown> {
 	});
 	const [error] = document.errors;
 	if (error) throw error;
-	if (document.contents === null) return {};
+	const warnings = document.warnings.map((warning) => ({
+		// `yaml` pretty-prints: the message ends in " at line N, column M:" and a code
+		// frame. Only the first line is kept, and `line` already carries the position.
+		message: warning.message.split('\n')[0]!.replace(/ at line \d+, column \d+:?$/, ''),
+		...(warning.linePos?.[0] ? { line: warning.linePos[0].line } : {}),
+	}));
+	if (document.contents === null) return { data: {}, warnings };
 	const value: unknown = document.toJS();
-	return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+	const data = value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+	return { data, warnings };
 }

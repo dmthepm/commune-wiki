@@ -19,7 +19,7 @@
 
 import { glob } from 'tinyglobby';
 import { slug as githubSlug } from 'github-slugger';
-import { parseFrontmatter } from './frontmatter.ts';
+import { parseFrontmatter, type FrontmatterWarning } from './frontmatter.ts';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -97,6 +97,8 @@ export interface ContentEntry {
 	body: string;
 	/** Parsed frontmatter. Kept because links can live in it. */
 	frontmatter: Record<string, unknown>;
+	/** What `yaml` warned about in the frontmatter. Absent when it had nothing to say. */
+	frontmatterWarnings?: FrontmatterWarning[];
 	/** Source file path, relative to the project root. */
 	file: string;
 }
@@ -383,7 +385,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 
 		for (const file of files) {
 			const source = await readFile(path.join(root, file), 'utf8');
-			const { content, data } = parseFrontmatter(source);
+			const { content, data, warnings } = parseFrontmatter(source);
 
 			if (!isPublic(collection, data)) continue;
 
@@ -404,6 +406,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 				...dates,
 				body: content,
 				frontmatter: data,
+				...(warnings.length ? { frontmatterWarnings: warnings } : {}),
 				file,
 			});
 		}
@@ -914,7 +917,8 @@ export type DiagnosticRule =
 	| 'duplicate-name'
 	| 'noncanonical-title'
 	| 'broken-anchor'
-	| 'route-collision';
+	| 'route-collision'
+	| 'frontmatter-warning';
 
 /**
  * One finding, as data.
@@ -1575,6 +1579,25 @@ export async function findBrokenAnchors(
 const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
 /**
+ * A warning for each thing `yaml` flagged in a note's frontmatter, such as an
+ * unresolved tag. The value is read the way Astro reads it, so the site and
+ * `check` agree; this only tells the author. It is a warning because nothing
+ * is broken.
+ */
+export function findFrontmatterWarnings(entries: ContentEntry[]): Diagnostic[] {
+	return entries.flatMap((entry) =>
+		(entry.frontmatterWarnings ?? []).map((warning) => ({
+			rule: 'frontmatter-warning' as const,
+			severity: 'warning' as const,
+			file: entry.file,
+			...(warning.line !== undefined ? { line: warning.line } : {}),
+			message: warning.message,
+			urlPath: entry.urlPath,
+		}))
+	);
+}
+
+/**
  * Every finding `check` reports.
  *
  * The graph's own diagnostics come first and in entry order, so the list reads
@@ -1588,5 +1611,6 @@ export function checkEntries(entries: ContentEntry[], graph: Graph): Diagnostic[
 		...findDuplicateNames(entries),
 		...findNoncanonicalTitles(entries),
 		...findRouteCollisions(entries),
+		...findFrontmatterWarnings(entries),
 	];
 }
