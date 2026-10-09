@@ -349,8 +349,12 @@ function diffLines(before: string, after: string): LineChange[] {
 	return changes;
 }
 
-/** Text a YAML 1.1 parser could take for a number, sexagesimal included. */
-const NUMERIC_LOOKING = /^[-+.\d][\d:_.eE+-]*$/;
+/**
+ * Text a YAML 1.1 parser could take for a number, sexagesimal and `0b`, `0o`, `0x`
+ * included. The `yaml` core schema reads `0b11` as text, so the parse check alone
+ * would no longer quote it.
+ */
+const NUMERIC_LOOKING = /^(?:[-+.\d][\d:_.eE+-]*|0[box][\da-fA-F_]+)$/;
 
 /** A YAML scalar that parses back to exactly `value`. */
 function yamlString(value: string, quote: string): string {
