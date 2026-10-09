@@ -1,7 +1,24 @@
 #!/usr/bin/env node
-import { cp, mkdir, readdir, realpath, rm } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { cp, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+const run = promisify(execFile);
+// Ask the registry, without a shell and without waiting long. Resolves to the
+// version string, null when the registry answered that it has no such version,
+// and undefined when it could not be asked (offline, timeout, no npm).
+async function npmView(spec, field) {
+  const parse = text => { try { return JSON.parse(text); } catch { return undefined; } };
+  try {
+    const { stdout } = await run('npm', ['view', spec, field, '--json'], { timeout: 10000 });
+    const value = parse(stdout);
+    return typeof value === 'string' ? value : stdout.trim() === '' ? null : undefined;
+  } catch (error) {
+    return parse(error.stdout ?? '')?.error?.code === 'E404' ? null : undefined;
+  }
+}
 
 const source = await realpath(fileURLToPath(new URL('../examples/starter/', import.meta.url)));
 const args = process.argv.slice(2);
@@ -46,6 +63,21 @@ if (args.length !== 1 || args[0].startsWith('-')) {
       // to block the retry.
       await rm(destination, { recursive: true, force: true });
       throw error;
+    }
+    // release-please puts the new version in the starter's pin when the release
+    // PR merges, a few minutes before npm serves it. Until then `npm install`
+    // fails with ETARGET, so use the registry's latest. When the registry cannot
+    // be asked, keep the pin and let `npm install` report the real problem.
+    const manifestPath = path.join(destination, 'package.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    const pin = manifest.dependencies?.['@dmthepm/commune'];
+    if (/^\d+\.\d+\.\d+$/.test(pin ?? '') && await npmView(`@dmthepm/commune@${pin}`, 'version') === null) {
+      const latest = await npmView('@dmthepm/commune', 'dist-tags.latest');
+      if (latest) {
+        manifest.dependencies['@dmthepm/commune'] = latest;
+        await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+        console.log(`@dmthepm/commune ${pin} is not on npm yet, using ${latest}\n`);
+      }
     }
     // Say where the wiki is the way the reader named it. A path inside the
     // working directory prints relative, so `my-wiki` does not come back as a
