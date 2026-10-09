@@ -57,6 +57,18 @@ test('the value still reads as the plain string', () => {
 	assert.deepEqual(parseFrontmatter(CLEAN).warnings, []);
 });
 
+test('the message is one line without the position or code frame', () => {
+	assert.equal(parseFrontmatter(TAGGED).warnings[0].message, 'Unresolved tag: !include');
+});
+
+test('the line is the real file line with CRLF endings and a BOM', () => {
+	for (const source of [TAGGED.replaceAll('\n', '\r\n'), '﻿' + TAGGED, '﻿' + TAGGED.replaceAll('\n', '\r\n')]) {
+		const [warning] = parseFrontmatter(source).warnings;
+		assert.equal(warning.line, 4);
+		assert.equal(warning.message, 'Unresolved tag: !include');
+	}
+});
+
 test('check --json counts it as a warning and still exits 0', async () => {
 	const root = await makeVault({ 'Tagged.md': TAGGED });
 	try {

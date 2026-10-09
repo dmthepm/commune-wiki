@@ -98,7 +98,9 @@ function parseYaml(source: string): { data: Record<string, unknown>; warnings: F
 	const [error] = document.errors;
 	if (error) throw error;
 	const warnings = document.warnings.map((warning) => ({
-		message: warning.message,
+		// `yaml` pretty-prints: the message ends in " at line N, column M:" and a code
+		// frame. Only the first line is kept, and `line` already carries the position.
+		message: warning.message.split('\n')[0]!.replace(/ at line \d+, column \d+:?$/, ''),
 		...(warning.linePos?.[0] ? { line: warning.linePos[0].line } : {}),
 	}));
 	if (document.contents === null) return { data: {}, warnings };
