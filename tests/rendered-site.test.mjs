@@ -142,8 +142,8 @@ describe('the rendered site', () => {
 		// History navigation follows the fragment too (#113): Back and Forward
 		// hand the address bar's hash to the pane, a rebuilt page scrolls to it
 		// on load, and re-clicking the current fragment replaces its entry.
-		assert.match(html, /focusPane\(panes\[targetIndex\], window\.location\.hash, e\.state\?\.scrollTop\)/);
-		assert.match(html, /history\.replaceState\(\{ \.\.\.history\.state, scrollTop: scroller\.scrollTop \}, ''\)/);
+		assert.match(html, /focusPane\(panes\[targetIndex\], window\.location\.hash, e\.state\)/);
+		assert.match(html, /history\.replaceState\(\{ \.\.\.history\.state, \.\.\.positionOf\(scroller\) \}, ''\)/);
 		assert.match(html, /scrollToHash\(firstPane, window\.location\.hash\)/);
 		assert.match(html, /history\[alreadyHere \? 'replaceState' : 'pushState'\]/);
 	});
@@ -159,7 +159,17 @@ describe('the rendered site', () => {
 		assert.match(html, /clearTimeout\(scrollTimer\)/);
 		assert.match(html, /scroller !== currentScroller\(\)/);
 		// A remembered position beats the fragment on a rebuilt page, as in focusPane.
-		assert.match(html, /typeof remembered === 'number'/);
+		assert.match(html, /typeof remembered\?\.scrollTop === 'number'/);
+		// ...but only once the images have their heights: a pixel offset applied
+		// earlier lands on different content, and the error is then saved back.
+		assert.match(html, /document\.readyState === 'complete'/);
+		assert.match(html, /window\.addEventListener\('load', restore, \{ once: true \}\)/);
+		assert.match(html, /if \(!positionReady \|\|/);
+		// The position is an element and an offset, with pixels as the fallback,
+		// and Back and Forward restore it the same way.
+		assert.match(html, /const positionOf = /);
+		assert.match(html, /restorePosition\(pane, position\)/);
+		assert.match(html, /\.\.\.positionOf\(paneScroller\(previousPane\)\)/);
 		// closePane's own saveScroll was overwritten by the replaceState after it.
 		const close = html.slice(html.indexOf('const closePane'), html.indexOf('Single Event Delegation'));
 		assert.ok(close.includes('history.replaceState'), 'closePane no longer found');

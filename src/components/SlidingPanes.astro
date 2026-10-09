@@ -209,13 +209,44 @@ if (window.wikiInitialized) {
     return paneScroller(Array.from(container.querySelectorAll('.pane')).findLast(p => p.dataset.url === url));
   };
 
+  // Where a pane is scrolled to, as the nearest element with an id (a heading)
+  // at or above the top edge plus the distance below it, with the raw pixels as
+  // a fallback. Pixels alone go wrong when the page is laid out differently on
+  // the way back, say an image above the reader has not got its height yet, and
+  // the error compounds on every reload.
+  const positionOf = (scroller) => {
+    if (!scroller) return {};
+    const top = scroller.getBoundingClientRect().top;
+    let anchor = null;
+    let offset = 0;
+    for (const el of scroller.querySelectorAll('[id]')) {
+      const gap = top - el.getBoundingClientRect().top;
+      if (gap < -1) break;
+      anchor = el.id;
+      offset = Math.round(gap);
+    }
+    return { scrollTop: Math.round(scroller.scrollTop), anchor, offset };
+  };
+
+  const restorePosition = (pane, position) => {
+    const scroller = paneScroller(pane);
+    if (!scroller) return;
+    scroller.scrollTop = position.scrollTop;
+    const el = position.anchor && pane.querySelector('#' + CSS.escape(position.anchor));
+    if (el) {
+      // Whole pixels: a fractional target is truncated by some engines, which
+      // would walk the position up the page by a pixel on every reload.
+      scroller.scrollTop = Math.round(scroller.scrollTop + el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + position.offset);
+    }
+  };
+
   // A history entry has no idea where its pane was scrolled to. Before the
   // address bar moves on, the entry being left remembers it in its state, so
   // Back can put the reader where they were, including a place they scrolled
   // to by hand, which no URL records.
   const saveScroll = () => {
     const scroller = currentScroller();
-    if (scroller) history.replaceState({ ...history.state, scrollTop: scroller.scrollTop }, '');
+    if (scroller) history.replaceState({ ...history.state, ...positionOf(scroller) }, '');
   };
 
   // saveScroll only runs when the page itself moves the address bar. Back
@@ -224,16 +255,30 @@ if (window.wikiInitialized) {
   // position up to date as the reader scrolls, once they pause: replaceState is
   // rate limited (Safari throws past about 100 calls in 30 s), so never once
   // per scroll event.
+  //
+  // Nothing is written until the first pane has been put back where its entry
+  // says it was, or the scroll that lands it would overwrite the entry first.
+  let positionReady = false;
   let scrollTimer;
   const handleScroll = (e) => {
     const scroller = e.target;
-    if (!scroller?.classList?.contains('body-wrapper')) return;
+    if (!positionReady || !scroller?.classList?.contains('body-wrapper')) return;
     clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => {
       // Only the pane that owns the address bar's note. Scrolling another pane
       // says nothing about this entry, and the reader may have moved on since.
       if (scroller !== currentScroller()) return;
-      history.replaceState({ ...history.state, scrollTop: scroller.scrollTop }, '');
+      const next = positionOf(scroller);
+      const now = history.state;
+      // A restore scrolls too; there is nothing new to write down.
+      if (now && now.scrollTop === next.scrollTop && now.anchor === next.anchor && now.offset === next.offset) return;
+      try {
+        history.replaceState({ ...now, ...next }, '');
+      } catch (error) {
+        // Safari throws once replaceState is called too often. Losing one
+        // position is better than an uncaught error in a scroll handler.
+        console.error('Could not remember the scroll position:', error);
+      }
     }, 200);
   };
 
@@ -351,7 +396,7 @@ if (window.wikiInitialized) {
     }
   };
 
-  const focusPane = (pane, hash, scrollTop) => {
+  const focusPane = (pane, hash, position) => {
     requestAnimationFrame(() => {
       if (document.activeElement && document.activeElement !== pane && document.activeElement.blur) {
         document.activeElement.blur();
@@ -364,9 +409,8 @@ if (window.wikiInitialized) {
           pane.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });
           // A remembered position beats the fragment; with neither, the pane
           // stays where it is.
-          if (typeof scrollTop === 'number') {
-            const scroller = paneScroller(pane);
-            if (scroller) scroller.scrollTop = scrollTop;
+          if (typeof position?.scrollTop === 'number') {
+            restorePosition(pane, position);
           } else {
             scrollToHash(pane, hash);
           }
@@ -383,7 +427,8 @@ if (window.wikiInitialized) {
     if (previousPane && previousPane.classList.contains('pane')) {
       focusPane(previousPane);
       if (previousPane.dataset.url) {
-        history.replaceState({ pane: previousPane.dataset.url }, '', previousPane.dataset.url);
+        // Keep where that pane is scrolled to; it is the entry now.
+        history.replaceState({ pane: previousPane.dataset.url, ...positionOf(paneScroller(previousPane)) }, '', previousPane.dataset.url);
       }
     }
   };
@@ -457,7 +502,7 @@ if (window.wikiInitialized) {
         panes[i].remove();
       }
       updateContainerLayout();
-      focusPane(panes[targetIndex], window.location.hash, e.state?.scrollTop);
+      focusPane(panes[targetIndex], window.location.hash, e.state);
     } else {
       window.location.reload();
     }
@@ -475,13 +520,22 @@ if (window.wikiInitialized) {
     // way) lands on the note's URL with its fragment. The pane scrolls, not
     // the page, so the heading is brought into view here. A position the
     // entry remembered beats the fragment, as in focusPane.
-    const remembered = history.state?.scrollTop;
-    if (typeof remembered === 'number') {
-      const scroller = paneScroller(firstPane);
-      if (scroller) scroller.scrollTop = remembered;
+    const remembered = history.state;
+    if (typeof remembered?.scrollTop === 'number') {
+      // Not before the images have their heights, or the position lands on
+      // different content than the one the reader left.
+      const restore = () => {
+        restorePosition(firstPane, remembered);
+        positionReady = true;
+      };
+      if (document.readyState === 'complete') restore();
+      else window.addEventListener('load', restore, { once: true });
     } else {
       scrollToHash(firstPane, window.location.hash);
+      positionReady = true;
     }
+  } else {
+    positionReady = true;
   }
 
   // --- SINGLE EVENT DELEGATION SETUP ---
