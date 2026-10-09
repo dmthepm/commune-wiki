@@ -163,12 +163,20 @@ describe('the rendered site', () => {
 		// ...but only once the images have their heights: a pixel offset applied
 		// earlier lands on different content, and the error is then saved back.
 		assert.match(html, /document\.readyState === 'complete'/);
-		assert.match(html, /window\.addEventListener\('load', restore, \{ once: true \}\)/);
+		assert.match(html, /window\.addEventListener\('load', correct, \{ once: true \}\)/);
+		// ...and straight away too, with the load pass skipped once the reader
+		// has scrolled, so a slow image cannot undo what they did (#159).
+		assert.match(html, /\[\[scroller, 'wheel'\], \[scroller, 'touchmove'\], \[scroller, 'pointerdown'\], \[window, 'keydown'\]\]/);
+		assert.match(html, /window\.removeEventListener\('load', correct\)/);
 		assert.match(html, /if \(!positionReady \|\|/);
 		// The position is an element and an offset, with pixels as the fallback,
 		// and Back and Forward restore it the same way.
 		assert.match(html, /const positionOf = /);
 		assert.match(html, /restorePosition\(pane, position\)/);
+		// The same id twice in a pane: the copy is remembered by its place among
+		// them and found the same way, never by whichever querySelector hits first.
+		assert.match(html, /nth = seen\[el\.id\] = /);
+		assert.match(html, /scroller\.querySelectorAll\('\[id="' \+ CSS\.escape\(position\.anchor\) \+ '"\]'\)\[position\.nth \?\? 0\]/);
 		assert.match(html, /\.\.\.positionOf\(paneScroller\(previousPane\)\)/);
 		// closePane's own saveScroll was overwritten by the replaceState after it.
 		const close = html.slice(html.indexOf('const closePane'), html.indexOf('Single Event Delegation'));

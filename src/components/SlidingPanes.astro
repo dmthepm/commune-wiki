@@ -213,26 +213,30 @@ if (window.wikiInitialized) {
   // at or above the top edge plus the distance below it, with the raw pixels as
   // a fallback. Pixels alone go wrong when the page is laid out differently on
   // the way back, say an image above the reader has not got its height yet, and
-  // the error compounds on every reload.
+  // the error compounds on every reload. A pane can hold the same id twice (an
+  // embedded note), so which copy is remembered too, as its place among them.
   const positionOf = (scroller) => {
     if (!scroller) return {};
     const top = scroller.getBoundingClientRect().top;
+    const seen = {};
     let anchor = null;
+    let nth = 0;
     let offset = 0;
     for (const el of scroller.querySelectorAll('[id]')) {
       const gap = top - el.getBoundingClientRect().top;
       if (gap < -1) break;
+      nth = seen[el.id] = (seen[el.id] ?? -1) + 1;
       anchor = el.id;
       offset = Math.round(gap);
     }
-    return { scrollTop: Math.round(scroller.scrollTop), anchor, offset };
+    return { scrollTop: Math.round(scroller.scrollTop), anchor, nth, offset };
   };
 
   const restorePosition = (pane, position) => {
     const scroller = paneScroller(pane);
     if (!scroller) return;
     scroller.scrollTop = position.scrollTop;
-    const el = position.anchor && pane.querySelector('#' + CSS.escape(position.anchor));
+    const el = position.anchor && scroller.querySelectorAll('[id="' + CSS.escape(position.anchor) + '"]')[position.nth ?? 0];
     if (el) {
       // Whole pixels: a fractional target is truncated by some engines, which
       // would walk the position up the page by a pixel on every reload.
@@ -271,7 +275,7 @@ if (window.wikiInitialized) {
       const next = positionOf(scroller);
       const now = history.state;
       // A restore scrolls too; there is nothing new to write down.
-      if (now && now.scrollTop === next.scrollTop && now.anchor === next.anchor && now.offset === next.offset) return;
+      if (now && now.scrollTop === next.scrollTop && now.anchor === next.anchor && now.nth === next.nth && now.offset === next.offset) return;
       try {
         history.replaceState({ ...now, ...next }, '');
       } catch (error) {
@@ -522,14 +526,28 @@ if (window.wikiInitialized) {
     // entry remembered beats the fragment, as in focusPane.
     const remembered = history.state;
     if (typeof remembered?.scrollTop === 'number') {
-      // Not before the images have their heights, or the position lands on
-      // different content than the one the reader left.
-      const restore = () => {
-        restorePosition(firstPane, remembered);
+      // Straight away, as well as the layout allows, then again once the
+      // images have their heights, or the position lands on different content
+      // than the one the reader left. A reader who has scrolled by then has
+      // taken over: the second pass would undo what they did, so it is
+      // skipped and their position is saved like any other.
+      const scroller = paneScroller(firstPane);
+      const takeOvers = [[scroller, 'wheel'], [scroller, 'touchmove'], [scroller, 'pointerdown'], [window, 'keydown']];
+      const settle = () => {
+        for (const [target, type] of takeOvers) target?.removeEventListener(type, settle);
+        window.removeEventListener('load', correct);
         positionReady = true;
       };
-      if (document.readyState === 'complete') restore();
-      else window.addEventListener('load', restore, { once: true });
+      const correct = () => {
+        restorePosition(firstPane, remembered);
+        settle();
+      };
+      restorePosition(firstPane, remembered);
+      if (document.readyState === 'complete') settle();
+      else {
+        for (const [target, type] of takeOvers) target?.addEventListener(type, settle, { passive: true });
+        window.addEventListener('load', correct, { once: true });
+      }
     } else {
       scrollToHash(firstPane, window.location.hash);
       positionReady = true;
