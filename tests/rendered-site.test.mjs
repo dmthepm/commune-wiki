@@ -170,8 +170,9 @@ describe('the rendered site', () => {
 		assert.match(html, /window\.removeEventListener\('load', correct\)/);
 		// ...and only a key that scrolls counts, not Tab, Shift or Cmd+R (#162).
 		assert.match(html, /\['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'\]/);
-		assert.match(html, /event\.ctrlKey \|\| event\.metaKey \|\| event\.altKey/);
-		assert.match(html, /event\.key === ' ' && !typing/);
+		assert.match(html, /event\.target\.isContentEditable \|\| event\.target\.closest\('input, textarea, select'\)/);
+		assert.match(html, /\[\.\.\.scrollKeys, ' '\]\.includes\(event\.key\)/);
+		assert.doesNotMatch(html, /event\.ctrlKey \|\| event\.metaKey \|\| event\.altKey/);
 		assert.match(html, /if \(!positionReady \|\|/);
 		// The position is an element and an offset, with pixels as the fallback,
 		// and Back and Forward restore it the same way.

@@ -531,15 +531,14 @@ if (window.wikiInitialized) {
       // than the one the reader left. A reader who has scrolled by then has
       // taken over: the second pass would undo what they did, so it is
       // skipped and their position is saved like any other. Only a key that
-      // scrolls counts, not Tab, Shift or Cmd+R, which move nothing.
+      // scrolls counts: Tab, Shift or Cmd+R are not a reader scrolling.
       const scroller = paneScroller(firstPane);
       const takeOvers = [[scroller, 'wheel'], [scroller, 'touchmove'], [scroller, 'pointerdown'], [window, 'keydown']];
       const scrollKeys = ['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'];
       const settle = (event) => {
         if (event?.type === 'keydown') {
-          if (event.ctrlKey || event.metaKey || event.altKey) return;
-          const typing = event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]');
-          if (!scrollKeys.includes(event.key) && !(event.key === ' ' && !typing)) return;
+          const typing = event.target instanceof Element && (event.target.isContentEditable || event.target.closest('input, textarea, select'));
+          if (typing || ![...scrollKeys, ' '].includes(event.key)) return;
         }
         for (const [target, type] of takeOvers) target?.removeEventListener(type, settle);
         window.removeEventListener('load', correct);
