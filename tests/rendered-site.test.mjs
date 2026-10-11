@@ -168,6 +168,10 @@ describe('the rendered site', () => {
 		// has scrolled, so a slow image cannot undo what they did (#159).
 		assert.match(html, /\[\[scroller, 'wheel'\], \[scroller, 'touchmove'\], \[scroller, 'pointerdown'\], \[window, 'keydown'\]\]/);
 		assert.match(html, /window\.removeEventListener\('load', correct\)/);
+		// ...and only a key that scrolls counts, not Tab, Shift or Cmd+R (#162).
+		assert.match(html, /\['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown'\]/);
+		assert.match(html, /event\.ctrlKey \|\| event\.metaKey \|\| event\.altKey/);
+		assert.match(html, /event\.key === ' ' && !typing/);
 		assert.match(html, /if \(!positionReady \|\|/);
 		// The position is an element and an offset, with pixels as the fallback,
 		// and Back and Forward restore it the same way.
