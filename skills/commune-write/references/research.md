@@ -81,9 +81,13 @@ into the rest of the wiki at every point the research touches it.
 3. **The summary note links at least three existing notes**, each where it
    genuinely bears, in a sentence that says why it connects. No "see also"
    lists.
-4. **Unlinked mentions.** Search both files for every title and alias from
-   step 1, case-insensitive. Each hit is linked, or left unlinked for a reason
-   you give in the report back.
+4. **Unlinked mentions.** Run `$COMMUNE graph related <file> --json` on each
+   of the two files and read `mentions` with `linked: false`: titles and
+   aliases the prose names without linking. Link destinations, URLs and
+   WikiLink targets are not searched. `linked` covers the whole file,
+   frontmatter included; first mentions in each section are still step 2's job.
+   Each one is linked, or left unlinked for
+   a reason you give in the report back.
 5. **Links back in.** List up to five existing notes the findings change or
    support, each with the one sentence and link you would add. These are a
    question in the report back. Do not edit other notes unasked.
