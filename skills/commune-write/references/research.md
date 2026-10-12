@@ -63,8 +63,7 @@ A research run is the one run that writes two files. Both go in `files:` in
   order they matter, not a table of contents of the dossier.
 - Frontmatter per `WRITING.md`'s notes block, with `visibility: public`. Read
   one of the wiki's existing research summaries first: if they carry a `type:`
-  key or a shared tag (devon.md uses `type: research-summary` and
-  `deep-research`), carry the same, `type:` placed after `tags`.
+  key or a shared tag, carry the same, `type:` placed after `tags`.
 - Last lines: `Full Deep Research:` then `[[<dossier title>]]`.
 
 ## Interlinking
