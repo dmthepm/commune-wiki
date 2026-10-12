@@ -209,6 +209,15 @@ test('a name that appears only inside a URL is not a mention', async () => {
 	assert.deepEqual(mentions, []);
 });
 
+test('a URL with any scheme is not prose', async () => {
+	const { mentions } = await related(
+		DICTATION,
+		'Sync over wss://sync.example.com/noontide/cake and ftp://files.example.com/main-branch.'
+	);
+
+	assert.deepEqual(mentions, []);
+});
+
 test('a markdown link destination is not prose, but its visible text is', async () => {
 	const dest = await related(DICTATION, 'Read [the docs](./Noontide.md "Cake") first.');
 	assert.deepEqual(dest.mentions, []);

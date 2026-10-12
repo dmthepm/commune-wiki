@@ -123,7 +123,7 @@ function stripLinkSyntax(text: string): string {
 			return link.slice(0, label) + blank(link.slice(label));
 		})
 		.replace(/<[a-z][a-z0-9+.-]*:[^\s<>]*>/gi, blank)
-		.replace(/\b(?:https?:\/\/|www\.)[^\s<>)\]]*/gi, blank);
+		.replace(/\b(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s<>)\]]*/gi, blank);
 }
 
 /** How often a name occurs in the prose, and how it was spelled the first time. */
