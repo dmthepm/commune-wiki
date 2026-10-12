@@ -59,6 +59,8 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    by `base:`. Frontmatter comes from `WRITING.md`'s block for that collection,
    keys in its order. Append every file you touched to `files:` in
    `.connect.md`.
+   Research, or anything that might be an essay or a letter instead, follows
+   `references/research.md` first.
 
 4. **Verify.** Run `$COMMUNE check --json` and compare finding identities `(rule, file, target)`,
    `null` for an absent target, against `baseline.findings` in `.connect.md`. Any **new** finding is yours to fix before you
