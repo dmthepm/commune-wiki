@@ -46,7 +46,8 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    `dumps/<slug>.connect.md`, and `dumps/<slug>.answers.md` if it exists. Pipe
    every `--json` payload through `node scripts/preflight.mjs --schema`.
 
-2. **Grill** — when no answered round exists. Follow `references/grill.md`.
+2. **Grill** — when no answered round exists. Follow `references/grill.md`,
+   and `references/research.md` too when the dump might be research.
    Output: `dumps/<slug>.answers.md` with `## Settled` and
    `## Round N — questions`. Print the path and stop. Do not draft in the same
    turn.
@@ -59,6 +60,8 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    by `base:`. Frontmatter comes from `WRITING.md`'s block for that collection,
    keys in its order. Append every file you touched to `files:` in
    `.connect.md`.
+   Research follows `references/research.md`. It is the one exception to one
+   note per run: a dossier and its summary note, both in `files:`.
 
 4. **Verify.** Run `$COMMUNE check --json` and compare finding identities `(rule, file, target)`,
    `null` for an absent target, against `baseline.findings` in `.connect.md`. Any **new** finding is yours to fix before you
