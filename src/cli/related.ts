@@ -7,8 +7,10 @@
  *
  *   `links`    — every edge the text actually contains, with its resolution.
  *   `mentions` — entries whose title or alias appears as a whole word in the
- *                prose, which is the "you wrote about this without linking it"
- *                signal a connect step needs.
+ *                prose (not in link destinations, URLs or WikiLink targets),
+ *                each marked `linked` when `links` already reaches it. That is
+ *                the "you wrote about this without linking it" signal a
+ *                connect step needs: `linked: false`.
  *
  * Fuzzy and semantic similarity are out of scope on purpose. They are product
  * direction, not a build decision, and inventing a ranking here would freeze it
@@ -24,6 +26,7 @@ import {
 	buildUrlLookup,
 	extractLinks,
 	loadContentEntries,
+	MARKDOWN_LINK,
 	resolveLink,
 	stripCode,
 	type CollectionName,
@@ -98,6 +101,31 @@ function normalize(text: string): Normalized {
 	return { text: normalized, offsets };
 }
 
+const blank = (text: string): string => ' '.repeat(text.length);
+
+/**
+ * Blank the parts of link syntax that are not prose, keeping every offset.
+ *
+ * The same idiom as `stripCode`: replace with spaces of equal length, so the
+ * normaliser's offsets still index the original text. A link's destination is
+ * an address, not something the author said, so a slug inside a URL must not
+ * read as a mention of the note that has that name; neither must the target of
+ * a WikiLink, which is already the link. What a reader sees stays: the label of
+ * a markdown link and the display text of `[[Target|label]]`.
+ */
+function stripLinkSyntax(text: string): string {
+	return text
+		.replace(/(!?\[\[)([^\]|]+)(\|)?([^\]]*)(\]\])/g, (_, open, target, bar = '', label, close) =>
+			blank(open + target + bar) + label + blank(close)
+		)
+		.replace(MARKDOWN_LINK, (link) => {
+			const label = link.indexOf(']');
+			return link.slice(0, label) + blank(link.slice(label));
+		})
+		.replace(/<[a-z][a-z0-9+.-]*:[^\s<>]*>/gi, blank)
+		.replace(/\b(?:https?:\/\/|www\.)[^\s<>)\]]*/gi, blank);
+}
+
 /** How often a name occurs in the prose, and how it was spelled the first time. */
 interface Hits {
 	count: number;
@@ -169,7 +197,10 @@ export async function relatedCommand(root: string, input: string, json: boolean)
 		};
 	});
 
-	const prose = stripCode(source.text);
+	const prose = stripLinkSyntax(stripCode(source.text));
+	const linkedPaths = new Set(
+		links.flatMap((link) => (link.resolved ? [link.resolved.urlPath] : []))
+	);
 	const haystack = normalize(prose);
 	const mentions = entries
 		.filter((entry) => entry.urlPath !== self?.urlPath)
@@ -182,7 +213,7 @@ export async function relatedCommand(root: string, input: string, json: boolean)
 				count += hits.count;
 				matched ??= hits.matched;
 			}
-			return { ...toReference(entry), matched, count };
+			return { ...toReference(entry), matched, count, linked: linkedPaths.has(entry.urlPath) };
 		})
 		.filter((mention) => mention.count > 0)
 		.sort(

@@ -28,7 +28,7 @@ test('a file source returns its links, its mentions and its inbound entries', as
 		links: 3,
 		resolved: 2,
 		unresolved: 1,
-		mentions: 3,
+		mentions: 1,
 		inbound: 3,
 	});
 	assert.deepEqual(
@@ -51,14 +51,11 @@ test('mentions are whole-word, case-insensitive, and never the source itself', a
 	);
 	const { mentions } = JSON.parse(stdout);
 
-	// "Beta" once and "beta note" once: two hits, one entry, count descending.
+	// `[[Beta|the beta note]]`: the target is the link, the label is prose, so
+	// one hit. `[[Shared Title]]` is all target, so it names nothing in prose.
 	assert.deepEqual(
-		mentions.map((mention) => [mention.urlPath, mention.matched, mention.count]),
-		[
-			['/notes/beta/', 'beta', 2],
-			['/notes/duplicate-one/', 'shared title', 1],
-			['/notes/duplicate-two/', 'shared title', 1],
-		]
+		mentions.map((mention) => [mention.urlPath, mention.matched, mention.count, mention.linked]),
+		[['/notes/beta/', 'beta', 1, true]]
 	);
 	assert.equal(
 		mentions.some((mention) => mention.urlPath === '/notes/alpha/'),
@@ -79,7 +76,7 @@ test('literal text is a source with links but no inbound', async () => {
 	assert.deepEqual(payload.links.map((link) => link.target), ['Beta']);
 	assert.deepEqual(
 		payload.mentions.map((mention) => mention.urlPath),
-		['/notes/beta/', '/notes/isolated/']
+		['/notes/isolated/']
 	);
 });
 
@@ -100,11 +97,9 @@ test('- reads the draft from stdin', async () => {
 	const payload = JSON.parse(stdout);
 	assert.equal(payload.source.kind, 'stdin');
 	assert.deepEqual(payload.links.map((link) => link.resolved.urlPath), ['/notes/alpha/']);
-	// Nothing is excluded for a stdin draft: it is not an entry, so the [[Alpha]]
-	// it links to is also a mention of Alpha.
-	assert.deepEqual(payload.mentions.map((mention) => mention.urlPath), [
-		'/notes/alpha/',
-		'/notes/isolated/',
+	// The [[Alpha]] target is the link, not prose: only Isolated is mentioned.
+	assert.deepEqual(payload.mentions.map((mention) => [mention.urlPath, mention.linked]), [
+		['/notes/isolated/', false],
 	]);
 });
 
@@ -196,5 +191,76 @@ test('a dictated draft on stdin finds both distorted titles at once', async () =
 	assert.deepEqual(
 		JSON.parse(stdout).mentions.map((mention) => [mention.title, mention.matched]),
 		[['Main Branch', 'main branch'], ['Noontide', 'noon tide']]
+	);
+});
+
+const related = async (root, text) => {
+	const { code, stdout } = await commune('--root', root, 'graph', 'related', text, '--json');
+	assert.equal(code, 0);
+	return JSON.parse(stdout);
+};
+
+test('a name that appears only inside a URL is not a mention', async () => {
+	const { mentions } = await related(
+		DICTATION,
+		'See https://example.com/noontide/pull/20 and <https://example.com/cake> and www.example.com/main-branch.'
+	);
+
+	assert.deepEqual(mentions, []);
+});
+
+test('a markdown link destination is not prose, but its visible text is', async () => {
+	const dest = await related(DICTATION, 'Read [the docs](./Noontide.md "Cake") first.');
+	assert.deepEqual(dest.mentions, []);
+
+	const text = await related(DICTATION, 'Read [Noontide](https://example.com/noontide) first.');
+	assert.deepEqual(
+		text.mentions.map((mention) => [mention.title, mention.count]),
+		[['Noontide', 1]]
+	);
+});
+
+test('a WikiLinked mention is marked linked and its brackets do not inflate the count', async () => {
+	const { mentions } = await related(
+		DICTATION,
+		'[[Noontide]] came first. [[Cake#Icing]] too. Later, Noontide again.'
+	);
+
+	assert.deepEqual(
+		mentions.map((mention) => [mention.title, mention.count, mention.linked]),
+		[['Noontide', 1, true]]
+	);
+});
+
+test('the display text of a WikiLink is prose; the target is not', async () => {
+	const { mentions } = await related(DICTATION, 'The [[Noontide|noon tide]] and [[Cake|a treat]].');
+
+	assert.deepEqual(
+		mentions.map((mention) => [mention.title, mention.matched, mention.count, mention.linked]),
+		[['Noontide', 'noon tide', 1, true]]
+	);
+});
+
+test('a prose mention the text does not link is marked unlinked', async () => {
+	const { mentions } = await related(DICTATION, 'Noontide matters, and so does [[Cake]] and cake.');
+
+	assert.deepEqual(
+		mentions.map((mention) => [mention.title, mention.linked]),
+		[['Cake', true], ['Noontide', false]]
+	);
+});
+
+test('an alias is a mention, and is linked when the text links its note', async () => {
+	// "Beta's twin" names the note twice over: the title, then the alias.
+	const bare = await related(VAULT, "Beta's twin is here.");
+	assert.deepEqual(
+		bare.mentions.map((mention) => [mention.urlPath, mention.count, mention.linked]),
+		[['/notes/beta/', 2, false]]
+	);
+
+	const linked = await related(VAULT, "Beta's twin is here, and see [[Beta]].");
+	assert.deepEqual(
+		linked.mentions.map((mention) => [mention.urlPath, mention.count, mention.linked]),
+		[['/notes/beta/', 2, true]]
 	);
 });

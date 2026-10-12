@@ -337,7 +337,7 @@ npx commune gate
 | Verb | What it answers |
 | --- | --- |
 | `graph query` | Every entry with its edges and dates. Filter with `--collection`, `--tag`, `--status`, `--orphans`, `--deadends`, `--unreferenced`, `--recent`. |
-| `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. Titles are matched across whitespace and case, so a dictated "noon tide" still finds `Noontide`. |
+| `graph related <path\|text\|->` | What this connects to. It takes stdin, so you can ask about a draft before it is a note. Titles are matched across whitespace and case, so a dictated "noon tide" still finds `Noontide`. `mentions` come from prose only, not link destinations, URLs or WikiLink targets, and each carries `linked`: true when the text already links that note. |
 | `render <path\|->` | The markdown as HTML, through the site's own pipeline: WikiLinks resolved, external links marked. Takes stdin, so you can see a draft before it is a page. |
 | `update` | Scaffold a dated update entry from what changed. Prints it; `--write` files it. |
 | `rename <from> <to>` | Move a note and rewrite every link to it, in every form the graph reads. The URL stays unless `--move-url`. `--dry-run` prints the plan. |
