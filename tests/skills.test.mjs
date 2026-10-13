@@ -254,6 +254,7 @@ test('npx skills add installs all four folders, references, scripts and assets i
 	}
 	assert.ok(existsSync(path.join(installed, 'commune-write', 'scripts', 'review.mjs')), 'scripts/ did not install');
 	assert.ok(existsSync(path.join(installed, 'commune-write', 'references', 'grill.md')), 'references/ did not install');
+	assert.ok(existsSync(path.join(installed, 'commune-write', 'references', 'forms.md')), 'forms.md did not install');
 	assert.ok(existsSync(path.join(installed, 'commune-setup', 'assets', 'WRITING.md')), 'assets/ did not install');
 	assert.ok(existsSync(path.join(installed, 'commune-setup', 'agents', 'openai.yaml')), 'agents/ did not install');
 });
