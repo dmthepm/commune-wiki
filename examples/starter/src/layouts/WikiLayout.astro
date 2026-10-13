@@ -8,9 +8,10 @@ import { toMarkdownHref } from '@dmthepm/commune/graph';
 import '@dmthepm/commune/styles/design-system.css';
 import '@dmthepm/commune/styles/notes.css';
 import '../styles/wiki.css';
+import { siteConfig } from '../site.config';
 
 interface Props { title: string; description?: string; entryPath?: string; }
-const { title, description = 'A personal wiki of connected notes.', entryPath } = Astro.props;
+const { title, description = siteConfig.description, entryPath } = Astro.props;
 ---
 <!doctype html>
 <html lang="en">
@@ -18,12 +19,12 @@ const { title, description = 'A personal wiki of connected notes.', entryPath } 
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <title>{title} · My wiki</title>
+    <title>{title} · {siteConfig.name}</title>
   </head>
   <body>
     <a class="wiki-skip" href="#main">Skip to content</a>
     <header class="wiki-header">
-      <a class="wiki-brand" href="/">My wiki</a>
+      <a class="wiki-brand" href="/">{siteConfig.name}</a>
       <nav aria-label="Main navigation">
         <a href="/updates/">Updates</a>
         <button type="button" onclick="window.dispatchEvent(new CustomEvent('commune:openSearch'))">Search <kbd>⌘K</kbd></button>

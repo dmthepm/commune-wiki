@@ -35,10 +35,12 @@ To test the production output, run `npm run preview` after building. If a link o
 
 ## Make it yours
 
+Set your wiki's name, default description, and deployment URL in `src/site.config.ts`. The header, page titles, default meta description, and Astro site origin use this config.
+
 - Edit `src/content/notes/welcome.md`, then add a markdown file with a unique title and `visibility: public` to `src/content/notes/`.
 - Link by exact title: `[[Connected notes]]`. Commune’s publication policy requires canonical titles in wikilinks. Its renderer supports aliased labels, but the publication gate intentionally rejects them. Use ordinary markdown links when you need a different label.
-- Change **My wiki** in `src/layouts/WikiLayout.astro` and the home introduction in `src/pages/index.astro`.
-- Set `site` in `astro.config.mjs` to your deployment origin before publishing. Deploy `dist/` at the domain root. This starter is not configured for a subdirectory such as `/my-wiki/`.
+- Edit the home introduction in `src/pages/index.astro`.
+- Set `url` in `src/site.config.ts` to your deployment origin before publishing. Deploy `dist/` at the domain root. This starter is not configured for a subdirectory such as `/my-wiki/`.
 - Adjust `src/styles/wiki.css` using Commune’s `--c-*` design tokens. The imported design system follows your operating system’s light/dark preference.
 
 Example note:
