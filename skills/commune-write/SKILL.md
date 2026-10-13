@@ -46,13 +46,15 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    `dumps/<slug>.connect.md`, and `dumps/<slug>.answers.md` if it exists. Pipe
    every `--json` payload through `node scripts/preflight.mjs --schema`.
 
-2. **Grill** — when no answered round exists. Follow `references/grill.md`,
-   and `references/research.md` too when the dump might be research.
+2. **Grill** — when no answered round exists. Read `references/forms.md`
+   before every first round, then follow `references/grill.md` and
+   `references/research.md` too when the dump might be research.
    Output: `dumps/<slug>.answers.md` with `## Settled` and
    `## Round N — questions`. Print the path and stop. Do not draft in the same
    turn.
 
-3. **Draft** — when the newest round has answers under it. Output: the file at
+3. **Draft** — when the newest round has answers under it. Read the form from
+   the answered round; do not pick one here. Output: the file at
    `target:` in the dump, or a new file in `src/content/<collection>/`, named
    the way that collection already names its files — read one before you
    guess. Write `## Round N — decisions extracted` into

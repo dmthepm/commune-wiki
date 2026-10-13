@@ -12,16 +12,9 @@ it as the next round, print the path, stop.
 
 ## Is it research?
 
-Research answers questions someone asked, with sources. Before writing, check
-the form:
-
-- An argument the owner is making, built on their own view: an essay.
-- Something written to subscribers, dated, in a letter's voice: a letter.
-- One idea, within the length `WRITING.md` gives notes: a note.
-
-If the material reads as one of these, or as two of them at once, the form is
-the round's first question. Never default to research or to a note because
-that collection exists.
+Follow `references/forms.md` before the first round. Continue here when the
+chosen form is research. Settle what was asked, by whom, and why from the
+dump, or ask for what is missing in the grill.
 
 ## Two files, always
 
