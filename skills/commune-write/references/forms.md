@@ -35,6 +35,9 @@ form has no collection, recommend pausing the draft for the owner's
 decision, then ask whether to wait or reshape it into an available form.
 Do not offer the missing form as a supported choice.
 
+If the dump names a `target:` in a collection that does not hold the
+chosen form, say so in the round and ask for a destination that does.
+
 Write the round, print the path, stop. The draft turn reads the chosen
 form from the answered round, including Settled; it never picks a form.
 If the form is unresolved, stop the draft and write the question in the

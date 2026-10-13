@@ -1,6 +1,6 @@
 ---
 name: commune-write
-description: Grill, draft and refine one Commune note from a dump. Use when a dumps/*.connect.md exists with no answered round (ask the round), when an answers file has a new answered round (draft or refine), or when the user gives a one-sentence correction on a drafted note. Requires the wiki's installed commune CLI; writes into the real note file plus dumps/<slug>.answers.md and dumps/<slug>.review.html, then hands off to commune-ship.
+description: Grill, draft and refine one Commune piece from a dump. Use when a dumps/*.connect.md exists with no answered round (ask the round), when an answers file has a new answered round (draft or refine), or when the user gives a one-sentence correction on a drafted piece. Requires the wiki's installed commune CLI; writes into the real content file plus dumps/<slug>.answers.md and dumps/<slug>.review.html, then hands off to commune-ship.
 metadata:
   version: "0.1.0"
   commune-schema: "1"
@@ -8,7 +8,7 @@ metadata:
 
 # commune-write
 
-Grill, draft, refine. One note per run. The draft goes into the real file in
+Grill, draft, refine. One piece per run. The draft goes into the real file in
 `src/content/`; the worktree is the staging area.
 
 Run every command from the wiki root. Pass no `--root`. `$COMMUNE` is the path
@@ -53,8 +53,11 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    `## Round N — questions`. Print the path and stop. Do not draft in the same
    turn.
 
-3. **Draft** — when the newest round has answers under it. Read the form from
-   the answered round; do not pick one here. Output: the file at
+3. **Draft** — when the newest round has answers under it. Read
+   `references/forms.md`, then the form from Settled or the round's answers;
+   do not pick one here. No resolved form, or a `target:` in a collection
+   that does not hold that form: ask in the next round, print the path, stop.
+   Output: the file at
    `target:` in the dump, or a new file in `src/content/<collection>/`, named
    the way that collection already names its files — read one before you
    guess. Write `## Round N — decisions extracted` into
@@ -63,7 +66,7 @@ step 1 prints. Handoff file shapes: `references/handoffs.md`.
    keys in its order. Append every file you touched to `files:` in
    `.connect.md`.
    Research follows `references/research.md`. It is the one exception to one
-   note per run: a dossier and its summary note, both in `files:`.
+   piece per run: a dossier and its summary note, both in `files:`.
 
 4. **Verify.** Run `$COMMUNE check --json` and compare finding identities `(rule, file, target)`,
    `null` for an absent target, against `baseline.findings` in `.connect.md`. Any **new** finding is yours to fix before you
