@@ -1,9 +1,9 @@
 import { defineConfig } from 'astro/config';
 import commune from '@dmthepm/commune/astro';
 import { communeMarkdown } from '@dmthepm/commune/markdown';
+import { siteConfig } from './src/site.config.ts';
 
-// Change this to your deployment origin before publishing at a domain root.
-const site = 'https://example.com';
+const site = siteConfig.url;
 
 export default defineConfig({
   site,
