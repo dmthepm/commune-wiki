@@ -71,4 +71,8 @@ Use a descriptive title such as `fix: resolve apostrophes in note titles` or `do
 
 For sample notes, use the target title verbatim in `[[Note Title]]`. Aliases and display text can resolve, but `check` and `gate` report noncanonical spellings. Notes require a title and `visibility: public` to publish. Other frontmatter requirements depend on the consuming site’s schema. Research, pages and updates enter the engine’s graph regardless of visibility, so use public samples in those collections.
 
+## Pull requests
+
+Outside pull requests get a review and a reply. When the work can merge, we merge the contributor's own commits. When a maintainer rewrites or carries the work, the commit keeps a `Co-authored-by:` line for the contributor, and the pull request or release notes say whose work it was.
+
 Contributions are licensed under the [MIT License](LICENSE).

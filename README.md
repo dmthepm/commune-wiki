@@ -411,6 +411,10 @@ Run `pnpm test:starter` from the repository root to check the copier, destinatio
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the rest. Issues and questions go to [the tracker](https://github.com/dmthepm/commune-wiki/issues).
 
+## Thanks
+
+Thanks to Joel ([@joedef](https://github.com/joedef)) for the Windows path fix using `fileURLToPath` and the single site config idea, both from [PR #1](https://github.com/dmthepm/commune-wiki/pull/1).
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Use it, change it, sell it. Keep the copyright notice; that is the whole obligation.
