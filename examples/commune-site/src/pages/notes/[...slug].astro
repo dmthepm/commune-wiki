@@ -1,0 +1,40 @@
+---
+import { getCollection, render } from 'astro:content';
+import SlidingPanes from '@dmthepm/commune/components/SlidingPanes.astro';
+import Backlinks from '@dmthepm/commune/components/Backlinks.astro';
+import BacklinksScript from '@dmthepm/commune/components/BacklinksScript.astro';
+import MarkdownLink from '@dmthepm/commune/components/MarkdownLink.astro';
+import SearchModal from '@dmthepm/commune/components/SearchModal.astro';
+import { toMarkdownHref } from '@dmthepm/commune/graph';
+import Base from '../../layouts/Base.astro';
+
+export async function getStaticPaths() {
+  const notes = await getCollection('notes', note => note.data.visibility === 'public');
+  return notes.map(note => ({ params: { slug: note.id }, props: { note } }));
+}
+const { note } = Astro.props;
+const { Content } = await render(note);
+const entryPath = `/notes/${note.id}/`;
+---
+<Base title={note.data.title} description={note.data.summary}>
+  <main id="pane-container">
+    <article class="pane" data-url={Astro.url.pathname} tabindex="-1">
+      <div class="body-wrapper">
+        <div class="body" id="main" tabindex="-1">
+          <div class="pane-content">
+            <article class="prose">
+              <p class="entry-meta">Sample note</p>
+              <h1>{note.data.title}</h1>
+              <Content />
+              <Backlinks slug={entryPath} />
+              <MarkdownLink href={toMarkdownHref(entryPath)} />
+            </article>
+          </div>
+        </div>
+      </div>
+    </article>
+  </main>
+  <SearchModal />
+  <BacklinksScript />
+  <SlidingPanes />
+</Base>

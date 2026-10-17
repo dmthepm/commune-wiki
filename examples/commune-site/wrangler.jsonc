@@ -1,0 +1,24 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "commune-site",
+	"compatibility_date": "2026-10-01",
+
+	// Static assets only: no Worker script. Astro's build output is served
+	// directly.
+	"assets": {
+		"directory": "./dist",
+
+		// Serve dist/404.html with a real 404 status for unmatched paths.
+		"not_found_handling": "404-page"
+	},
+
+	// Cloudflare creates the DNS record and the certificate for each hostname.
+	"routes": [
+		{ "pattern": "commune.md", "custom_domain": true },
+		{ "pattern": "www.commune.md", "custom_domain": true }
+	],
+
+	// workers.dev subdomain and preview URLs for branch builds.
+	"workers_dev": true,
+	"preview_urls": true
+}
