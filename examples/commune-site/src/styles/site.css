@@ -55,7 +55,8 @@ body.is-home { overflow-x: clip; }
 /* On pink paper the bright vermilion outline is only 2.93:1. The command box and
    skip link keep the bright ring, which sits on dark ink outside them. */
 .spread :focus-visible,
-.is-note #pane-container :focus-visible { outline-color: var(--vermilion-ink); }
+.is-note #pane-container :focus-visible,
+#commune-search :focus-visible { outline-color: var(--vermilion-ink); }
 
 /* Header */
 .site-header {
