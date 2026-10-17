@@ -11,6 +11,7 @@
   --paper-deep: #efc7d1;
   --vermilion: #f04425;
   --vermilion-ink: #b3200a; /* vermilion for links on paper: 5.3:1 */
+  --ink-on-vermilion: #24101f; /* text on vermilion: 4.76:1 */
   --muted-on-paper: #6b4560; /* 5.9:1 on paper */
   --muted-on-ink: #e3b9c6;
 
@@ -51,6 +52,11 @@ body {
 body.is-home { overflow-x: clip; }
 
 :focus-visible { outline: 3px solid var(--vermilion); outline-offset: 3px; }
+/* On pink paper the bright vermilion outline is only 2.93:1. */
+.spread :focus-visible,
+.cmd:focus-visible,
+.is-note #pane-container :focus-visible,
+.site-skip:focus-visible { outline-color: var(--vermilion-ink); }
 
 /* Header */
 .site-header {
@@ -160,8 +166,8 @@ body.is-home { overflow-x: clip; }
   text-decoration: none;
 }
 .button:hover { background: var(--paper); color: var(--ink); }
-.button--solid { background: var(--vermilion); border-color: var(--vermilion); color: var(--ink); }
-.button--solid:hover { background: var(--paper); border-color: var(--paper); }
+.button--solid { background: var(--vermilion); border-color: var(--vermilion); color: var(--ink-on-vermilion); }
+.button--solid:hover { background: var(--paper); border-color: var(--paper); color: var(--ink); }
 
 /* Spread: paper ground with two open pages and their source */
 .spread {
@@ -216,7 +222,7 @@ body.is-home { overflow-x: clip; }
 .spread-foot { margin: 2rem 0 0; max-width: 44rem; color: var(--ink); }
 
 /* Mechanism band */
-.band { background: var(--vermilion); color: var(--ink); padding: clamp(2.5rem, 6vw, 5rem) var(--gutter); }
+.band { background: var(--vermilion); color: var(--ink-on-vermilion); padding: clamp(2.5rem, 6vw, 5rem) var(--gutter); }
 .band-inner { max-width: 62rem; }
 .band .section-title { font-size: clamp(2.6rem, 7vw, 6rem); }
 .band p { margin: 0; max-width: 38rem; font-size: 1.25rem; font-weight: 500; }
