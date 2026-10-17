@@ -1,0 +1,89 @@
+---
+import { readFile } from 'node:fs/promises';
+import { getEntry, render } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { siteConfig } from '../site.config';
+
+// The two pages in the spread are real notes. The reading view comes from
+// the same renderer as the note routes, and the source is the file itself,
+// the same bytes the markdown twin serves.
+const spread = await Promise.all(
+  ['small-notes', 'useful-links'].map(async id => {
+    const note = await getEntry('notes', id);
+    if (!note) throw new Error(`Missing sample note: ${id}`);
+    const { Content } = await render(note);
+    const source = await readFile(`${process.cwd()}/src/content/notes/${id}.md`, 'utf8');
+    return { id, note, Content, source };
+  }),
+);
+const readme = `${siteConfig.repo}#readme`;
+---
+<Base title="Your notes deserve a life beyond the folder." home>
+  <main id="main">
+    <section class="hero">
+      <p class="kicker">A personal wiki from markdown files</p>
+      <h1 class="display">Your notes deserve a life <em>beyond the folder.</em></h1>
+      <div class="hero-foot">
+        <p class="lede">A personal wiki from markdown files. Find connections while you write. Publish with Astro.</p>
+        <p class="actions">
+          <a class="button button--solid" href={`${siteConfig.repo}#start-a-wiki`}>Start your wiki</a>
+          <a class="button" href="/notes/small-notes/">Explore the demo</a>
+        </p>
+      </div>
+    </section>
+
+    <section class="spread" aria-labelledby="demo-title">
+      <div class="spread-head">
+        <h2 id="demo-title" class="section-title">Follow a thought.</h2>
+        <p>Open a sample note, follow its link and find the way back. Read the markdown twin to see the source behind the page.</p>
+      </div>
+      <div class="folios">
+        {spread.map(({ id, note, Content, source }) => (
+          <article class="folio">
+            <div class="page">
+              <p class="label">Reading view</p>
+              <h3><a href={`/notes/${id}/`}>{note.data.title}</a></h3>
+              <div class="page-body"><Content /></div>
+              <p class="open"><a href={`/notes/${id}/`}>Open this note</a></p>
+            </div>
+            <div class="source">
+              <p class="label">Markdown source: <a href={`/notes/${id}.md`}>{id}.md</a></p>
+              <pre tabindex="0"><code>{source}</code></pre>
+            </div>
+          </article>
+        ))}
+      </div>
+      <p class="spread-foot">A third sample note, <a href="/notes/writing-in-public/">Writing in public</a>, completes the loop back to Small notes. These are sample notes, and every link between them is a real link in this site's own wiki.</p>
+    </section>
+
+    <section class="band" aria-labelledby="mechanism-title">
+      <div class="band-inner">
+        <h2 id="mechanism-title" class="section-title">Find the connection before you publish.</h2>
+        <p>Commune reads your markdown files from disk. Query the graph while you write, then publish with the same link resolver through Astro.</p>
+      </div>
+    </section>
+
+    <section class="columns">
+      <div id="start">
+        <h2 class="section-title section-title--sm">Build two linked notes.</h2>
+        <p>You need Node 22.12 or newer, npm and Git. One paste creates an Astro 7 starter wiki from a clone of the repository.</p>
+        <pre class="cmd" tabindex="0"><code>git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev</code></pre>
+        <p>The <a href={`${siteConfig.repo}#install`}>install section</a> of the README has the details.</p>
+      </div>
+      <div id="writing">
+        <h2 class="section-title section-title--sm">Keep the rough thought. Review the finished note.</h2>
+        <p>Optional skills for Claude Code and Codex help save rough text, find connection candidates, ask editorial questions and prepare a reviewed change for shipping. They require an existing Commune wiki.</p>
+      </div>
+      <div id="docs">
+        <h2 class="section-title section-title--sm">Make the wiki yours.</h2>
+        <p>The <a href={readme}>README</a> covers installation, wikilinks, backlinks, markdown twins and the graph commands. Read the visibility rules before publishing. <a href={`${siteConfig.repo}/blob/main/docs/hosting.md`}>Hosting</a> covers putting the static build on a host.</p>
+      </div>
+      <div id="feedback">
+        <h2 class="section-title section-title--sm">Tell us where you had to guess.</h2>
+        <p>Share the step, what you expected and what happened. Add your Node and Commune versions so the problem can be reproduced. <a href={`${siteConfig.repo}/issues/85`}>Open the thread on GitHub</a>.</p>
+      </div>
+    </section>
+  </main>
+  <SiteFooter />
+</Base>

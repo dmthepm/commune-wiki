@@ -22,7 +22,8 @@
 			"initial-version": "0.1.0",
 			"include-component-in-tag": false,
 			"extra-files": [
-				{ "type": "json", "path": "examples/starter/package.json", "jsonpath": "$.dependencies['@dmthepm/commune']" }
+				{ "type": "json", "path": "examples/starter/package.json", "jsonpath": "$.dependencies['@dmthepm/commune']" },
+				{ "type": "json", "path": "examples/commune-site/package.json", "jsonpath": "$.dependencies['@dmthepm/commune']" }
 			]
 		}
 	}

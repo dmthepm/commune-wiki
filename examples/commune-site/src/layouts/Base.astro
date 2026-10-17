@@ -1,0 +1,52 @@
+---
+import '@fontsource/instrument-serif/400.css';
+import '@fontsource/instrument-serif/400-italic.css';
+import '@fontsource-variable/instrument-sans';
+import '@dmthepm/commune/styles/design-system.css';
+import '@dmthepm/commune/styles/notes.css';
+import '../styles/site.css';
+import { siteConfig } from '../site.config';
+
+interface Props {
+  title: string;
+  description?: string;
+  home?: boolean;
+}
+const { title, description = siteConfig.description, home = false } = Astro.props;
+const fullTitle = home ? `${siteConfig.name}: ${title}` : `${title} · ${siteConfig.name}`;
+const canonical = new URL(Astro.url.pathname, siteConfig.url).href;
+---
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#34192D" />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>{fullTitle}</title>
+  </head>
+  <body class={home ? 'is-home' : 'is-note'}>
+    <a class="site-skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="site-brand" href="/">{siteConfig.name}</a>
+      <nav aria-label="Main navigation">
+        <a href="/notes/small-notes/">Demo</a>
+        <a href={siteConfig.repo}>GitHub</a>
+        {!home && (
+          <button type="button" onclick="window.dispatchEvent(new CustomEvent('commune:openSearch'))">Search <kbd>⌘K</kbd></button>
+        )}
+      </nav>
+    </header>
+    <slot />
+    <script>
+      const header = document.querySelector<HTMLElement>('.site-header');
+      if (header) {
+        const measure = () => document.documentElement.style.setProperty('--header-height', `${header.offsetHeight}px`);
+        measure();
+        new ResizeObserver(measure).observe(header);
+      }
+    </script>
+  </body>
+</html>
