@@ -1,0 +1,51 @@
+---
+import { getEntry, render } from 'astro:content';
+import Mark from './Mark.astro';
+import { loadNoteLinks } from '../lib/note-links';
+import { siteConfig } from '../site.config';
+
+// A picture of the sliding panes, drawn live from the sample notes. The header,
+// the pane cards and the "links to this note" list use the product's own tokens
+// and proportions. Each older pane keeps a narrow slice showing, the same way a
+// Commune wiki stacks the notes a reader has followed. The strip repeats notes
+// that are already on the page, so it is hidden from assistive technology and
+// its links are not focusable.
+const order = ['small-notes', 'useful-links', 'writing-in-public'];
+const all = await loadNoteLinks();
+const panes = await Promise.all(
+  order.map(async id => {
+    const note = await getEntry('notes', id);
+    if (!note) throw new Error(`Missing sample note: ${id}`);
+    const { Content } = await render(note);
+    const from = all.filter(n => n.links.includes(id));
+    return { id, title: note.data.title, Body: Content, from };
+  }),
+);
+---
+<figure class="screen">
+  <div class="screen-view" aria-hidden="true" inert>
+    <header class="p-header">
+      <span class="p-brand"><Mark size={28} class="p-mark" /><span>{siteConfig.name}</span></span>
+      <span class="p-controls">
+        <span class="p-theme">&#9728;&#65039;</span>
+        <span class="p-search"><span>Search</span><kbd>⌘K</kbd></span>
+      </span>
+    </header>
+    <div class="p-strip">
+      {panes.map((pane, i) => (
+        <article class={`p-pane${i === panes.length - 1 ? ' is-active' : ''}`} style={`--i:${i}`}>
+          <p class="p-meta">Sample note</p>
+          <h3>{pane.title}</h3>
+          <div class="p-body"><pane.Body /></div>
+          {pane.from.length > 0 && (
+            <div class="p-back">
+              <h4>{pane.from.length} {pane.from.length === 1 ? 'link' : 'links'} to this note</h4>
+              <ul>{pane.from.map(n => <li><a href={`/notes/${n.id}/`} tabindex="-1">{n.title}</a></li>)}</ul>
+            </div>
+          )}
+        </article>
+      ))}
+    </div>
+  </div>
+  <figcaption>Follow a link in a Commune wiki and the next note opens beside the first. The notes you have read stay in a stack on the left.</figcaption>
+</figure>

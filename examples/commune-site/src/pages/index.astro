@@ -6,6 +6,7 @@ import SiteFooter from '../components/SiteFooter.astro';
 import { siteConfig } from '../site.config';
 import HeroDemo from '../components/HeroDemo.astro';
 import Mark from '../components/Mark.astro';
+import PaneStrip from '../components/PaneStrip.astro';
 import { loadNoteLinks } from '../lib/note-links';
 
 // The two pages in the spread are real notes. The reading view comes from
@@ -81,7 +82,10 @@ const readme = `${siteConfig.repo}#readme`;
               <h3><a href={`/notes/${id}/`}>{note.data.title}</a></h3>
               <div class="page-body"><Content /></div>
               {linkedFrom(id).length > 0 && (
-                <p class="from">Linked from {linkedFrom(id).map((n, i) => (<>{i > 0 && ', '}<a href={`/notes/${n.id}/`}>{n.title}</a></>))}</p>
+                <div class="from">
+                  <h4>{linkedFrom(id).length} {linkedFrom(id).length === 1 ? 'link' : 'links'} to this note</h4>
+                  <ul>{linkedFrom(id).map(n => (<li><a href={`/notes/${n.id}/`}>{n.title}</a></li>))}</ul>
+                </div>
               )}
               <p class="open"><a href={`/notes/${id}/`}>Open this note</a></p>
             </div>
@@ -93,6 +97,7 @@ const readme = `${siteConfig.repo}#readme`;
           </article>
         ))}
       </div>
+      <PaneStrip />
       <p class="spread-foot">A third sample note, <a href="/notes/writing-in-public/">Writing in public</a>, completes the loop back to Small notes. These are sample notes, and every link between them is a real link in this site's own wiki.</p>
     </section>
 
