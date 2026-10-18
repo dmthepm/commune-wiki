@@ -6,6 +6,8 @@ import BacklinksScript from '@dmthepm/commune/components/BacklinksScript.astro';
 import MarkdownLink from '@dmthepm/commune/components/MarkdownLink.astro';
 import SearchModal from '@dmthepm/commune/components/SearchModal.astro';
 import { toMarkdownHref } from '@dmthepm/commune/graph';
+import Mark from '../../components/Mark.astro';
+import { siteConfig } from '../../site.config';
 import Base from '../../layouts/Base.astro';
 
 export async function getStaticPaths() {
@@ -28,6 +30,17 @@ const entryPath = `/notes/${note.id}/`;
               <Content />
               <Backlinks slug={entryPath} />
               <MarkdownLink href={toMarkdownHref(entryPath)} />
+              <aside class="note-cta" aria-label="About this sample note">
+                <Mark size={40} />
+                <div>
+                  <p class="note-cta-title">One file, three views.</p>
+                  <p>Commune made this page, the list of links to it and its markdown twin from a single markdown file. Your notes can work the same way.</p>
+                  <p class="note-cta-actions">
+                    <a class="button button--solid" href="/#start">Start your wiki</a>
+                    <a class="button button--quiet" href={siteConfig.repo}>Read the source</a>
+                  </p>
+                </div>
+              </aside>
             </article>
           </div>
         </div>

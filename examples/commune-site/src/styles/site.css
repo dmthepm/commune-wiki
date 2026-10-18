@@ -74,6 +74,9 @@ body.is-home { overflow-x: clip; }
   border-bottom: 1px solid rgba(247, 220, 227, 0.22);
 }
 .site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
   font-family: var(--font-display);
   font-size: 1.75rem;
   line-height: 1;
@@ -94,6 +97,7 @@ body.is-home { overflow-x: clip; }
 .site-header button:hover { border-color: var(--vermilion); }
 .site-header kbd { font: inherit; font-size: 0.75rem; color: var(--muted-on-ink); }
 @media (max-width: 520px) { .site-header kbd { display: none; } }
+@media (max-width: 560px) { .nav-start { display: none; } .site-header nav { gap: 0.9rem; } }
 
 .site-skip {
   position: fixed;
@@ -295,4 +299,186 @@ body.is-home { overflow-x: clip; }
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Overdrive: brand mark, link graph, annotated spread, steps, notes   */
+/* ------------------------------------------------------------------ */
+:root {
+  --coral-on-ink: #ff8f74; /* wikilinks on ink: 7.1:1 */
+  --blush-line: rgba(247, 220, 227, 0.16);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+  .site-header { view-transition-name: site-header; }
+}
+
+/* The mark */
+.mark { flex: none; display: block; transition: transform 0.4s var(--ease-out); }
+.mark-tile { fill: var(--ink-soft); }
+.mark-ring { fill: none; stroke: var(--vermilion); stroke-width: 3.2; stroke-linecap: round; }
+.mark-node { fill: var(--paper); }
+.site-header .mark-tile { fill: var(--vermilion); }
+.site-header .mark-ring { stroke: var(--ink); }
+.site-header .mark-node { fill: var(--ink); }
+.site-brand:hover .mark { transform: rotate(-12deg); }
+
+/* Hero: dotted paper behind the headline, graph beneath */
+.hero {
+  background-image: radial-gradient(circle at 1px 1px, rgba(247, 220, 227, 0.13) 1px, transparent 0);
+  background-size: 28px 28px;
+}
+.button { transition: background-color 0.2s, color 0.2s, transform 0.2s var(--ease-out); }
+.button:active { transform: translateY(1px) scale(0.99); }
+.button--quiet { border-color: var(--c-border-focus); color: var(--ink); }
+.button--quiet:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.graph { margin: clamp(2rem, 4vw, 3.5rem) 0 0; }
+.graph-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.graph-svg--tall { display: none; max-width: 26rem; margin-inline: auto; }
+@media (max-width: 719px) {
+  .graph-svg--wide { display: none; }
+  .graph-svg--tall { display: block; }
+}
+.graph figcaption { margin-top: 1rem; max-width: 40rem; font-size: 0.9rem; color: var(--muted-on-ink); }
+.edge { fill: none; stroke: var(--vermilion); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke 0.25s, stroke-width 0.25s; }
+.pulse { fill: var(--paper); offset-rotate: 0deg; animation: travel 5.5s linear infinite; }
+@keyframes travel { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+.node rect { fill: var(--ink-soft); stroke: rgba(247, 220, 227, 0.55); stroke-width: 1.5; transition: fill 0.25s, stroke 0.25s; }
+.node text { fill: var(--paper); font-family: var(--font-display); font-size: 27px; }
+.node-dot { fill: var(--vermilion); transition: fill 0.25s; }
+.node { cursor: pointer; outline: none; }
+.graph-svg--tall .node text { font-size: 24px; }
+.node:hover rect, .node:focus-visible rect { fill: var(--vermilion); stroke: var(--vermilion); }
+.node:hover text, .node:focus-visible text { fill: var(--ink-on-vermilion); }
+.node:hover .node-dot, .node:focus-visible .node-dot { fill: var(--ink-on-vermilion); }
+.node:focus-visible rect { stroke: var(--paper); stroke-width: 3; }
+/* Follow a note's links: dim the edges that do not touch it. */
+.graph:has(.node:hover) .edge, .graph:has(.node:focus-visible) .edge { stroke: rgba(240, 68, 37, 0.3); }
+.graph:has(.node--small-notes:hover) :is(.edge--a-b, .edge--b-a, .edge--c-a),
+.graph:has(.node--small-notes:focus-visible) :is(.edge--a-b, .edge--b-a, .edge--c-a),
+.graph:has(.node--useful-links:hover) :is(.edge--a-b, .edge--b-a, .edge--b-c),
+.graph:has(.node--useful-links:focus-visible) :is(.edge--a-b, .edge--b-a, .edge--b-c),
+.graph:has(.node--writing-in-public:hover) :is(.edge--b-c, .edge--c-a),
+.graph:has(.node--writing-in-public:focus-visible) :is(.edge--b-c, .edge--c-a) { stroke: var(--vermilion); stroke-width: 4; }
+
+.facts { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: clamp(1.5rem, 3vw, 2.25rem) 0 0; padding: 0; list-style: none; }
+.facts li { padding: 0.3rem 0.85rem; border: 1px solid rgba(247, 220, 227, 0.35); border-radius: 999px; font-size: 0.9rem; color: var(--paper); }
+
+/* Spread: the same file shown twice */
+.folio { gap: 0; }
+.twin { position: relative; margin: 0; height: 2.5rem; display: flex; align-items: center; justify-content: center; }
+.twin::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 2px dashed var(--vermilion-ink); }
+.twin span {
+  position: relative;
+  padding: 0.2rem 0.8rem;
+  background: var(--paper);
+  border: 1.5px solid var(--vermilion-ink);
+  border-radius: 999px;
+  color: var(--vermilion-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.page { box-shadow: 8px 8px 0 var(--paper-deep); }
+.page-body a.wikilink {
+  color: var(--ink);
+  text-decoration: none;
+  background: linear-gradient(transparent 62%, rgba(240, 68, 37, 0.35) 62%);
+  border-bottom: 2px solid var(--vermilion-ink);
+}
+.page-body a.wikilink:hover { background: var(--vermilion); color: var(--ink-on-vermilion); }
+.page .from { margin: 1.25rem 0 0; padding-top: 0.9rem; border-top: 1px dashed var(--c-border-focus); font-size: 0.9rem; color: var(--muted-on-paper); }
+.page .open { margin-top: 0.5rem; }
+.source pre .fm { color: var(--muted-on-ink); opacity: 0.85; }
+.source pre .wl { color: var(--coral-on-ink); font-weight: 600; }
+
+/* Band: the mark as a large cropped watermark, then three steps */
+.band { position: relative; overflow: hidden; }
+.band-mark { position: absolute; right: -8%; top: 50%; width: min(70vw, 560px); height: auto; transform: translateY(-50%); opacity: 0.16; pointer-events: none; }
+.band-mark .mark-tile { fill: none; }
+.band-mark .mark-ring { stroke: var(--ink); }
+.band-mark .mark-node { fill: var(--ink); }
+.band-inner { position: relative; max-width: 72rem; }
+.steps { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); margin: 2.25rem 0 0; padding: 0; list-style: none; }
+@media (min-width: 900px) { .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; } }
+.steps li { display: grid; gap: 0.4rem; align-content: start; padding: 1.25rem 1.4rem 1.4rem; background: var(--ink); color: var(--paper); border-radius: 4px; }
+.steps h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 2rem; line-height: 1; }
+.steps p { margin: 0; max-width: none; font-size: 1rem; font-weight: 400; }
+.steps code { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+.step-n { display: inline-grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: var(--vermilion); color: var(--ink-on-vermilion); font-size: 0.9rem; font-weight: 700; }
+.step-cmd { display: block; margin-top: 0.5rem; padding: 0.6rem 0.8rem; background: rgba(247, 220, 227, 0.1); border: 1px solid var(--blush-line); font-size: 0.8rem; overflow-wrap: anywhere; color: var(--paper); }
+
+/* Start and the four columns */
+.columns { counter-reset: col; }
+.columns > div { counter-increment: col; padding-top: 1.1rem; border-top: 2px solid var(--vermilion); }
+.columns > div::before { content: '0' counter(col); display: block; margin-bottom: 0.6rem; font-family: var(--font-display); font-size: 1.1rem; color: var(--coral-on-ink); }
+.cmd-wrap { margin: 0 0 1rem; }
+.cmd-wrap .cmd { margin: 0; border-top: 5px solid var(--vermilion); }
+.copy { display: block; width: 100%; padding: 0.7rem 1rem; background: var(--vermilion); color: var(--ink-on-vermilion); border: 0; font: inherit; font-weight: 600; cursor: pointer; text-align: center; }
+.copy[hidden] { display: none; }
+.copy:hover { background: var(--paper); color: var(--ink); }
+.cmd-wrap .cmd:only-of-type { border-radius: 4px; }
+.copy-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0 !important; }
+
+/* Footer */
+.site-footer { align-items: flex-start; }
+.footer-brand { display: grid; grid-template-columns: auto 1fr; column-gap: 0.9rem; align-items: center; }
+.footer-brand .mark { grid-row: span 2; }
+.footer-name { font-family: var(--font-display); font-size: 1.9rem; line-height: 1; color: var(--paper); }
+.footer-links { display: grid; gap: 0.35rem; justify-items: start; }
+@media (min-width: 720px) { .footer-links { justify-items: end; } }
+
+/* Note pages */
+.note-cta { display: grid; grid-template-columns: auto 1fr; gap: 1rem; margin: 2.5rem 0 0; padding: 1.25rem; background: #fff4f6; border: 1px solid var(--c-border); border-top: 6px solid var(--vermilion); }
+.note-cta p { margin: 0 0 0.6rem; font-size: 0.975rem; }
+.note-cta .note-cta-title { font-family: var(--font-display); font-size: 1.75rem; line-height: 1; }
+.note-cta .note-cta-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.9rem; }
+.note-cta .button { font-size: 0.975rem; padding: 0.5rem 1.1rem; text-decoration: none; }
+.prose .note-cta a.button--solid { color: var(--ink-on-vermilion); }
+.prose .note-cta a.button--quiet { color: var(--ink); }
+.prose .note-cta a.button--quiet:hover { color: var(--paper); }
+.note-cta .mark-tile { fill: var(--ink); }
+@media (max-width: 420px) { .note-cta { grid-template-columns: 1fr; } }
+
+/* Scroll-driven reveals, only where supported and motion is welcome */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .folio, .steps li, .columns > div {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+    @keyframes rise { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+    .edge { animation: draw 1.6s var(--ease-out) both; }
+    @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse { display: none; }
+  .mark, .site-brand:hover .mark { transition: none; transform: none; }
+}
+@media (max-width: 430px) {
+  .site-brand { font-size: 1.5rem; gap: 0.45rem; }
+  .site-brand .mark { width: 26px; height: 26px; }
+  .site-header nav { gap: 0.7rem; }
+  .site-header button { padding: 0.3rem 0.65rem; }
+}
+@media (max-width: 899px) { .band-mark { top: 6%; right: -22%; transform: none; opacity: 0.12; } }
+
+/* Narrow phones: no horizontal scroll at 320 */
+@media (max-width: 380px) { .nav-demo { display: none; } }
+
+/* First screen on a phone: both calls to action on one row, graph higher up */
+@media (max-width: 560px) {
+  .hero { padding-top: 1.5rem; padding-bottom: 2rem; }
+  .kicker { margin-bottom: 0.9rem; }
+  .hero-foot { margin-top: 1.1rem; gap: 1.1rem; }
+  .lede { font-size: 1.05rem; line-height: 1.5; }
+  .actions { flex-wrap: wrap; gap: 0.6rem; width: 100%; }
+  .actions .button { flex: 1 1 auto; text-align: center; padding: 0.65rem 0.9rem; font-size: 1rem; white-space: nowrap; }
+  .graph { margin-top: 1.5rem; }
 }

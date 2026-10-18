@@ -1,0 +1,99 @@
+---
+import { loadNoteLinks } from '../lib/note-links';
+
+// Nodes and edges come from the notes' own wikilinks, read at build time with
+// the same loader as the "Linked from" list. Only the placement is set by hand,
+// for the three sample notes. Any other note falls into a simple grid.
+const notes = await loadNoteLinks();
+const H = 58;
+const known = {
+  wide: { 'small-notes': [50, 183], 'useful-links': [460, 53], 'writing-in-public': [870, 183] } as Record<string, number[]>,
+  tall: { 'small-notes': [10, 108], 'useful-links': [120, 6], 'writing-in-public': [120, 208] } as Record<string, number[]>,
+};
+const layouts = [
+  { key: 'wide' as const, w: 280, width: 1200, spare: (i: number) => [50 + ((i - 3) % 3) * 410, 313 + Math.floor((i - 3) / 3) * 130] },
+  { key: 'tall' as const, w: 240, width: 380, spare: (i: number) => [i % 2 ? 120 : 10, 310 + (i - 3) * 100] },
+];
+const variants = layouts.map(l => {
+  let spareIndex = 0;
+  const pos: Record<string, number[]> = {};
+  for (const n of notes) pos[n.id] = known[l.key][n.id] ?? l.spare(3 + spareIndex++);
+  const centre = (id: string) => [pos[id][0] + l.w / 2, pos[id][1] + H / 2];
+  const edges = notes.flatMap(n =>
+    n.links.map(to => {
+      const [c1x, c1y] = centre(n.id);
+      const [c2x, c2y] = centre(to);
+      const dx = c2x - c1x;
+      const dy = c2y - c1y;
+      const bend = l.key === 'wide' ? -0.3 : -0.16;
+      // Opposite directions bulge to opposite sides, so a pair of notes that
+      // link to each other draws two lines.
+      const cx = (c1x + c2x) / 2 - dy * bend;
+      const cy = (c1y + c2y) / 2 + dx * bend;
+      // Start and end on each pill's edge, aimed between the curve and the other note.
+      const edgePoint = (px: number, py: number, qx: number, qy: number) => {
+        const vx = (cx + qx) / 2 - px;
+        const vy = (cy + qy) / 2 - py;
+        const len = Math.hypot(vx, vy) || 1;
+        const ux = vx / len;
+        const uy = vy / len;
+        // The pill is a capsule. Walk out from its centre to the rim, then
+        // step 3 units back in so the line meets the stroke with no gap.
+        const arm = l.w / 2 - H / 2;
+        const inside = (t: number) => {
+          const x = px + ux * t - px;
+          const y = py + uy * t - py;
+          const nx = Math.max(-arm, Math.min(arm, x));
+          return Math.hypot(x - nx, y) <= H / 2;
+        };
+        let lo = 0;
+        let hi = l.w;
+        for (let k = 0; k < 24; k++) {
+          const mid = (lo + hi) / 2;
+          if (inside(mid)) lo = mid; else hi = mid;
+        }
+        const t = lo - 3;
+        return [px + ux * t, py + uy * t];
+      };
+      const [x1, y1] = edgePoint(c1x, c1y, c2x, c2y);
+      const [x2, y2] = edgePoint(c2x, c2y, c1x, c1y);
+      return { from: n.id, to, d: `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}` };
+    }),
+  );
+  const ys = Object.values(pos).map(p => p[1]);
+  const height = Math.max(...ys) + H + (l.key === "wide" ? 100 : 30);
+  return { ...l, pos, edges, box: `0 0 ${l.width} ${height}` };
+});
+const title = (id: string) => notes.find(n => n.id === id)!.title;
+// Hover or focus a note to light the links that touch it.
+const rules = notes
+  .map(n => {
+    const touching = notes.flatMap(m => m.links.map(to => [m.id, to])).filter(([a, b]) => a === n.id || b === n.id);
+    const sel = touching.map(([a, b]) => `.edge--${a}--${b}`).join(', ');
+    return sel ? `.graph:has(.node--${n.id}:hover) :is(${sel}), .graph:has(.node--${n.id}:focus-visible) :is(${sel}) { stroke: var(--vermilion); stroke-width: 4; }` : '';
+  })
+  .join('\n');
+---
+<figure class="graph" data-graph>
+  {variants.map(v => (
+    <svg class={`graph-svg graph-svg--${v.key}`} viewBox={v.box} role="group" aria-label="The sample notes and the links between them">
+      <g class="edges" aria-hidden="true">
+        {v.edges.map((e, i) => (
+          <>
+            <path class={`edge edge--${e.from}--${e.to}`} d={e.d} pathLength="1" />
+            <circle class="pulse" r="4" style={`offset-path:path('${e.d}');animation-delay:-${((i * 1.7) % 5.5).toFixed(1)}s`} />
+          </>
+        ))}
+      </g>
+      {notes.map(n => (
+        <a class={`node node--${n.id}`} href={`/notes/${n.id}/`} aria-label={`Open the note ${n.title}`}>
+          <rect x={v.pos[n.id][0]} y={v.pos[n.id][1]} width={v.w} height={H} rx="29" />
+          <circle class="node-dot" cx={v.pos[n.id][0] + 29} cy={v.pos[n.id][1] + 29} r="6" />
+          <text x={v.pos[n.id][0] + 50} y={v.pos[n.id][1] + 38}>{title(n.id)}</text>
+        </a>
+      ))}
+    </svg>
+  ))}
+  <figcaption>The sample notes on this site and the links written between them. Each line is a wikilink in the notes. Hover or focus a note to follow its links.</figcaption>
+  <style is:inline set:html={rules}></style>
+</figure>
