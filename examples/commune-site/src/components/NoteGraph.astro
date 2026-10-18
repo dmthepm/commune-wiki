@@ -1,0 +1,57 @@
+---
+// The three sample notes and the links written between them. Drawn from the
+// same wikilinks the site resolves, so every line is a real link.
+const labels: Record<string, string> = {
+  'small-notes': 'Small notes',
+  'useful-links': 'Useful links',
+  'writing-in-public': 'Writing in public',
+};
+const variants = [
+  {
+    key: 'wide',
+    box: '0 0 1200 300',
+    w: 280,
+    nodes: { 'small-notes': [50, 183], 'useful-links': [460, 53], 'writing-in-public': [870, 183] } as Record<string, number[]>,
+    edges: [
+      ['a-b', 'M 300 183 C 350 120, 390 86, 460 86'],
+      ['b-a', 'M 480 111 C 430 150, 400 168, 346 192'],
+      ['b-c', 'M 740 86 C 810 86, 850 120, 900 183'],
+      ['c-a', 'M 872 232 C 700 316, 500 316, 328 232'],
+    ],
+  },
+  {
+    key: 'tall',
+    box: '0 0 380 272',
+    w: 240,
+    nodes: { 'small-notes': [10, 108], 'useful-links': [120, 6], 'writing-in-public': [120, 208] } as Record<string, number[]>,
+    edges: [
+      ['a-b', 'M 52 114 C 52 60, 70 35, 126 35'],
+      ['b-a', 'M 176 62 C 176 80, 140 92, 110 112'],
+      ['b-c', 'M 340 62 C 380 110, 380 170, 340 212'],
+      ['c-a', 'M 126 237 C 30 237, 20 190, 52 160'],
+    ],
+  },
+];
+---
+<figure class="graph" data-graph>
+  {variants.map(v => (
+    <svg class={`graph-svg graph-svg--${v.key}`} viewBox={v.box} role="group" aria-label="The three sample notes and the links between them">
+      <g class="edges" aria-hidden="true">
+        {v.edges.map(([id, d]) => (
+          <>
+            <path class={`edge edge--${id}`} d={d} pathLength="1" />
+            <circle class={`pulse pulse--${id}`} r="4" style={`offset-path:path('${d}')`} />
+          </>
+        ))}
+      </g>
+      {Object.entries(v.nodes).map(([id, [x, y]]) => (
+        <a class={`node node--${id}`} href={`/notes/${id}/`} aria-label={`Open the note ${labels[id]}`}>
+          <rect x={x} y={y} width={v.w} height="58" rx="29" />
+          <circle class="node-dot" cx={x + 29} cy={y + 29} r="6" />
+          <text x={x + 50} y={y + 38}>{labels[id]}</text>
+        </a>
+      ))}
+    </svg>
+  ))}
+  <figcaption>The three sample notes on this site and the links written between them. Each line is a wikilink in the notes. Hover a note to follow its links.</figcaption>
+</figure>

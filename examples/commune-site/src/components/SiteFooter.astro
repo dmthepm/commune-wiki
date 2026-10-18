@@ -1,7 +1,17 @@
 ---
 import { siteConfig } from '../site.config';
+import Mark from './Mark.astro';
 ---
 <footer class="site-footer">
-  <p>Open source. MIT. No account.</p>
-  <p><a href={siteConfig.repo}>github.com/dmthepm/commune-wiki</a></p>
+  <div class="footer-brand">
+    <Mark size={44} />
+    <p class="footer-name">{siteConfig.name}</p>
+    <p>Open source. MIT. No account.</p>
+  </div>
+  <nav class="footer-links" aria-label="Footer">
+    <a href="/#start">Start a wiki</a>
+    <a href="/notes/small-notes/">Sample notes</a>
+    <a href={`${siteConfig.repo}#readme`}>README</a>
+    <a href={siteConfig.repo}>github.com/dmthepm/commune-wiki</a>
+  </nav>
 </footer>

@@ -4,6 +4,8 @@ import { getEntry, render } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import { siteConfig } from '../site.config';
+import NoteGraph from '../components/NoteGraph.astro';
+import Mark from '../components/Mark.astro';
 
 // The two pages in the spread are real notes. The reading view comes from
 // the same renderer as the note routes, and the source is the file itself,
@@ -17,6 +19,41 @@ const spread = await Promise.all(
     return { id, note, Content, source };
   }),
 );
+
+// Show the source the way an editor would: frontmatter dimmed, wikilinks lit.
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function highlight(src: string) {
+  let fences = 0;
+  let inFront = false;
+  return src
+    .replace(/\n$/, '')
+    .split('\n')
+    .map(line => {
+      if (line === '---') {
+        fences += 1;
+        inFront = fences === 1;
+        return `<span class="fm">${line}</span>`;
+      }
+      const safe = esc(line);
+      return inFront ? `<span class="fm">${safe}</span>` : safe.replace(/\[\[([^\]]+)\]\]/g, '<span class="wl">[[$1]]</span>');
+    })
+    .join('\n');
+}
+
+// Backlinks for the spread, read from the same wikilinks the engine resolves.
+const all = await Promise.all(
+  ['small-notes', 'useful-links', 'writing-in-public'].map(async id => {
+    const entry = await getEntry('notes', id);
+    if (!entry) throw new Error(`Missing sample note: ${id}`);
+    const text = await readFile(`${process.cwd()}/src/content/notes/${id}.md`, 'utf8');
+    const targets = [...text.matchAll(/\[\[([^\]|#]+)/g)].map(m => m[1].trim().toLowerCase());
+    return { id, title: entry.data.title, targets };
+  }),
+);
+const linkedFrom = (id: string) => {
+  const me = all.find(n => n.id === id)!;
+  return all.filter(n => n.id !== id && n.targets.includes(me.title.toLowerCase()));
+};
 const readme = `${siteConfig.repo}#readme`;
 ---
 <Base title="Your notes deserve a life beyond the folder." home>
@@ -27,10 +64,18 @@ const readme = `${siteConfig.repo}#readme`;
       <div class="hero-foot">
         <p class="lede">A personal wiki from markdown files. Find connections while you write. Publish with Astro.</p>
         <p class="actions">
-          <a class="button button--solid" href={`${siteConfig.repo}#start-a-wiki`}>Start your wiki</a>
+          <a class="button button--solid" href="#start">Start your wiki</a>
           <a class="button" href="/notes/small-notes/">Explore the demo</a>
         </p>
       </div>
+      <NoteGraph />
+      <ul class="facts" aria-label="Facts about Commune">
+        <li>MIT licensed</li>
+        <li>No account</li>
+        <li>Plain markdown files</li>
+        <li>A markdown twin for every note</li>
+        <li>Publishes through Astro</li>
+      </ul>
     </section>
 
     <section class="spread" aria-labelledby="demo-title">
@@ -45,11 +90,15 @@ const readme = `${siteConfig.repo}#readme`;
               <p class="label">Reading view</p>
               <h3><a href={`/notes/${id}/`}>{note.data.title}</a></h3>
               <div class="page-body"><Content /></div>
+              {linkedFrom(id).length > 0 && (
+                <p class="from">Linked from {linkedFrom(id).map((n, i) => (<>{i > 0 && ', '}<a href={`/notes/${n.id}/`}>{n.title}</a></>))}</p>
+              )}
               <p class="open"><a href={`/notes/${id}/`}>Open this note</a></p>
             </div>
+            <p class="twin" aria-hidden="true"><span>Same file</span></p>
             <div class="source">
               <p class="label">Markdown source: <a href={`/notes/${id}.md`}>{id}.md</a></p>
-              <pre tabindex="0"><code>{source}</code></pre>
+              <pre tabindex="0"><code set:html={highlight(source)} /></pre>
             </div>
           </article>
         ))}
@@ -58,9 +107,29 @@ const readme = `${siteConfig.repo}#readme`;
     </section>
 
     <section class="band" aria-labelledby="mechanism-title">
+      <Mark size={520} class="band-mark" />
       <div class="band-inner">
         <h2 id="mechanism-title" class="section-title">Find the connection before you publish.</h2>
         <p>Commune reads your markdown files from disk. Query the graph while you write, then publish with the same link resolver through Astro.</p>
+        <ol class="steps">
+          <li>
+            <span class="step-n">1</span>
+            <h3>Write</h3>
+            <p>Link notes with <code>[[Title]]</code> in plain markdown.</p>
+          </li>
+          <li>
+            <span class="step-n">2</span>
+            <h3>Connect</h3>
+            <p>Ask the graph what relates to a note.</p>
+            <code class="step-cmd">npx commune graph related src/content/notes/small-notes.md</code>
+          </li>
+          <li>
+            <span class="step-n">3</span>
+            <h3>Publish</h3>
+            <p>Build the static site. Links resolve the same way, and every note gets backlinks and a markdown twin.</p>
+            <code class="step-cmd">npx commune gate</code>
+          </li>
+        </ol>
       </div>
     </section>
 
@@ -68,7 +137,11 @@ const readme = `${siteConfig.repo}#readme`;
       <div id="start">
         <h2 class="section-title section-title--sm">Build two linked notes.</h2>
         <p>You need Node 22.12 or newer, npm and Git. One paste creates an Astro 7 starter wiki from a clone of the repository.</p>
-        <pre class="cmd" tabindex="0"><code>git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev</code></pre>
+        <div class="cmd-wrap">
+          <pre class="cmd" tabindex="0"><code id="start-cmd">git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev</code></pre>
+          <button type="button" class="copy" data-copy="#start-cmd" hidden>Copy command</button>
+          <p class="copy-status" role="status" aria-live="polite"></p>
+        </div>
         <p>The <a href={`${siteConfig.repo}#install`}>install section</a> of the README has the details.</p>
       </div>
       <div id="writing">
@@ -86,4 +159,22 @@ const readme = `${siteConfig.repo}#readme`;
     </section>
   </main>
   <SiteFooter />
+  <script>
+    const btn = document.querySelector<HTMLButtonElement>('[data-copy]');
+    const status = document.querySelector<HTMLElement>('.copy-status');
+    if (btn && navigator.clipboard) {
+      btn.hidden = false;
+      btn.addEventListener('click', async () => {
+        const text = document.querySelector(btn.dataset.copy!)?.textContent ?? '';
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.textContent = 'Copied';
+          if (status) status.textContent = 'Command copied.';
+        } catch {
+          if (status) status.textContent = 'Copy failed. Select the command and copy it.';
+        }
+        setTimeout(() => { btn.textContent = 'Copy command'; }, 2000);
+      });
+    }
+  </script>
 </Base>
