@@ -168,13 +168,15 @@ const readme = `${siteConfig.repo}#readme`;
     }
   </script>
   <script>
-    // Replays the hero edit. The page is already complete HTML. This only
-    // rewinds it and types it again, and it never runs when motion is reduced.
+    // Types the hero note out. The page is already complete HTML, with the
+    // finished text kept in the accessibility tree. This only rewinds the
+    // visible copy and types it again, and it never runs when motion is reduced.
     const demo = document.querySelector<HTMLElement>('[data-demo]');
     if (demo && document.documentElement.classList.contains('anim')) {
       const live = demo.querySelector<HTMLElement>('.type-live')!;
       const count = demo.querySelector<HTMLElement>('.demo-count')!;
-      const replay = demo.querySelector<HTMLButtonElement>('.replay')!;
+      const status = demo.querySelector<HTMLElement>('[data-status]')!;
+      const again = demo.querySelector<HTMLButtonElement>('.replay')!;
       const text = demo.dataset.text ?? '';
       const trigger = Number(demo.dataset.trigger);
       const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -183,11 +185,13 @@ const readme = `${siteConfig.repo}#readme`;
         live.innerHTML = `${html}<span class="caret"></span>`;
       };
       let timer = 0;
-      const play = () => {
+      const play = (announce: boolean) => {
         clearTimeout(timer);
         demo.classList.remove('is-live', 'is-done');
         demo.classList.add('is-ready');
-        replay.hidden = true;
+        again.hidden = false;
+        again.setAttribute('aria-disabled', 'true');
+        status.textContent = '';
         count.textContent = demo.dataset.one ?? '';
         let i = 0;
         draw(0);
@@ -202,13 +206,17 @@ const readme = `${siteConfig.repo}#readme`;
             timer = window.setTimeout(tick, text[i - 1] === ' ' ? 70 : 38);
           } else {
             demo.classList.add('is-done');
-            replay.hidden = false;
+            again.removeAttribute('aria-disabled');
+            // Announce once, and only after a person asks for another run.
+            if (announce) status.textContent = `${demo.dataset.name} now has ${demo.dataset.two}.`;
           }
         };
         timer = window.setTimeout(tick, 900);
       };
-      replay.addEventListener('click', () => { play(); });
-      play();
+      again.addEventListener('click', () => {
+        if (again.getAttribute('aria-disabled') !== 'true') play(true);
+      });
+      play(false);
     }
   </script>
 </Base>

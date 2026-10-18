@@ -494,11 +494,14 @@ body.is-home { overflow-x: clip; }
 .demo-file { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.8rem; color: var(--muted-on-paper); }
 .replay { margin-left: auto; font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--vermilion-ink); background: transparent; border: 1.5px solid var(--vermilion-ink); border-radius: 999px; padding: 0.15rem 0.8rem; cursor: pointer; }
 .replay[hidden] { display: none; }
+.replay[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.replay[aria-disabled="true"]:hover { background: transparent; color: var(--vermilion-ink); }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .replay:hover { background: var(--vermilion-ink); color: #fff4f6; }
 .demo-type { display: grid; padding: 1rem 1.25rem 1.25rem; }
 .type-final, .type-live { grid-area: 1 / 1; margin: 0; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.95rem; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .type-live { display: none; }
-.anim .type-final { visibility: hidden; }
+.anim .type-final { opacity: 0; pointer-events: none; user-select: none; }
 .anim .type-live { display: block; }
 .demo .wl { color: var(--vermilion-ink); font-weight: 600; background: linear-gradient(transparent 62%, rgba(240, 68, 37, 0.3) 62%); }
 .caret { display: inline-block; width: 2px; height: 1.15em; margin-left: 1px; vertical-align: text-bottom; background: var(--vermilion-ink); animation: blink 1s steps(2, start) infinite; }
@@ -549,7 +552,7 @@ body.is-home { overflow-x: clip; }
 }
 
 /* Footer: the wordmark at scale */
-.footer-giant { flex: 1 0 100%; display: flex; align-items: flex-end; gap: 0.04em; margin: 0 0 1.5rem; font-family: var(--font-display); font-size: clamp(4.5rem, 23vw, 20rem); line-height: 0.78; letter-spacing: -0.03em; color: var(--ink-soft); overflow: hidden; user-select: none; }
+.footer-giant { flex: 1 0 100%; display: flex; align-items: flex-end; gap: 0.04em; margin: 0 0 1.5rem; font-family: var(--font-display); font-size: min(23vw, 20rem); line-height: 0.78; letter-spacing: -0.03em; color: var(--ink-soft); overflow: hidden; user-select: none; }
 .footer-giant .mark { width: 0.62em; height: 0.62em; margin-bottom: 0.04em; }
 .footer-giant .mark-tile { fill: var(--vermilion); }
 .footer-giant .mark-ring { stroke: var(--ink); }
@@ -560,3 +563,4 @@ body.is-home { overflow-x: clip; }
 .demo-graph .graph-svg--tall { display: block; max-width: 34rem; }
 @media (min-width: 900px) { .demo-graph .graph-svg--tall { margin-inline: auto; } }
 .demo.is-done .caret { display: none; }
+@media (max-width: 480px) { .footer-giant { font-size: 17vw; } }

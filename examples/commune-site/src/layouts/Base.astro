@@ -45,7 +45,7 @@ const ogAlt = 'Commune. Your notes deserve a life beyond the folder. Three linke
     <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:image:alt" content={ogAlt} />
     <link rel="preload" href={serifUrl} as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href={serifItalicUrl} as="font" type="font/woff2" crossorigin />
+    {home && <link rel="preload" href={serifItalicUrl} as="font" type="font/woff2" crossorigin />}
     <link rel="preload" href={sansUrl} as="font" type="font/woff2" crossorigin />
     <link rel="canonical" href={canonical} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />

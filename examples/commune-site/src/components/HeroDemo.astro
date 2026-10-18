@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import NoteGraph from './NoteGraph.astro';
 import { loadNoteLinks } from '../lib/note-links';
 
-// The hero replays one real edit. In the Writing in public note, the link to
+// The hero types out one real note. In the Writing in public note, the link to
 // Small notes is the one that gives Small notes its second backlink. The text
 // is the note's own body, the links come from the notes, and the finished
 // state is plain HTML, so the page reads the same without script.
@@ -26,12 +26,12 @@ const finalHtml = esc(body).replace(/\[\[([^\]]+)\]\]/g, '<span class="wl">[[$1]
 const backers = notes.filter(n => n.links.includes(TO));
 const countText = (n: number) => `${n} ${n === 1 ? 'link' : 'links'} to this note`;
 ---
-<figure class="demo" data-demo data-text={body} data-trigger={trigger} data-one={countText(backers.length - 1)} data-two={countText(backers.length)}>
+<figure class="demo" data-demo data-text={body} data-trigger={trigger} data-name={to.title} data-one={countText(backers.length - 1)} data-two={countText(backers.length)}>
   <div class="demo-editor">
     <div class="demo-bar">
       <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="demo-file">{FROM}.md</span>
-      <button type="button" class="replay" hidden>Replay</button>
+      <button type="button" class="replay" hidden>Type it again</button>
     </div>
     <div class="demo-type">
       <p class="type-final" set:html={finalHtml} />
@@ -42,12 +42,13 @@ const countText = (n: number) => `${n} ${n === 1 ? 'link' : 'links'} to this not
     <NoteGraph live={{ from: FROM, to: TO }} caption={false} />
   </div>
   <div class="demo-back">
-    <p class="demo-back-title"><span class="demo-count" role="status">{countText(backers.length)}</span> <span class="demo-back-for">{to.title}</span></p>
+    <p class="demo-back-title"><span class="demo-count">{countText(backers.length)}</span> <span class="demo-back-for">{to.title}</span></p>
     <ul>
       {backers.map(b => (
         <li data-live={b.id === FROM ? '' : undefined}><a href={`/notes/${b.id}/`}>{b.title}</a></li>
       ))}
     </ul>
   </div>
-  <figcaption>A replay of the real note Writing in public. Its link to Small notes is the one that gives Small notes a second backlink. Select a note in the graph to open it.</figcaption>
+  <p class="sr-only" role="status" data-status></p>
+  <figcaption>The real note Writing in public, typed out as written. Its link to Small notes is the one that gives Small notes a second backlink. Select a note in the graph to open it.</figcaption>
 </figure>
