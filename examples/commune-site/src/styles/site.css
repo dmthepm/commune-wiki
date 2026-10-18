@@ -563,12 +563,16 @@ body.is-home { overflow-x: clip; }
 /* design system's tokens, system font, radii and borders.             */
 /* ------------------------------------------------------------------ */
 
-/* Header search button: the product's pattern, bordered, rounded, kbd chip */
+/* Header search button: the product's pattern, bordered, rounded, kbd chip.
+   Copied from Header.astro: .search-btn (gap .6rem, padding .5rem .8rem, 1.5px
+   border, --c-radius-md), kbd (padding .2rem .4rem, .75rem, --c-radius-sm) and
+   the 768px phone breakpoint (padding .6rem, min-width 2.5rem, icon only).
+   Only the colours differ, because this header is plum. */
 .site-header .search-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.45rem 0.75rem;
+  padding: 0.5rem 0.8rem;
   border: 1.5px solid rgba(247, 220, 227, 0.3);
   border-radius: var(--c-radius-md);
   background: rgba(247, 220, 227, 0.08);
@@ -578,7 +582,7 @@ body.is-home { overflow-x: clip; }
 .site-header .search-btn:hover { border-color: var(--vermilion); background: rgba(247, 220, 227, 0.14); }
 .site-header .search-btn .search-icon { display: none; flex: none; }
 .site-header .search-btn kbd {
-  padding: 0.15rem 0.4rem;
+  padding: 0.2rem 0.4rem;
   border: 1px solid rgba(247, 220, 227, 0.3);
   border-radius: var(--c-radius-sm);
   background: rgba(0, 0, 0, 0.18);
@@ -586,11 +590,43 @@ body.is-home { overflow-x: clip; }
   font-family: var(--product-font);
   font-size: 0.75rem;
 }
-@media (max-width: 720px) {
-  .site-header .search-btn { padding: 0.55rem; min-width: 2.5rem; justify-content: center; }
+@media (max-width: 768px) {
+  .site-header .search-btn { padding: 0.6rem; min-width: 2.5rem; justify-content: center; }
   .site-header .search-btn .search-icon { display: block; }
   .site-header .search-btn .search-text, .site-header .search-btn kbd { display: none; }
 }
+
+/* Light only, on purpose. The product tokens are restated here so no dark
+   attribute or dark system preference (the engine's :root:not([data-theme="light"])
+   and :root[data-theme="dark"] rules) can flip the demos. The page also sets
+   data-theme="light" and color-scheme: light. */
+:root,
+:root[data-theme],
+:root:not([data-theme="light"]) {
+  color-scheme: light;
+  --c-bg: #ffffff;
+  --c-bg-soft: #f8f9fa;
+  --c-bg-muted: #e9ecef;
+  --c-text: #1a1a1a;
+  --c-text-muted: #6c757d;
+  --c-text-accent: #495057;
+  --c-border: rgba(0, 0, 0, 0.08);
+  --c-border-focus: rgba(0, 0, 0, 0.2);
+  --c-accent: #3f5fd6;
+  --c-accent-hover: #2b46ad;
+  --c-accent-soft: rgba(91, 127, 249, 0.1);
+  --c-accent-border: rgba(91, 127, 249, 0.3);
+  --c-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --c-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --c-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
+  --c-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+/* Link colour rule. Inside a product surface (the hero editor and backlinks card,
+   the reading-view pages, the pane strip and the note pages) links are blue,
+   var(--c-accent) with a --prod-blue underline. In the brand frame (header,
+   hero, band, steps, columns, footer, and links on the pink paper outside a
+   product surface) links are vermilion-ink, paper or ink with a vermilion underline. */
 
 /* Product surfaces: white, system font, product borders and radii */
 .demo-editor, .demo-back, .page, .p-pane, .note-cta {
@@ -606,7 +642,7 @@ body.is-home { overflow-x: clip; }
   box-shadow: var(--c-shadow-xl);
   overflow: hidden;
 }
-.demo-bar { background: var(--c-bg-soft); border-bottom: 1px solid var(--c-border); }
+.demo-bar { background: var(--c-bg); border-bottom: 1px solid var(--c-border); }
 .demo-file { color: var(--c-text-muted); }
 .replay {
   color: var(--c-text);
@@ -684,9 +720,23 @@ body.is-home { overflow-x: clip; }
 .page .from a:hover, .page .open a:hover { text-decoration: underline; }
 .page .open { margin-top: 1.25rem; font-size: 0.9rem; }
 
-/* Pane strip: the sliding panes idea, built from the shipped pane metrics */
-.screen { --slice: clamp(2.2rem, 8vw, 6.25rem); --pw: calc(100vw - 2rem - 2px - 1.25rem - 2 * var(--slice) - 1.5rem); margin: clamp(2rem, 5vw, 3.5rem) 0 0; }
+/* Pane strip: a picture of the sliding panes, drawn at desktop proportions and
+   scaled down on narrow screens like a screenshot. Every length inside is in em,
+   and the em is derived from the container width (54em design width, 1rem at most),
+   so the strip never reflows. Below 1024px a real Commune wiki shows one note at
+   a time (SlidingPanes.astro, the max-width 1023px block), so the caption says so.
+   Copied values and their engine files:
+   - pane card, 0.75rem radius, 1px border, collapsed shadow, active shadow and the
+     accent border: SlidingPanes.astro (.pane, .pane:focus-within)
+   - pane padding 2rem 2.5rem 4rem 1.5rem: SlidingPanes.astro (.pane .body)
+   - collapsed slice 100px at 1440px: SlidingPanes.astro (--collapsed-visible-width)
+   - header padding 1rem 1.25rem, 1.15rem bold brand, 2.5rem theme button, search
+     button padding .5rem .8rem and kbd padding .2rem .4rem: Header.astro */
+.screen { container-type: inline-size; margin: clamp(2rem, 5vw, 3.5rem) 0 0; max-width: 54rem; }
 .screen-view {
+  --pw: 38em;
+  --slice: 6.25em;
+  font-size: min(1rem, calc(100cqw / 54));
   overflow: hidden;
   background: var(--c-bg);
   border: 1px solid var(--c-border);
@@ -695,39 +745,39 @@ body.is-home { overflow-x: clip; }
   color: var(--c-text);
   font-family: var(--product-font);
 }
-.p-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem 1.25rem; background: var(--c-bg); border-bottom: 1px solid var(--c-border); box-shadow: var(--c-shadow-sm); }
-.p-brand { display: inline-flex; align-items: center; gap: 0.65rem; font-weight: 700; font-size: 1.1rem; letter-spacing: 0.3px; }
+.p-header { display: flex; align-items: center; justify-content: space-between; gap: 1em; padding: 1em 1.25em; background: var(--c-bg); border-bottom: 1px solid var(--c-border); box-shadow: var(--c-shadow-sm); }
+.p-brand { display: inline-flex; align-items: center; gap: 0.75em; font-weight: 700; font-size: 1.15em; letter-spacing: 0.3px; }
+.p-brand .mark { width: 2.2em; height: 2.2em; }
 .p-brand .mark-tile { fill: var(--vermilion); }
 .p-brand .mark-ring { stroke: var(--ink); }
 .p-brand .mark-node { fill: var(--ink); }
-.p-controls { display: inline-flex; align-items: center; gap: 0.6rem; }
-.p-theme { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border: 1.5px solid var(--c-border); border-radius: var(--c-radius-md); background: var(--c-bg-soft); font-size: 1.1rem; }
-.p-search { display: inline-flex; align-items: center; gap: 0.6rem; height: 2.4rem; padding: 0 0.75rem; border: 1.5px solid var(--c-border); border-radius: var(--c-radius-md); background: var(--c-bg-soft); color: var(--c-text-muted); font-size: 0.95rem; }
-.p-search kbd { font-family: var(--product-font); font-size: 0.75rem; padding: 0.15rem 0.4rem; border: 1px solid var(--c-border); border-radius: var(--c-radius-sm); background: var(--c-bg); }
-@media (max-width: 560px) { .p-search span, .p-search kbd { display: none; } .p-search { width: 2.4rem; padding: 0; justify-content: center; } .p-search::before { content: '🔍'; font-size: 1rem; } }
-.p-strip { display: flex; align-items: flex-start; padding: 1.25rem 0 1.25rem 1.25rem; height: 25rem; background: var(--c-bg); }
+.p-controls { display: inline-flex; align-items: center; gap: 0.75em; }
+.p-theme { display: grid; place-items: center; width: 2.5em; height: 2.5em; border: 1.5px solid var(--c-border); border-radius: var(--c-radius-md); background: var(--c-bg-soft); font-size: 1.2em; }
+.p-search { display: inline-flex; align-items: center; gap: 0.6em; height: 2.5em; padding: 0.5em 0.8em; box-sizing: border-box; border: 1.5px solid var(--c-border); border-radius: var(--c-radius-md); background: var(--c-bg-soft); color: var(--c-text-accent); font-size: 0.95em; }
+.p-search kbd { font-family: var(--product-font); font-size: 0.75em; padding: 0.2em 0.4em; border: 1px solid var(--c-border); border-radius: var(--c-radius-sm); background: var(--c-bg); color: var(--c-text-accent); }
+.p-strip { display: flex; align-items: flex-start; padding: 1.5em 0 1.5em 2em; height: 27em; background: var(--c-bg); }
 .p-pane {
   position: relative;
   flex: 0 0 var(--pw);
   width: var(--pw);
   height: 100%;
   overflow: hidden;
-  padding: 1.6rem 1.5rem;
+  padding: 2em 2.5em 1.5em 1.5em;
   margin-right: calc(var(--pw) * -1 + var(--slice));
   background: var(--c-bg);
   border: 1px solid var(--c-border);
   border-radius: var(--c-radius-md);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
-.p-pane.is-active { margin-right: 1.25rem; border-color: var(--c-accent-border); box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2), 0 5px 15px rgba(0, 0, 0, 0.1); }
-.p-meta { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--c-text-muted); }
-.p-pane h3 { margin: 0 0 0.8rem; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.2; }
-.p-body { font-size: 1rem; line-height: 1.7; }
+.p-pane.is-active { margin-right: 1.5em; border-color: var(--c-accent-border); box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2), 0 5px 15px rgba(0, 0, 0, 0.1); }
+.p-meta { margin: 0 0 0.4em; font-size: 0.85em; color: var(--c-text-muted); }
+.p-pane h3 { margin: 0 0 0.8em; font-size: 2em; font-weight: 700; letter-spacing: -0.025em; line-height: 1.2; }
+.p-body { font-size: 1em; line-height: 1.7; }
 .p-body p { margin: 0; }
-.p-back { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--c-border); font-size: 0.9rem; }
+.p-back { margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--c-border); font-size: 0.9em; }
+.p-back h4 { font-size: 0.85em; }
 .p-back a { color: var(--c-accent); }
 .screen figcaption { margin: 1rem 0 0; max-width: 44rem; font-size: 0.9rem; color: var(--muted-on-paper); }
-@media (min-width: 900px) { .screen { --pw: 36rem; --slice: 6rem; max-width: 54rem; } .p-strip { padding-left: 2rem; } }
 
 /* Note pages: white product panes on the ink ground, a bold system title */
 .is-note .pane { border-radius: var(--c-radius-md); }
@@ -753,4 +803,3 @@ body.is-home { overflow-x: clip; }
     @keyframes slideIn { from { opacity: 0; transform: translateX(3rem); } to { opacity: 1; transform: none; } }
   }
 }
-@media (max-width: 560px) { .p-pane { padding: 1.25rem 1rem; } .p-pane h3 { font-size: 1.35rem; } .p-body { font-size: 0.95rem; line-height: 1.6; } .p-strip { height: 22rem; } }
