@@ -19,23 +19,14 @@
   --font-text: 'Instrument Sans Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --gutter: clamp(1rem, 4vw, 3.5rem);
 
-  /* Commune design-system tokens, remapped. Panes and search are paper. */
-  --c-bg: var(--paper);
-  --c-bg-soft: var(--paper-deep);
-  --c-bg-muted: var(--paper-deep);
-  --c-text: var(--ink);
-  --c-text-muted: var(--muted-on-paper);
-  --c-text-accent: var(--ink);
-  --c-border: rgba(52, 25, 45, 0.22);
-  --c-border-focus: rgba(52, 25, 45, 0.55);
-  --c-accent: var(--vermilion-ink);
-  --c-accent-hover: var(--ink);
-  --c-accent-soft: rgba(240, 68, 37, 0.12);
-  --c-accent-border: rgba(179, 32, 10, 0.4);
-  --c-shadow-sm: none;
-  --c-shadow-md: 0 6px 24px rgba(20, 6, 16, 0.25);
-  --c-shadow-lg: 0 12px 40px rgba(20, 6, 16, 0.35);
-  --c-shadow-xl: 0 20px 60px rgba(20, 6, 16, 0.45);
+  /* Product tokens. The Commune design system's own values are used as shipped
+     (--c-bg, --c-text, --c-border, --c-radius-*, --c-shadow-*). Only the link
+     colour is darkened, because the product's #5b7ff9 is 3.6:1 on white. */
+  --c-accent: #3f5fd6; /* 5.5:1 on white */
+  --c-accent-hover: #2b46ad;
+  --prod-blue: #5b7ff9; /* the product's accent, kept for underlines and dots */
+  --product-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --line: rgba(52, 25, 45, 0.3);
   color-scheme: light;
 }
 
@@ -332,7 +323,7 @@ body.is-home { overflow-x: clip; }
 }
 .button { transition: background-color 0.2s, color 0.2s, transform 0.2s var(--ease-out); }
 .button:active { transform: translateY(1px) scale(0.99); }
-.button--quiet { border-color: var(--c-border-focus); color: var(--ink); }
+.button--quiet { border-color: var(--line); color: var(--ink); }
 .button--quiet:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 
 .graph { margin: clamp(2rem, 4vw, 3.5rem) 0 0; }
@@ -391,7 +382,7 @@ body.is-home { overflow-x: clip; }
   border-bottom: 2px solid var(--vermilion-ink);
 }
 .page-body a.wikilink:hover { background: var(--vermilion); color: var(--ink-on-vermilion); }
-.page .from { margin: 1.25rem 0 0; padding-top: 0.9rem; border-top: 1px dashed var(--c-border-focus); font-size: 0.9rem; color: var(--muted-on-paper); }
+.page .from { margin: 1.25rem 0 0; padding-top: 0.9rem; border-top: 1px dashed var(--line); font-size: 0.9rem; color: var(--muted-on-paper); }
 .page .open { margin-top: 0.5rem; }
 .source pre .fm { color: var(--muted-on-ink); opacity: 0.85; }
 .source pre .wl { color: var(--coral-on-ink); font-weight: 600; }
@@ -488,9 +479,9 @@ body.is-home { overflow-x: clip; }
 /* ------------------------------------------------------------------ */
 .demo { display: grid; gap: 1rem; margin: clamp(1.5rem, 4vw, 3rem) 0 0; grid-template-columns: minmax(0, 1fr); }
 .demo-editor { background: #fff4f6; color: var(--ink); border-top: 6px solid var(--vermilion); box-shadow: 8px 8px 0 var(--ink-soft); min-width: 0; }
-.demo-bar { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 1rem; border-bottom: 1px dashed var(--c-border-focus); min-height: 2.9rem; box-sizing: border-box; }
+.demo-bar { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 1rem; border-bottom: 1px dashed var(--line); min-height: 2.9rem; box-sizing: border-box; }
 .dots { display: inline-flex; gap: 5px; }
-.dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--paper-deep); border: 1px solid var(--c-border-focus); }
+.dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--paper-deep); border: 1px solid var(--line); }
 .demo-file { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.8rem; color: var(--muted-on-paper); }
 .replay { margin-left: auto; font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--vermilion-ink); background: transparent; border: 1.5px solid var(--vermilion-ink); border-radius: 999px; padding: 0.15rem 0.8rem; cursor: pointer; }
 .replay[hidden] { display: none; }
@@ -564,3 +555,251 @@ body.is-home { overflow-x: clip; }
 @media (min-width: 900px) { .demo-graph .graph-svg--tall { margin-inline: auto; } }
 .demo.is-done .caret { display: none; }
 @media (max-width: 480px) { .footer-giant { font-size: 17vw; } }
+
+/* ------------------------------------------------------------------ */
+/* Round 3: the demos use the product's own look                       */
+/* The Workshop stays as the frame (mark, serif headline, coral, ink   */
+/* band, share card). Everything that pretends to be Commune uses the  */
+/* design system's tokens, system font, radii and borders.             */
+/* ------------------------------------------------------------------ */
+
+/* Header search button: the product's pattern, bordered, rounded, kbd chip.
+   Copied from Header.astro: .search-btn (gap .6rem, padding .5rem .8rem, 1.5px
+   border, --c-radius-md), kbd (padding .2rem .4rem, .75rem, --c-radius-sm) and
+   the 768px phone breakpoint (padding .6rem, min-width 2.5rem, icon only).
+   Only the colours differ, because this header is plum. */
+.site-header .search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border: 1.5px solid rgba(247, 220, 227, 0.3);
+  border-radius: var(--c-radius-md);
+  background: rgba(247, 220, 227, 0.08);
+  color: var(--paper);
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.site-header .search-btn:hover { border-color: var(--vermilion); background: rgba(247, 220, 227, 0.14); }
+.site-header .search-btn .search-icon { display: none; flex: none; }
+.site-header .search-btn kbd {
+  padding: 0.2rem 0.4rem;
+  border: 1px solid rgba(247, 220, 227, 0.3);
+  border-radius: var(--c-radius-sm);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--paper);
+  font-family: var(--product-font);
+  font-size: 0.75rem;
+}
+@media (max-width: 768px) {
+  .site-header .search-btn { padding: 0.6rem; min-width: 2.5rem; justify-content: center; }
+  .site-header .search-btn .search-icon { display: block; }
+  .site-header .search-btn .search-text, .site-header .search-btn kbd { display: none; }
+}
+
+/* Light only, on purpose. The product tokens are restated here so no dark
+   attribute or dark system preference (the engine's :root:not([data-theme="light"])
+   and :root[data-theme="dark"] rules) can flip the demos. The page also sets
+   data-theme="light" and color-scheme: light. */
+:root,
+:root[data-theme],
+:root:not([data-theme="light"]) {
+  color-scheme: light;
+  --c-bg: #ffffff;
+  --c-bg-soft: #f8f9fa;
+  --c-bg-muted: #e9ecef;
+  --c-text: #1a1a1a;
+  --c-text-muted: #6c757d;
+  --c-text-accent: #495057;
+  --c-border: rgba(0, 0, 0, 0.08);
+  --c-border-focus: rgba(0, 0, 0, 0.2);
+  --c-accent: #3f5fd6;
+  --c-accent-hover: #2b46ad;
+  --c-accent-soft: rgba(91, 127, 249, 0.1);
+  --c-accent-border: rgba(91, 127, 249, 0.3);
+  --c-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --c-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --c-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
+  --c-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+/* Link colour rule. Inside a product surface (the hero editor and backlinks card,
+   the reading-view pages, the pane strip and the note pages) links are blue,
+   var(--c-accent) with a --prod-blue underline. In the brand frame (header,
+   hero, band, steps, columns, footer, and links on the pink paper outside a
+   product surface) links are vermilion-ink, paper or ink with a vermilion underline. */
+
+/* Product surfaces: white, system font, product borders and radii */
+.demo-editor, .demo-back, .page, .p-pane, .note-cta {
+  font-family: var(--product-font);
+  color: var(--c-text);
+}
+
+/* Hero editor: a window with the product's card treatment */
+.demo-editor {
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--c-radius-md);
+  box-shadow: var(--c-shadow-xl);
+  overflow: hidden;
+}
+.demo-bar { background: var(--c-bg); border-bottom: 1px solid var(--c-border); }
+.demo-file { color: var(--c-text-muted); }
+.replay {
+  color: var(--c-text);
+  background: var(--c-bg);
+  border: 1.5px solid var(--c-border);
+  border-radius: var(--c-radius-sm);
+  padding: 0.2rem 0.7rem;
+}
+.replay:hover { background: var(--c-bg); color: var(--c-text); border-color: var(--c-accent); }
+.replay[aria-disabled="true"]:hover { color: var(--c-text); border-color: var(--c-border); }
+.demo .wl {
+  color: var(--c-accent);
+  background: var(--c-accent-soft);
+  border-radius: 4px;
+  padding: 0 0.15em;
+}
+.caret { background: var(--c-accent); }
+.demo-editor :focus-visible, .page :focus-visible, .note-cta :focus-visible { outline-color: var(--c-accent); }
+
+/* Backlinks card: "N links to this note" with a bullet list, as shipped */
+.demo-back {
+  padding: 1.1rem 1.25rem 1.2rem;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--c-radius-md);
+  box-shadow: var(--c-shadow-lg);
+}
+.demo-back-for { font-family: var(--product-font); margin: 0 0 0.9rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--c-border); font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; color: var(--c-text); }
+.demo-count { margin: 0 0 0.6rem; font-size: 0.85rem; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--c-text-muted); }
+.demo-back ul { display: block; padding-left: 1.2rem; list-style: disc; }
+.demo-back li { margin: 0.35rem 0; padding-left: 0; font-size: 0.95rem; }
+.demo-back li::before { content: none; }
+.demo-back li::marker { color: var(--c-text-muted); }
+.demo-back a { color: var(--c-accent); text-decoration: none; }
+.demo-back a:hover { color: var(--c-accent-hover); text-decoration: underline; }
+.demo-back li[data-live] a { background: var(--c-accent-soft); border-radius: 4px; padding: 0 0.2em; margin-left: -0.2em; }
+
+/* Graph: notes drawn as the product's cards. Coral lines stay brand. */
+.node rect { fill: var(--c-bg); stroke: var(--c-border); stroke-width: 1; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
+.node text { fill: var(--c-text); font-family: var(--product-font); font-weight: 600; font-size: 24px; letter-spacing: -0.01em; }
+.graph-svg--tall .node text { font-size: 22px; }
+.node-dot { fill: var(--prod-blue); }
+.node:hover rect, .node:focus-visible rect { fill: #eef2ff; stroke: var(--prod-blue); }
+.node:hover text, .node:focus-visible text { fill: var(--c-text); }
+.node:hover .node-dot, .node:focus-visible .node-dot { fill: var(--c-accent); }
+.node:focus-visible rect { stroke: var(--vermilion); stroke-width: 3; }
+.pulse { fill: var(--coral-on-ink); }
+@keyframes flash { 0% { fill: #dfe7ff; } 100% { fill: #ffffff; } }
+
+/* Reading-view pages: the product's pane, a bold sans title and blue links */
+.page {
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--c-radius-md);
+  box-shadow: var(--c-shadow-md);
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+.page .label { margin: 0 0 0.4rem; font-size: 0.85rem; letter-spacing: 0; text-transform: none; font-weight: 400; color: var(--c-text-muted); }
+.page h3 { margin: 0 0 0.75rem; font-family: var(--product-font); font-weight: 700; font-size: clamp(1.7rem, 3vw, 2.2rem); letter-spacing: -0.025em; line-height: 1.2; }
+.page h3 a { color: var(--c-text); }
+.page h3 a:hover { color: var(--c-accent); text-decoration: none; }
+.page-body { font-size: 1.0625rem; line-height: 1.7; color: var(--c-text); }
+.page-body a.wikilink, .p-body a.wikilink {
+  color: var(--c-accent);
+  background: none;
+  border-bottom: 2px solid var(--prod-blue);
+  text-decoration: none;
+}
+.page-body a.wikilink:hover { background: var(--c-accent-soft); color: var(--c-accent-hover); }
+.page .from { margin: 1.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--c-border); font-size: 0.9rem; color: var(--c-text); }
+.page .from h4, .p-back h4 { margin: 0 0 0.6rem; font-size: 0.85rem; font-weight: 500; color: var(--c-text-muted); }
+.page .from ul, .p-back ul { margin: 0; padding-left: 1.2rem; }
+.page .from li, .p-back li { margin: 0.3rem 0; }
+.page .from a, .page .open a { color: var(--c-accent); text-decoration: none; }
+.page .from a:hover, .page .open a:hover { text-decoration: underline; }
+.page .open { margin-top: 1.25rem; font-size: 0.9rem; }
+
+/* Pane strip: a picture of the sliding panes, drawn at desktop proportions and
+   scaled down on narrow screens like a screenshot. Every length inside is in em,
+   and the em is derived from the container width (54em design width, 1rem at most),
+   so the strip never reflows. Below 1024px a real Commune wiki shows one note at
+   a time (SlidingPanes.astro, the max-width 1023px block), so the caption says so.
+   Copied values and their engine files:
+   - pane card, 0.75rem radius, 1px border, collapsed shadow, active shadow and the
+     accent border: SlidingPanes.astro (.pane, .pane:focus-within)
+   - pane padding 2rem 2.5rem 4rem 1.5rem: SlidingPanes.astro (.pane .body)
+   - collapsed slice 100px at 1440px: SlidingPanes.astro (--collapsed-visible-width)
+   - header padding 1rem 1.25rem, 1.15rem bold brand, 2.5rem theme button, search
+     button padding .5rem .8rem and kbd padding .2rem .4rem: Header.astro */
+.screen { container-type: inline-size; margin: clamp(2rem, 5vw, 3.5rem) 0 0; max-width: 54rem; }
+.screen-view {
+  --pw: 38em;
+  --slice: 6.25em;
+  font-size: min(1rem, calc(100cqw / 54));
+  overflow: hidden;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--c-radius-lg);
+  box-shadow: var(--c-shadow-xl);
+  color: var(--c-text);
+  font-family: var(--product-font);
+}
+.p-header { display: flex; align-items: center; justify-content: space-between; gap: 1em; padding: 1em 1.25em; background: var(--c-bg); border-bottom: 1px solid var(--c-border); box-shadow: var(--c-shadow-sm); }
+.p-brand { display: inline-flex; align-items: center; gap: 0.75em; font-weight: 700; font-size: 1.15em; letter-spacing: 0.3px; }
+.p-brand .mark { width: 2.2em; height: 2.2em; }
+.p-brand .mark-tile { fill: var(--vermilion); }
+.p-brand .mark-ring { stroke: var(--ink); }
+.p-brand .mark-node { fill: var(--ink); }
+.p-controls { display: inline-flex; align-items: center; gap: 0.75em; }
+.p-theme { display: grid; place-items: center; width: 2.5em; height: 2.5em; border: 1.5px solid var(--c-border); border-radius: var(--c-radius-md); background: var(--c-bg-soft); font-size: 1.2em; }
+.p-search { display: inline-flex; align-items: center; gap: 0.6em; height: 2.5em; padding: 0.5em 0.8em; box-sizing: border-box; border: 1.5px solid var(--c-border); border-radius: var(--c-radius-md); background: var(--c-bg-soft); color: var(--c-text-accent); font-size: 0.95em; }
+.p-search kbd { font-family: var(--product-font); font-size: 0.75em; padding: 0.2em 0.4em; border: 1px solid var(--c-border); border-radius: var(--c-radius-sm); background: var(--c-bg); color: var(--c-text-accent); }
+.p-strip { display: flex; align-items: flex-start; padding: 1.5em 0 1.5em 2em; height: 27em; background: var(--c-bg); }
+.p-pane {
+  position: relative;
+  flex: 0 0 var(--pw);
+  width: var(--pw);
+  height: 100%;
+  overflow: hidden;
+  padding: 2em 2.5em 1.5em 1.5em;
+  margin-right: calc(var(--pw) * -1 + var(--slice));
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: var(--c-radius-md);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+.p-pane.is-active { margin-right: 1.5em; border-color: var(--c-accent-border); box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2), 0 5px 15px rgba(0, 0, 0, 0.1); }
+.p-meta { margin: 0 0 0.4em; font-size: 0.85em; color: var(--c-text-muted); }
+.p-pane h3 { margin: 0 0 0.8em; font-size: 2em; font-weight: 700; letter-spacing: -0.025em; line-height: 1.2; }
+.p-body { font-size: 1em; line-height: 1.7; }
+.p-body p { margin: 0; }
+.p-back { margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--c-border); font-size: 0.9em; }
+.p-back h4 { font-size: 0.85em; }
+.p-back a { color: var(--c-accent); }
+.screen figcaption { margin: 1rem 0 0; max-width: 44rem; font-size: 0.9rem; color: var(--muted-on-paper); }
+
+/* Note pages: white product panes on the ink ground, a bold system title */
+.is-note .pane { border-radius: var(--c-radius-md); }
+.is-note .pane, .is-note .prose { color: var(--c-text); }
+.prose { font-family: var(--product-font); }
+.prose h1 { font-family: var(--product-font); font-weight: 700; font-size: clamp(1.9rem, 4vw, 2.4rem); line-height: 1.2; letter-spacing: -0.025em; }
+.prose a { color: var(--c-accent); }
+.prose a.wikilink { text-decoration: none; border-bottom: 2px solid var(--prod-blue); }
+.prose a.wikilink:hover { background: var(--c-accent-soft); color: var(--c-accent-hover); }
+.prose .backlinks h2, .prose .backlinks h3 { font-family: var(--product-font); font-weight: 500; font-size: 0.85rem; }
+.entry-meta { font-size: 0.85rem; letter-spacing: 0; text-transform: none; color: var(--c-text-muted); }
+@media (max-width: 1023px) {
+  .is-note #pane-container, body.is-note, html:has(body.is-note) { background: var(--c-bg); }
+}
+.note-cta { background: var(--c-bg-soft); border: 1px solid var(--c-border); border-radius: var(--c-radius-md); }
+.note-cta .note-cta-title { font-family: var(--font-display); }
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .p-pane { animation: slideIn linear both; animation-timeline: view(); animation-range: entry 10% entry 70%; }
+    .p-pane:nth-child(2) { animation-range: entry 20% entry 80%; }
+    .p-pane:nth-child(3) { animation-range: entry 30% entry 90%; }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(3rem); } to { opacity: 1; transform: none; } }
+  }
+}

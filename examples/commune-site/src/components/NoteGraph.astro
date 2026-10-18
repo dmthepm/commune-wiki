@@ -90,7 +90,7 @@ const rules = notes
       </g>
       {notes.map(n => (
         <a class={`node node--${n.id}`} href={`/notes/${n.id}/`} aria-label={`Open the note ${n.title}`}>
-          <rect x={v.pos[n.id][0]} y={v.pos[n.id][1]} width={v.w} height={H} rx="29" />
+          <rect x={v.pos[n.id][0]} y={v.pos[n.id][1]} width={v.w} height={H} rx="14" />
           <circle class="node-dot" cx={v.pos[n.id][0] + 29} cy={v.pos[n.id][1] + 29} r="6" />
           <text x={v.pos[n.id][0] + 50} y={v.pos[n.id][1] + 38}>{title(n.id)}</text>
         </a>

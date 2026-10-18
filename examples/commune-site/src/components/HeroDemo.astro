@@ -29,7 +29,6 @@ const countText = (n: number) => `${n} ${n === 1 ? 'link' : 'links'} to this not
 <figure class="demo" data-demo data-text={body} data-trigger={trigger} data-name={to.title} data-one={countText(backers.length - 1)} data-two={countText(backers.length)}>
   <div class="demo-editor">
     <div class="demo-bar">
-      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="demo-file">{FROM}.md</span>
       <button type="button" class="replay" hidden>Type it again</button>
     </div>
@@ -41,14 +40,15 @@ const countText = (n: number) => `${n} ${n === 1 ? 'link' : 'links'} to this not
   <div class="demo-graph">
     <NoteGraph live={{ from: FROM, to: TO }} caption={false} />
   </div>
-  <div class="demo-back">
-    <p class="demo-back-title"><span class="demo-count">{countText(backers.length)}</span> <span class="demo-back-for">{to.title}</span></p>
+  <aside class="demo-back" aria-label={`Backlinks for ${to.title}`}>
+    <p class="demo-back-for">{to.title}</p>
+    <h4 class="demo-count">{countText(backers.length)}</h4>
     <ul>
       {backers.map(b => (
         <li data-live={b.id === FROM ? '' : undefined}><a href={`/notes/${b.id}/`}>{b.title}</a></li>
       ))}
     </ul>
-  </div>
+  </aside>
   <p class="sr-only" role="status" data-status></p>
   <figcaption>The real note Writing in public, typed out as written. Its link to Small notes is the one that gives Small notes a second backlink. Select a note in the graph to open it.</figcaption>
 </figure>

@@ -63,11 +63,20 @@ const ogAlt = 'Commune. Your notes deserve a life beyond the folder. Three linke
         <a class="nav-demo" href="/notes/small-notes/">Demo</a>
         <a href={siteConfig.repo}>GitHub</a>
         {!home && (
-          <button type="button" onclick="window.dispatchEvent(new CustomEvent('commune:openSearch'))">Search <kbd>⌘K</kbd></button>
+          <button type="button" class="search-btn" aria-label="Search (⌘K)" onclick="window.dispatchEvent(new CustomEvent('commune:openSearch'))">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6.8" cy="6.8" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M10.3 10.3 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+            <span class="search-text">Search</span><kbd>⌘K</kbd>
+          </button>
         )}
       </nav>
     </header>
     <slot />
+    <script is:inline>
+      if (!/mac/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '')) {
+        document.querySelectorAll('.search-btn kbd').forEach(function (k) { k.textContent = 'Ctrl K'; });
+        document.querySelectorAll('.search-btn').forEach(function (b) { b.setAttribute('aria-label', 'Search (Ctrl K)'); });
+      }
+    </script>
     <script>
       const header = document.querySelector<HTMLElement>('.site-header');
       if (header) {
