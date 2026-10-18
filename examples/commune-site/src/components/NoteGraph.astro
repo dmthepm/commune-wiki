@@ -4,6 +4,9 @@ import { loadNoteLinks } from '../lib/note-links';
 // Nodes and edges come from the notes' own wikilinks, read at build time with
 // the same loader as the "Linked from" list. Only the placement is set by hand,
 // for the three sample notes. Any other note falls into a simple grid.
+interface Props { live?: { from: string; to: string }; caption?: boolean }
+const { live, caption = true } = Astro.props;
+const isLive = (from: string, to: string) => !!live && live.from === from && live.to === to;
 const notes = await loadNoteLinks();
 const H = 58;
 const known = {
@@ -80,8 +83,8 @@ const rules = notes
       <g class="edges" aria-hidden="true">
         {v.edges.map((e, i) => (
           <>
-            <path class={`edge edge--${e.from}--${e.to}`} d={e.d} pathLength="1" />
-            <circle class="pulse" r="4" style={`offset-path:path('${e.d}');animation-delay:-${((i * 1.7) % 5.5).toFixed(1)}s`} />
+            <path class={`edge edge--${e.from}--${e.to}${isLive(e.from, e.to) ? ' edge--live' : ''}`} d={e.d} pathLength="1" />
+            <circle class={`pulse${isLive(e.from, e.to) ? ' pulse--live' : ''}`} r="4" style={`offset-path:path('${e.d}');animation-delay:-${((i * 1.7) % 5.5).toFixed(1)}s`} />
           </>
         ))}
       </g>
@@ -94,6 +97,6 @@ const rules = notes
       ))}
     </svg>
   ))}
-  <figcaption>The sample notes on this site and the links written between them. Each line is a wikilink in the notes. Hover or focus a note to follow its links.</figcaption>
+  {caption && <figcaption>The sample notes on this site and the links written between them. Each line is a wikilink in the notes. Hover or focus a note to follow its links.</figcaption>}
   <style is:inline set:html={rules}></style>
 </figure>

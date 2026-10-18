@@ -1,0 +1,53 @@
+---
+import { readFile } from 'node:fs/promises';
+import NoteGraph from './NoteGraph.astro';
+import { loadNoteLinks } from '../lib/note-links';
+
+// The hero replays one real edit. In the Writing in public note, the link to
+// Small notes is the one that gives Small notes its second backlink. The text
+// is the note's own body, the links come from the notes, and the finished
+// state is plain HTML, so the page reads the same without script.
+const FROM = 'writing-in-public';
+const TO = 'small-notes';
+const notes = await loadNoteLinks();
+const from = notes.find(n => n.id === FROM);
+const to = notes.find(n => n.id === TO);
+if (!from || !to || !from.links.includes(TO)) throw new Error(`HeroDemo needs ${FROM} to link to ${TO}`);
+
+const raw = await readFile(`${process.cwd()}/src/content/notes/${FROM}.md`, 'utf8');
+const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim();
+const marker = `[[${to.title}]]`;
+const at = body.indexOf(marker);
+if (at < 0) throw new Error(`HeroDemo expects ${marker} in ${FROM}.md`);
+const trigger = at + marker.length;
+
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const finalHtml = esc(body).replace(/\[\[([^\]]+)\]\]/g, '<span class="wl">[[$1]]</span>');
+const backers = notes.filter(n => n.links.includes(TO));
+const countText = (n: number) => `${n} ${n === 1 ? 'link' : 'links'} to this note`;
+---
+<figure class="demo" data-demo data-text={body} data-trigger={trigger} data-one={countText(backers.length - 1)} data-two={countText(backers.length)}>
+  <div class="demo-editor">
+    <div class="demo-bar">
+      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="demo-file">{FROM}.md</span>
+      <button type="button" class="replay" hidden>Replay</button>
+    </div>
+    <div class="demo-type">
+      <p class="type-final" set:html={finalHtml} />
+      <p class="type-live" aria-hidden="true"></p>
+    </div>
+  </div>
+  <div class="demo-graph">
+    <NoteGraph live={{ from: FROM, to: TO }} caption={false} />
+  </div>
+  <div class="demo-back">
+    <p class="demo-back-title"><span class="demo-count" role="status">{countText(backers.length)}</span> <span class="demo-back-for">{to.title}</span></p>
+    <ul>
+      {backers.map(b => (
+        <li data-live={b.id === FROM ? '' : undefined}><a href={`/notes/${b.id}/`}>{b.title}</a></li>
+      ))}
+    </ul>
+  </div>
+  <figcaption>A replay of the real note Writing in public. Its link to Small notes is the one that gives Small notes a second backlink. Select a note in the graph to open it.</figcaption>
+</figure>
