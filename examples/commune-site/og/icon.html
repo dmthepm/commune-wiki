@@ -1,0 +1,25 @@
+<!doctype html>
+<!--
+  Source for public/apple-touch-icon.png (180x180, full bleed) and
+  public/favicon-32.png (32x32, rounded tile). Render at a matching viewport
+  with a transparent background. Pass ?size=180 or ?size=32.
+-->
+<html lang="en">
+<meta charset="utf-8" />
+<title>Commune icon</title>
+<style>
+  html, body { margin: 0; background: transparent; }
+  svg { display: block; }
+</style>
+<body>
+<script>
+  const size = Number(new URLSearchParams(location.search).get('size')) || 180;
+  const full = size >= 120;
+  document.body.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 32 32">
+    <rect width="32" height="32" rx="${full ? 0 : 7}" fill="${full ? '#f04425' : '#34192d'}" />
+    <path d="M19.6 9.6a7.6 7.6 0 1 0 0 12.8" fill="none" stroke="${full ? '#34192d' : '#f04425'}" stroke-width="3.2" stroke-linecap="round" />
+    <circle cx="23.6" cy="16" r="2.4" fill="${full ? '#34192d' : '#f7dce3'}" />
+  </svg>`;
+</script>
+</body>
+</html>

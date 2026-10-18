@@ -4,7 +4,7 @@ import { getEntry, render } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import { siteConfig } from '../site.config';
-import NoteGraph from '../components/NoteGraph.astro';
+import HeroDemo from '../components/HeroDemo.astro';
 import Mark from '../components/Mark.astro';
 import { loadNoteLinks } from '../lib/note-links';
 
@@ -58,7 +58,7 @@ const readme = `${siteConfig.repo}#readme`;
           <a class="button" href="/notes/small-notes/">Explore the demo</a>
         </p>
       </div>
-      <NoteGraph />
+      <HeroDemo />
       <ul class="facts" aria-label="Facts about Commune">
         <li>MIT licensed</li>
         <li>No account</li>
@@ -165,6 +165,58 @@ const readme = `${siteConfig.repo}#readme`;
         }
         setTimeout(() => { btn.textContent = 'Copy command'; }, 2000);
       });
+    }
+  </script>
+  <script>
+    // Types the hero note out. The page is already complete HTML, with the
+    // finished text kept in the accessibility tree. This only rewinds the
+    // visible copy and types it again, and it never runs when motion is reduced.
+    const demo = document.querySelector<HTMLElement>('[data-demo]');
+    if (demo && document.documentElement.classList.contains('anim')) {
+      const live = demo.querySelector<HTMLElement>('.type-live')!;
+      const count = demo.querySelector<HTMLElement>('.demo-count')!;
+      const status = demo.querySelector<HTMLElement>('[data-status]')!;
+      const again = demo.querySelector<HTMLButtonElement>('.replay')!;
+      const text = demo.dataset.text ?? '';
+      const trigger = Number(demo.dataset.trigger);
+      const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const draw = (n: number) => {
+        const html = esc(text.slice(0, n)).replace(/\[\[([^\]]+)\]\]/g, '<span class="wl">[[$1]]</span>');
+        live.innerHTML = `${html}<span class="caret"></span>`;
+      };
+      let timer = 0;
+      const play = (announce: boolean) => {
+        clearTimeout(timer);
+        demo.classList.remove('is-live', 'is-done');
+        demo.classList.add('is-ready');
+        again.hidden = false;
+        again.setAttribute('aria-disabled', 'true');
+        status.textContent = '';
+        count.textContent = demo.dataset.one ?? '';
+        let i = 0;
+        draw(0);
+        const tick = () => {
+          i += 1;
+          draw(i);
+          if (i === trigger) {
+            demo.classList.add('is-live');
+            count.textContent = demo.dataset.two ?? '';
+          }
+          if (i < text.length) {
+            timer = window.setTimeout(tick, text[i - 1] === ' ' ? 70 : 38);
+          } else {
+            demo.classList.add('is-done');
+            again.removeAttribute('aria-disabled');
+            // Announce once, and only after a person asks for another run.
+            if (announce) status.textContent = `${demo.dataset.name} now has ${demo.dataset.two}.`;
+          }
+        };
+        timer = window.setTimeout(tick, 900);
+      };
+      again.addEventListener('click', () => {
+        if (again.getAttribute('aria-disabled') !== 'true') play(true);
+      });
+      play(false);
     }
   </script>
 </Base>

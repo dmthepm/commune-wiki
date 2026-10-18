@@ -482,3 +482,85 @@ body.is-home { overflow-x: clip; }
   .actions .button { flex: 1 1 auto; text-align: center; padding: 0.65rem 0.9rem; font-size: 1rem; white-space: nowrap; }
   .graph { margin-top: 1.5rem; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Round 2: the hero replays a real edit                               */
+/* ------------------------------------------------------------------ */
+.demo { display: grid; gap: 1rem; margin: clamp(1.5rem, 4vw, 3rem) 0 0; grid-template-columns: minmax(0, 1fr); }
+.demo-editor { background: #fff4f6; color: var(--ink); border-top: 6px solid var(--vermilion); box-shadow: 8px 8px 0 var(--ink-soft); min-width: 0; }
+.demo-bar { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 1rem; border-bottom: 1px dashed var(--c-border-focus); min-height: 2.9rem; box-sizing: border-box; }
+.dots { display: inline-flex; gap: 5px; }
+.dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--paper-deep); border: 1px solid var(--c-border-focus); }
+.demo-file { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.8rem; color: var(--muted-on-paper); }
+.replay { margin-left: auto; font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--vermilion-ink); background: transparent; border: 1.5px solid var(--vermilion-ink); border-radius: 999px; padding: 0.15rem 0.8rem; cursor: pointer; }
+.replay[hidden] { display: none; }
+.replay[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.replay[aria-disabled="true"]:hover { background: transparent; color: var(--vermilion-ink); }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.replay:hover { background: var(--vermilion-ink); color: #fff4f6; }
+.demo-type { display: grid; padding: 1rem 1.25rem 1.25rem; }
+.type-final, .type-live { grid-area: 1 / 1; margin: 0; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.95rem; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.type-live { display: none; }
+.anim .type-final { opacity: 0; pointer-events: none; user-select: none; }
+.anim .type-live { display: block; }
+.demo .wl { color: var(--vermilion-ink); font-weight: 600; background: linear-gradient(transparent 62%, rgba(240, 68, 37, 0.3) 62%); }
+.caret { display: inline-block; width: 2px; height: 1.15em; margin-left: 1px; vertical-align: text-bottom; background: var(--vermilion-ink); animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+
+.demo-graph .graph { margin: 0; }
+.demo-back { padding: 1rem 1.25rem; background: var(--ink-soft); border: 1px solid var(--blush-line); min-width: 0; }
+.demo-back-title { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 1rem; margin: 0 0 0.6rem; }
+.demo-count { font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted-on-ink); }
+.demo-back-for { font-family: var(--font-display); font-size: 1.6rem; line-height: 1; color: var(--paper); }
+.demo-back ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.25rem; }
+.demo-back li { padding-left: 1.1rem; position: relative; }
+.demo-back li::before { content: ''; position: absolute; left: 0; top: 0.62em; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--vermilion); }
+.demo-back a { color: var(--paper); text-decoration-color: var(--vermilion); text-underline-offset: 0.2em; text-decoration-thickness: 2px; }
+.demo figcaption { margin: 0; max-width: 44rem; font-size: 0.9rem; color: var(--muted-on-ink); }
+
+@media (min-width: 900px) {
+  .demo { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.3fr); grid-template-areas: 'editor graph' 'back graph' 'cap cap'; align-items: start; column-gap: 2.5rem; }
+  .demo-editor { grid-area: editor; }
+  .demo-back { grid-area: back; }
+  .demo-graph { grid-area: graph; align-self: center; }
+  .demo figcaption { grid-area: cap; }
+}
+
+/* Before the replay starts, the live edge and its backlink wait. */
+.anim .demo .edge--live, .anim .demo .pulse--live { opacity: 0; }
+.anim .demo .edge--live { animation: none; stroke-dashoffset: 1; }
+.anim .demo li[data-live] { opacity: 0; transform: translateX(-10px); }
+.demo li[data-live] { transition: opacity 0.5s var(--ease-out) 0.35s, transform 0.5s var(--ease-out) 0.35s; }
+.anim .demo.is-live .edge--live { opacity: 1; animation: liveDraw 0.9s var(--ease-out) both; }
+.anim .demo.is-live .pulse--live { opacity: 1; }
+.anim .demo.is-live li[data-live] { opacity: 1; transform: none; }
+.anim .demo.is-live .node--small-notes rect { animation: flash 1.4s var(--ease-out); }
+@keyframes liveDraw { from { stroke-dashoffset: 1; stroke-width: 6; } to { stroke-dashoffset: 0; stroke-width: 2.5; } }
+@keyframes flash { 0% { fill: var(--vermilion); } 100% { fill: var(--ink-soft); } }
+
+/* Phone: the hero and its motion share the first screen */
+@media (max-width: 560px) {
+  .hero .kicker { display: none; }
+  .hero { padding-top: 1.25rem; }
+  .display { font-size: clamp(2.9rem, 12.4vw, 3.4rem); }
+  .lede { font-size: 1rem; }
+  .demo { margin-top: 1.25rem; gap: 0.75rem; }
+  .demo-bar { min-height: 2.5rem; padding: 0.4rem 0.85rem; }
+  .demo-type { padding: 0.75rem 1rem 0.9rem; }
+  .type-final, .type-live { font-size: 0.875rem; line-height: 1.6; }
+  .demo-editor { box-shadow: 5px 5px 0 var(--ink-soft); }
+}
+
+/* Footer: the wordmark at scale */
+.footer-giant { flex: 1 0 100%; display: flex; align-items: flex-end; gap: 0.04em; margin: 0 0 1.5rem; font-family: var(--font-display); font-size: min(23vw, 20rem); line-height: 0.78; letter-spacing: -0.03em; color: var(--ink-soft); overflow: hidden; user-select: none; }
+.footer-giant .mark { width: 0.62em; height: 0.62em; margin-bottom: 0.04em; }
+.footer-giant .mark-tile { fill: var(--vermilion); }
+.footer-giant .mark-ring { stroke: var(--ink); }
+.footer-giant .mark-node { fill: var(--ink); }
+
+/* The replay always uses the stacked layout, so the note names stay large. */
+.demo-graph .graph-svg--wide { display: none; }
+.demo-graph .graph-svg--tall { display: block; max-width: 34rem; }
+@media (min-width: 900px) { .demo-graph .graph-svg--tall { margin-inline: auto; } }
+.demo.is-done .caret { display: none; }
+@media (max-width: 480px) { .footer-giant { font-size: 17vw; } }

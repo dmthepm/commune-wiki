@@ -1,0 +1,55 @@
+<!doctype html>
+<!--
+  Source for public/og.png (1200x630), the share card.
+  Render it with any headless Chromium at a 1200x630 viewport, device scale 1.
+  It uses the same fonts as the site, from node_modules, so run npm install first.
+-->
+<html lang="en">
+<meta charset="utf-8" />
+<title>Commune share card</title>
+<style>
+  @font-face { font-family: 'Instrument Serif'; font-style: normal; src: url('../node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2') format('woff2'); }
+  @font-face { font-family: 'Instrument Serif'; font-style: italic; src: url('../node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff2') format('woff2'); }
+  @font-face { font-family: 'Instrument Sans'; font-weight: 400 700; src: url('../node_modules/@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2') format('woff2'); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    position: relative;
+    background: #34192d;
+    background-image: radial-gradient(circle at 1px 1px, rgba(247, 220, 227, 0.13) 1.5px, transparent 0);
+    background-size: 34px 34px;
+    color: #f7dce3;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+  }
+  .brand { position: absolute; left: 72px; top: 60px; display: flex; align-items: center; gap: 18px; font-family: 'Instrument Serif', serif; font-size: 46px; line-height: 1; }
+  .brand svg { width: 56px; height: 56px; }
+  h1 { position: absolute; left: 72px; top: 150px; width: 640px; margin: 0; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: 104px; line-height: 0.93; letter-spacing: -0.02em; }
+  h1 em { color: #f04425; }
+  .foot { position: absolute; left: 72px; bottom: 54px; right: 72px; display: flex; justify-content: space-between; align-items: center; font-size: 26px; }
+  .foot b { font-weight: 600; color: #f7dce3; }
+  .foot span { color: #e3b9c6; }
+  .graph { position: absolute; left: 700px; top: 110px; width: 460px; height: 420px; }
+  .graph path { fill: none; stroke: #f04425; stroke-width: 4; stroke-linecap: round; }
+  .pill { position: absolute; width: 310px; height: 70px; border-radius: 35px; background: #4a2a42; border: 2px solid rgba(247, 220, 227, 0.55); display: flex; align-items: center; gap: 18px; padding-left: 26px; font-family: 'Instrument Serif', serif; font-size: 38px; }
+  .pill i { width: 16px; height: 16px; border-radius: 50%; background: #f04425; }
+  .pill.hot { background: #f04425; border-color: #f04425; color: #24101f; }
+  .pill.hot i { background: #24101f; }
+</style>
+<body>
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#f04425" /><path d="M19.6 9.6a7.6 7.6 0 1 0 0 12.8" fill="none" stroke="#34192d" stroke-width="3.2" stroke-linecap="round" /><circle cx="23.6" cy="16" r="2.4" fill="#34192d" /></svg>
+    Commune
+  </div>
+  <h1>Your notes deserve a life <em>beyond the folder.</em></h1>
+  <svg class="graph" viewBox="0 0 460 420" aria-hidden="true">
+    <path d="M 90 182 C 90 90, 110 45, 152 45" />
+    <path d="M 235 78 C 230 130, 215 160, 205 184" />
+    <path d="M 440 72 C 458 150, 458 290, 440 345" />
+    <path d="M 152 375 C 60 370, 50 300, 85 248" />
+  </svg>
+  <div class="pill" style="left: 850px; top: 120px"><i></i>Useful links</div>
+  <div class="pill hot" style="left: 700px; top: 290px"><i></i>Small notes</div>
+  <div class="pill" style="left: 850px; top: 450px"><i></i>Writing in public</div>
+  <div class="foot"><b>commune.md</b><span>A personal wiki from markdown files. MIT.</span></div>
+</body>
+</html>

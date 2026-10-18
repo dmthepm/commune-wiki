@@ -3,9 +3,8 @@ import { siteConfig } from '../site.config';
 import Mark from './Mark.astro';
 ---
 <footer class="site-footer">
+  <p class="footer-giant" aria-hidden="true"><Mark size={120} /><span>{siteConfig.name}</span></p>
   <div class="footer-brand">
-    <Mark size={44} />
-    <p class="footer-name">{siteConfig.name}</p>
     <p>Open source. MIT. No account.</p>
   </div>
   <nav class="footer-links" aria-label="Footer">
