@@ -345,9 +345,6 @@ body.is-home { overflow-x: clip; }
 .graph figcaption { margin-top: 1rem; max-width: 40rem; font-size: 0.9rem; color: var(--muted-on-ink); }
 .edge { fill: none; stroke: var(--vermilion); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke 0.25s, stroke-width 0.25s; }
 .pulse { fill: var(--paper); offset-rotate: 0deg; animation: travel 5.5s linear infinite; }
-.pulse--b-a { animation-delay: -1.5s; }
-.pulse--b-c { animation-delay: -3s; }
-.pulse--c-a { animation-delay: -4.2s; animation-duration: 7s; }
 @keyframes travel { from { offset-distance: 0%; } to { offset-distance: 100%; } }
 .node rect { fill: var(--ink-soft); stroke: rgba(247, 220, 227, 0.55); stroke-width: 1.5; transition: fill 0.25s, stroke 0.25s; }
 .node text { fill: var(--paper); font-family: var(--font-display); font-size: 27px; }
