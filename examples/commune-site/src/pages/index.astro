@@ -6,6 +6,7 @@ import SiteFooter from '../components/SiteFooter.astro';
 import { siteConfig } from '../site.config';
 import NoteGraph from '../components/NoteGraph.astro';
 import Mark from '../components/Mark.astro';
+import { loadNoteLinks } from '../lib/note-links';
 
 // The two pages in the spread are real notes. The reading view comes from
 // the same renderer as the note routes, and the source is the file itself,
@@ -40,20 +41,9 @@ function highlight(src: string) {
     .join('\n');
 }
 
-// Backlinks for the spread, read from the same wikilinks the engine resolves.
-const all = await Promise.all(
-  ['small-notes', 'useful-links', 'writing-in-public'].map(async id => {
-    const entry = await getEntry('notes', id);
-    if (!entry) throw new Error(`Missing sample note: ${id}`);
-    const text = await readFile(`${process.cwd()}/src/content/notes/${id}.md`, 'utf8');
-    const targets = [...text.matchAll(/\[\[([^\]|#]+)/g)].map(m => m[1].trim().toLowerCase());
-    return { id, title: entry.data.title, targets };
-  }),
-);
-const linkedFrom = (id: string) => {
-  const me = all.find(n => n.id === id)!;
-  return all.filter(n => n.id !== id && n.targets.includes(me.title.toLowerCase()));
-};
+// Backlinks for the spread, read from the same wikilinks the graph uses.
+const all = await loadNoteLinks();
+const linkedFrom = (id: string) => all.filter(n => n.links.includes(id));
 const readme = `${siteConfig.repo}#readme`;
 ---
 <Base title="Your notes deserve a life beyond the folder." home>
@@ -121,7 +111,7 @@ const readme = `${siteConfig.repo}#readme`;
             <span class="step-n">2</span>
             <h3>Connect</h3>
             <p>Ask the graph what relates to a note.</p>
-            <code class="step-cmd">npx commune graph related src/content/notes/small-notes.md</code>
+            <code class="step-cmd">npx commune graph related src/content/notes/welcome.md</code>
           </li>
           <li>
             <span class="step-n">3</span>

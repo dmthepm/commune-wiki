@@ -1,57 +1,81 @@
 ---
-// The three sample notes and the links written between them. Drawn from the
-// same wikilinks the site resolves, so every line is a real link.
-const labels: Record<string, string> = {
-  'small-notes': 'Small notes',
-  'useful-links': 'Useful links',
-  'writing-in-public': 'Writing in public',
+import { loadNoteLinks } from '../lib/note-links';
+
+// Nodes and edges come from the notes' own wikilinks, read at build time with
+// the same loader as the "Linked from" list. Only the placement is set by hand,
+// for the three sample notes. Any other note falls into a simple grid.
+const notes = await loadNoteLinks();
+const H = 58;
+const known = {
+  wide: { 'small-notes': [50, 183], 'useful-links': [460, 53], 'writing-in-public': [870, 183] } as Record<string, number[]>,
+  tall: { 'small-notes': [10, 108], 'useful-links': [120, 6], 'writing-in-public': [120, 208] } as Record<string, number[]>,
 };
-const variants = [
-  {
-    key: 'wide',
-    box: '0 0 1200 300',
-    w: 280,
-    nodes: { 'small-notes': [50, 183], 'useful-links': [460, 53], 'writing-in-public': [870, 183] } as Record<string, number[]>,
-    edges: [
-      ['a-b', 'M 300 183 C 350 120, 390 86, 460 86'],
-      ['b-a', 'M 480 111 C 430 150, 400 168, 346 192'],
-      ['b-c', 'M 740 86 C 810 86, 850 120, 900 183'],
-      ['c-a', 'M 872 232 C 700 316, 500 316, 328 232'],
-    ],
-  },
-  {
-    key: 'tall',
-    box: '0 0 380 272',
-    w: 240,
-    nodes: { 'small-notes': [10, 108], 'useful-links': [120, 6], 'writing-in-public': [120, 208] } as Record<string, number[]>,
-    edges: [
-      ['a-b', 'M 52 114 C 52 60, 70 35, 126 35'],
-      ['b-a', 'M 176 62 C 176 80, 140 92, 110 112'],
-      ['b-c', 'M 340 62 C 380 110, 380 170, 340 212'],
-      ['c-a', 'M 126 237 C 30 237, 20 190, 52 160'],
-    ],
-  },
+const layouts = [
+  { key: 'wide' as const, w: 280, width: 1200, spare: (i: number) => [50 + (i % 3) * 410, 53 + Math.floor(i / 3) * 130] },
+  { key: 'tall' as const, w: 240, width: 380, spare: (i: number) => [i % 2 ? 120 : 10, 6 + i * 100] },
 ];
+const variants = layouts.map(l => {
+  let spareIndex = 0;
+  const pos: Record<string, number[]> = {};
+  for (const n of notes) pos[n.id] = known[l.key][n.id] ?? l.spare(3 + spareIndex++);
+  const centre = (id: string) => [pos[id][0] + l.w / 2, pos[id][1] + H / 2];
+  const edges = notes.flatMap(n =>
+    n.links.map(to => {
+      const [c1x, c1y] = centre(n.id);
+      const [c2x, c2y] = centre(to);
+      const dx = c2x - c1x;
+      const dy = c2y - c1y;
+      const bend = l.key === 'wide' ? -0.3 : -0.16;
+      // Opposite directions bulge to opposite sides, so a pair of notes that
+      // link to each other draws two lines.
+      const cx = (c1x + c2x) / 2 - dy * bend;
+      const cy = (c1y + c2y) / 2 + dx * bend;
+      // Start and end on each pill's edge, aimed between the curve and the other note.
+      const edgePoint = (px: number, py: number, qx: number, qy: number) => {
+        const vx = (cx + qx) / 2 - px;
+        const vy = (cy + qy) / 2 - py;
+        const t = Math.min(l.w / 2 / Math.abs(vx || 1e-6), H / 2 / Math.abs(vy || 1e-6));
+        return [px + vx * t, py + vy * t];
+      };
+      const [x1, y1] = edgePoint(c1x, c1y, c2x, c2y);
+      const [x2, y2] = edgePoint(c2x, c2y, c1x, c1y);
+      return { from: n.id, to, d: `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}` };
+    }),
+  );
+  const ys = Object.values(pos).map(p => p[1]);
+  const height = Math.max(...ys) + H + (l.key === "wide" ? 100 : 30);
+  return { ...l, pos, edges, box: `0 0 ${l.width} ${height}` };
+});
+const title = (id: string) => notes.find(n => n.id === id)!.title;
+// Hover or focus a note to light the links that touch it.
+const rules = notes
+  .map(n => {
+    const touching = notes.flatMap(m => m.links.map(to => [m.id, to])).filter(([a, b]) => a === n.id || b === n.id);
+    const sel = touching.map(([a, b]) => `.edge--${a}--${b}`).join(', ');
+    return sel ? `.graph:has(.node--${n.id}:hover) :is(${sel}), .graph:has(.node--${n.id}:focus-visible) :is(${sel}) { stroke: var(--vermilion); stroke-width: 4; }` : '';
+  })
+  .join('\n');
 ---
 <figure class="graph" data-graph>
   {variants.map(v => (
-    <svg class={`graph-svg graph-svg--${v.key}`} viewBox={v.box} role="group" aria-label="The three sample notes and the links between them">
+    <svg class={`graph-svg graph-svg--${v.key}`} viewBox={v.box} role="group" aria-label="The sample notes and the links between them">
       <g class="edges" aria-hidden="true">
-        {v.edges.map(([id, d]) => (
+        {v.edges.map(e => (
           <>
-            <path class={`edge edge--${id}`} d={d} pathLength="1" />
-            <circle class={`pulse pulse--${id}`} r="4" style={`offset-path:path('${d}')`} />
+            <path class={`edge edge--${e.from}--${e.to}`} d={e.d} pathLength="1" />
+            <circle class="pulse" r="4" style={`offset-path:path('${e.d}')`} />
           </>
         ))}
       </g>
-      {Object.entries(v.nodes).map(([id, [x, y]]) => (
-        <a class={`node node--${id}`} href={`/notes/${id}/`} aria-label={`Open the note ${labels[id]}`}>
-          <rect x={x} y={y} width={v.w} height="58" rx="29" />
-          <circle class="node-dot" cx={x + 29} cy={y + 29} r="6" />
-          <text x={x + 50} y={y + 38}>{labels[id]}</text>
+      {notes.map(n => (
+        <a class={`node node--${n.id}`} href={`/notes/${n.id}/`} aria-label={`Open the note ${n.title}`}>
+          <rect x={v.pos[n.id][0]} y={v.pos[n.id][1]} width={v.w} height={H} rx="29" />
+          <circle class="node-dot" cx={v.pos[n.id][0] + 29} cy={v.pos[n.id][1] + 29} r="6" />
+          <text x={v.pos[n.id][0] + 50} y={v.pos[n.id][1] + 38}>{title(n.id)}</text>
         </a>
       ))}
     </svg>
   ))}
-  <figcaption>The three sample notes on this site and the links written between them. Each line is a wikilink in the notes. Hover a note to follow its links.</figcaption>
+  <figcaption>The sample notes on this site and the links written between them. Each line is a wikilink in the notes. Hover or focus a note to follow its links.</figcaption>
+  <style is:inline set:html={rules}></style>
 </figure>

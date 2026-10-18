@@ -305,13 +305,15 @@ body.is-home { overflow-x: clip; }
 /* Overdrive: brand mark, link graph, annotated spread, steps, notes   */
 /* ------------------------------------------------------------------ */
 :root {
-  --coral-on-ink: #ff8f74; /* wikilinks on ink: 7.2:1 */
+  --coral-on-ink: #ff8f74; /* wikilinks on ink: 7.1:1 */
   --blush-line: rgba(247, 220, 227, 0.16);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@view-transition { navigation: auto; }
-.site-header { view-transition-name: site-header; }
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+  .site-header { view-transition-name: site-header; }
+}
 
 /* The mark */
 .mark { flex: none; display: block; transition: transform 0.4s var(--ease-out); }
@@ -469,3 +471,17 @@ body.is-home { overflow-x: clip; }
   .site-header button { padding: 0.3rem 0.65rem; }
 }
 @media (max-width: 899px) { .band-mark { top: 6%; right: -22%; transform: none; opacity: 0.12; } }
+
+/* Narrow phones: no horizontal scroll at 320 */
+@media (max-width: 380px) { .nav-demo { display: none; } }
+
+/* First screen on a phone: both calls to action on one row, graph higher up */
+@media (max-width: 560px) {
+  .hero { padding-top: 1.5rem; padding-bottom: 2rem; }
+  .kicker { margin-bottom: 0.9rem; }
+  .hero-foot { margin-top: 1.1rem; gap: 1.1rem; }
+  .lede { font-size: 1.05rem; line-height: 1.5; }
+  .actions { flex-wrap: wrap; gap: 0.6rem; width: 100%; }
+  .actions .button { flex: 1 1 auto; text-align: center; padding: 0.65rem 0.9rem; font-size: 1rem; white-space: nowrap; }
+  .graph { margin-top: 1.5rem; }
+}

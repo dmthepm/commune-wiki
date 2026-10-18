@@ -36,7 +36,7 @@ const canonical = new URL(Astro.url.pathname, siteConfig.url).href;
       <a class="site-brand" href="/" aria-label={`${siteConfig.name}, home`}><Mark size={30} /><span>{siteConfig.name}</span></a>
       <nav aria-label="Main navigation">
         <a class="nav-start" href="/#start">Start</a>
-        <a href="/notes/small-notes/">Demo</a>
+        <a class="nav-demo" href="/notes/small-notes/">Demo</a>
         <a href={siteConfig.repo}>GitHub</a>
         {!home && (
           <button type="button" onclick="window.dispatchEvent(new CustomEvent('commune:openSearch'))">Search <kbd>⌘K</kbd></button>
