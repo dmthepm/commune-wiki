@@ -19,9 +19,8 @@
 
 import { test, after, before, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { glob, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { glob, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { run } from './helpers.mjs';
@@ -46,7 +45,12 @@ describe('the rendered site', () => {
 		const manifest = require.resolve('astro/package.json');
 		const astro = path.join(path.dirname(manifest), require(manifest).bin.astro);
 
-		DIST = await mkdtemp(path.join(tmpdir(), 'commune-rendered-'));
+		// Inside `.astro/`, not the OS temp dir: Astro renames its prerendered
+		// assets from `.astro/.prerender/` into `outDir`, and a rename across
+		// devices fails with EXDEV, which it does on runners whose /tmp is a
+		// separate tmpfs (ubuntu-26.04, Oct 2026). `.astro/` is gitignored.
+		await mkdir(path.join(ROOT, '.astro'), { recursive: true });
+		DIST = await mkdtemp(path.join(ROOT, '.astro', 'rendered-'));
 		await run(process.execPath, [astro, 'build', '--outDir', DIST], {
 			cwd: ROOT,
 			maxBuffer: 16 * 1024 * 1024,
