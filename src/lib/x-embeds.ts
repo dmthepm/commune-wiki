@@ -306,13 +306,14 @@ export async function fetchSnapshot(
 	}
 }
 
-const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const IMAGE_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 /**
  * The extension for an image, read from its first bytes. A server's
  * content-type can be wrong, and the extension is what the dev server and the
- * built site serve the file as, so the bytes decide. Anything that is not
- * JPEG, PNG, WebP or GIF gets no extension and is not saved.
+ * built site serve the file as, so the bytes pick it. The header must still
+ * claim one of the four types for the body to be read at all. Anything that
+ * is not JPEG, PNG, WebP or GIF gets no extension and is not saved.
  */
 export function imageExtension(bytes: Uint8Array): string | undefined {
 	const ascii = (start: number, end: number) => String.fromCharCode(...bytes.subarray(start, end));
@@ -363,7 +364,7 @@ async function saveMedia(
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
 			// The header only screens out what is plainly not an image before the
 			// body is read; the bytes pick the extension.
-			if (!IMAGE_TYPES.has((response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase())) {
+			if (!IMAGE_CONTENT_TYPES.has((response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase())) {
 				throw new Error('not an image');
 			}
 			const buffer = await readCapped(response, MAX_IMAGE_BYTES);

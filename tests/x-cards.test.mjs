@@ -263,7 +263,7 @@ async function fetchWithImage(src, answer) {
 	return { outcome, seen, dir };
 }
 
-test('an image is saved with the extension of its exact type, and redirects are refused', async () => {
+test('a PNG is saved as .png, and redirects are refused', async () => {
 	const { outcome, seen } = await fetchWithImage('https://pbs.twimg.com/media/a', () => image('image/png; charset=x'));
 
 	assert.equal(outcome.snapshot.media[0].file, '55/1.png');
@@ -298,13 +298,18 @@ test('a non-image answer and a foreign host leave a text-only card', async () =>
 });
 
 test('an image over the size cap is refused, declared or streamed', async () => {
+	// Every body starts as a real image, so only the cap can refuse it.
 	const big = 10 * 1024 * 1024 + 1;
+	const small = await fetchWithImage('https://pbs.twimg.com/a', () => image('image/jpeg', PNG));
+	assert.equal(small.outcome.snapshot.media[0].file, '55/1.png');
+
 	const declared = await fetchWithImage('https://pbs.twimg.com/a', () =>
-		new Response('x', { status: 200, headers: { 'content-type': 'image/jpeg', 'content-length': String(big) } }));
+		new Response(PNG, { status: 200, headers: { 'content-type': 'image/jpeg', 'content-length': String(big) } }));
 	assert.equal(declared.outcome.snapshot.media[0].file, undefined);
 
-	const streamed = await fetchWithImage('https://pbs.twimg.com/a', () =>
-		image('image/jpeg', new Uint8Array(big)));
+	const body = new Uint8Array(big);
+	body.set(PNG);
+	const streamed = await fetchWithImage('https://pbs.twimg.com/a', () => image('image/jpeg', body));
 	assert.equal(streamed.outcome.snapshot.media[0].file, undefined);
 });
 
