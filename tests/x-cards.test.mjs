@@ -13,7 +13,8 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import commune from '../src/integration.ts';
 import { communeMarkdown } from '../src/markdown.ts';
 import {
 	fetchSnapshot,
@@ -344,4 +345,79 @@ test('a refetch that finds the post gone keeps the text and marks it removed', a
 
 	const onDisk = JSON.parse(await readFile(path.join(dir, '.commune/embeds/x/9.json'), 'utf8'));
 	assert.equal(onDisk.text, 'Original words');
+});
+
+// --- Copying images into the build -----------------------------------------
+
+/**
+ * Run a throwaway site through the integration's build hooks. `pages` is
+ * `{ 'index.html': '...' }` written into `dist/` first, standing in for what
+ * Astro rendered; `commune()` gets no options, as the one-switch design intends.
+ */
+async function buildWithPages(pages, snapshots = {}) {
+	const dir = await mkdtemp(path.join(tmpdir(), 'x-copy-'));
+	await mkdir(path.join(dir, 'src/content/notes'), { recursive: true });
+	await writeFile(path.join(dir, 'src/content/notes/A.md'), '---\ntitle: A\nvisibility: public\n---\n\nA.\n');
+	for (const [file, body] of Object.entries(snapshots)) {
+		await mkdir(path.dirname(path.join(dir, '.commune/embeds/x', file)), { recursive: true });
+		await writeFile(path.join(dir, '.commune/embeds/x', file), body);
+	}
+	for (const [file, body] of Object.entries(pages)) {
+		await mkdir(path.dirname(path.join(dir, 'dist', file)), { recursive: true });
+		await writeFile(path.join(dir, 'dist', file), body);
+	}
+	const messages = [];
+	const logger = { info: (m) => messages.push(m), warn() {}, error() {} };
+	const integration = commune();
+	await integration.hooks['astro:config:setup']({
+		config: { root: pathToFileURL(dir + '/'), publicDir: pathToFileURL(path.join(dir, 'public/')) },
+		logger,
+	});
+	await integration.hooks['astro:build:done']({ dir: pathToFileURL(path.join(dir, 'dist/')), logger });
+	return { dir, messages };
+}
+
+const listed = async (dir) => {
+	try {
+		return (await readdir(path.join(dir, 'dist/embeds'), { recursive: true })).sort();
+	} catch {
+		return [];
+	}
+};
+
+test('the images a built page uses are copied with only the markdown option set', async () => {
+	// The pipeline alone turns the cards on, as a real site's config does.
+	const html = await render(`Look: ${post(LIVE)}\n`, { x: true });
+	const src = /<img [^>]*src="(\/embeds\/x\/[^"]+)"/.exec(html)?.[1];
+	assert.ok(src, 'the card has an image');
+
+	const { dir, messages } = await buildWithPages(
+		{ 'notes/a/index.html': html },
+		{ [src.replace('/embeds/x/', '')]: 'IMAGE', 'unused/1.jpg': 'no' }
+	);
+	assert.equal(await readFile(path.join(dir, 'dist', src), 'utf8'), 'IMAGE');
+	assert.ok(messages.some((m) => /1 embedded post images/.test(m)));
+});
+
+test('a site with no card copies nothing, even with snapshots on disk', async () => {
+	const { dir, messages } = await buildWithPages(
+		{ 'index.html': '<p>Hello</p>' },
+		{ '1111111111111111111/1.jpg': 'IMAGE', '1111111111111111111.json': '{}' }
+	);
+	assert.deepEqual(await listed(dir), []);
+	assert.ok(!messages.some((m) => /embedded post images/.test(m)));
+});
+
+test('an unsafe or missing image path in a page is not copied and does not fail the build', async () => {
+	const pages = `
+		<img src="/embeds/x/../../x">
+		<img src="/embeds/x/abc/1.jpg">
+		<img src="/embeds/x/1111111111111111111/1.svg">
+		<img src="/embeds/x/1111111111111111111/../2.jpg">
+		<img src="/embeds/x/1111111111111111111/9.jpg">`;
+	const { dir } = await buildWithPages(
+		{ 'index.html': pages },
+		{ '1111111111111111111/1.svg': 'x', '2.jpg': 'x', 'abc/1.jpg': 'x' }
+	);
+	assert.deepEqual(await listed(dir), []);
 });
