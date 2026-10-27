@@ -96,12 +96,14 @@ test('a consumer project installs this package and builds a wiki with it', async
 	// output, including on a build that never happened.
 	await rm(DIST, { recursive: true, force: true });
 
-	// The lockfile is committed, and in CI (where pnpm defaults to
-	// `--frozen-lockfile`) this step is also the check that it is current: the
-	// fixture's lock records this package's own dependency and peer sets, so
-	// changing either here without regenerating it fails right there, which is
-	// the earliest anyone could be told.
-	await sh('pnpm', ['install']);
+	// The lockfile is committed, and this step is also the check that it is
+	// current: the fixture's lock records this package's own dependency and
+	// peer sets, so changing either here without regenerating it fails right
+	// there, which is the earliest anyone could be told. `--frozen-lockfile`
+	// is spelled out rather than left to CI's default: without it a local run
+	// rewrites the tracked lock whenever pnpm's format moves on, and the dirty
+	// tree then makes `install.test.mjs` skip itself (#184).
+	await sh('pnpm', ['install', '--frozen-lockfile']);
 	const { stdout: build, stderr: buildErr } = await sh('pnpm', ['build']);
 
 	assert.match(build, /4 total backlinks across 3 entries/, build);
