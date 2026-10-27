@@ -306,12 +306,22 @@ export async function fetchSnapshot(
 	}
 }
 
-const IMAGE_TYPES: Record<string, string> = {
-	'image/jpeg': 'jpg',
-	'image/png': 'png',
-	'image/webp': 'webp',
-	'image/gif': 'gif',
-};
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+/**
+ * The extension for an image, read from its first bytes. A server's
+ * content-type can be wrong, and the extension is what the dev server and the
+ * built site serve the file as, so the bytes decide. Anything that is not
+ * JPEG, PNG, WebP or GIF gets no extension and is not saved.
+ */
+export function imageExtension(bytes: Uint8Array): string | undefined {
+	const ascii = (start: number, end: number) => String.fromCharCode(...bytes.subarray(start, end));
+	if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg';
+	if (ascii(0, 8) === '\x89PNG\r\n\x1a\n') return 'png';
+	if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'webp';
+	if (ascii(0, 6) === 'GIF87a' || ascii(0, 6) === 'GIF89a') return 'gif';
+	return undefined;
+}
 
 /** The body of a response, refusing to hold more than `max` bytes. */
 async function readCapped(response: Response, max: number): Promise<Buffer> {
@@ -351,9 +361,14 @@ async function saveMedia(
 			// host check above cannot be walked around.
 			const response = await fetcher(source.href, { redirect: 'error' });
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-			const ext = IMAGE_TYPES[(response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()];
-			if (!ext) throw new Error('not an image');
+			// The header only screens out what is plainly not an image before the
+			// body is read; the bytes pick the extension.
+			if (!IMAGE_TYPES.has((response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase())) {
+				throw new Error('not an image');
+			}
 			const buffer = await readCapped(response, MAX_IMAGE_BYTES);
+			const ext = imageExtension(buffer);
+			if (!ext) throw new Error('not an image');
 			const file = `${id}/${n}.${ext}`;
 			await mkdir(path.join(root, SNAPSHOT_DIR, id), { recursive: true });
 			await writeFile(path.join(root, SNAPSHOT_DIR, file), buffer);
