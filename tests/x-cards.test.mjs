@@ -21,6 +21,7 @@ import {
 	findXStatusIds,
 	fromOembed,
 	fromSyndication,
+	imageExtension,
 	isSafeMediaFile,
 	parseXStatusUrl,
 } from '../src/lib/x-embeds.ts';
@@ -248,7 +249,8 @@ const synd = (src) => ({
 	text: 't', created_at: '2026-10-01T00:00:00.000Z', user: { name: 'N', screen_name: 'n' },
 	mediaDetails: [{ type: 'photo', media_url_https: src }],
 });
-const image = (type, body = 'x') => new Response(body, { status: 200, headers: { 'content-type': type } });
+const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+const image = (type, body = PNG) => new Response(body, { status: 200, headers: { 'content-type': type } });
 
 async function fetchWithImage(src, answer) {
 	const dir = await mkdtemp(path.join(tmpdir(), 'x-embeds-'));
@@ -261,11 +263,31 @@ async function fetchWithImage(src, answer) {
 	return { outcome, seen, dir };
 }
 
-test('an image is saved with the extension of its exact type, and redirects are refused', async () => {
+test('a PNG is saved as .png, and redirects are refused', async () => {
 	const { outcome, seen } = await fetchWithImage('https://pbs.twimg.com/media/a', () => image('image/png; charset=x'));
 
 	assert.equal(outcome.snapshot.media[0].file, '55/1.png');
 	assert.equal(seen[0].init.redirect, 'error');
+});
+
+test('the saved extension comes from the image bytes, not the content-type', async () => {
+	const { outcome } = await fetchWithImage('https://pbs.twimg.com/media/a', () => image('image/jpeg'));
+	assert.equal(outcome.snapshot.media[0].file, '55/1.png');
+
+	const html = await fetchWithImage('https://pbs.twimg.com/media/a', () => image('image/png', '<!doctype html><p>blocked</p>'));
+	assert.equal(html.outcome.snapshot.media[0].file, undefined);
+});
+
+test('each supported image format is recognised by its first bytes', () => {
+	const bytes = (...parts) => Uint8Array.from(parts.flatMap((p) => (typeof p === 'string' ? [...p].map((c) => c.charCodeAt(0)) : p)));
+	assert.equal(imageExtension(bytes([0xff, 0xd8, 0xff, 0xe0], 'JFIF')), 'jpg');
+	assert.equal(imageExtension(PNG), 'png');
+	assert.equal(imageExtension(bytes('RIFF', [1, 2, 3, 4], 'WEBPVP8 ')), 'webp');
+	assert.equal(imageExtension(bytes('GIF89a', [1, 0])), 'gif');
+	assert.equal(imageExtension(bytes('GIF87a', [1, 0])), 'gif');
+	assert.equal(imageExtension(bytes('RIFF', [1, 2, 3, 4], 'WAVEfmt ')), undefined);
+	assert.equal(imageExtension(bytes('<svg')), undefined);
+	assert.equal(imageExtension(new Uint8Array(0)), undefined);
 });
 
 test('a non-image answer and a foreign host leave a text-only card', async () => {
@@ -276,13 +298,18 @@ test('a non-image answer and a foreign host leave a text-only card', async () =>
 });
 
 test('an image over the size cap is refused, declared or streamed', async () => {
+	// Every body starts as a real image, so only the cap can refuse it.
 	const big = 10 * 1024 * 1024 + 1;
+	const small = await fetchWithImage('https://pbs.twimg.com/a', () => image('image/jpeg', PNG));
+	assert.equal(small.outcome.snapshot.media[0].file, '55/1.png');
+
 	const declared = await fetchWithImage('https://pbs.twimg.com/a', () =>
-		new Response('x', { status: 200, headers: { 'content-type': 'image/jpeg', 'content-length': String(big) } }));
+		new Response(PNG, { status: 200, headers: { 'content-type': 'image/jpeg', 'content-length': String(big) } }));
 	assert.equal(declared.outcome.snapshot.media[0].file, undefined);
 
-	const streamed = await fetchWithImage('https://pbs.twimg.com/a', () =>
-		image('image/jpeg', new Uint8Array(big)));
+	const body = new Uint8Array(big);
+	body.set(PNG);
+	const streamed = await fetchWithImage('https://pbs.twimg.com/a', () => image('image/jpeg', body));
 	assert.equal(streamed.outcome.snapshot.media[0].file, undefined);
 });
 
