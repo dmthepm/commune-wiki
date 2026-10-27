@@ -79,7 +79,8 @@
             if (link) {
               const star = document.createElement('span');
               star.className = 'star-indicator-inline';
-              star.textContent = ' ⭐';
+              // No-break space, so the star stays on the title's last line.
+              star.textContent = '\u00A0⭐';
               star.setAttribute('aria-label', 'Top 5% most linked - click to learn more');
               star.setAttribute('role', 'button');
               star.setAttribute('tabindex', '0');

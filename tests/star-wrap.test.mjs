@@ -1,0 +1,34 @@
+/**
+ * The star after a starred link must stay on the line of the link's last word.
+ *
+ * Line breaking is decided by the browser, so these tests pin the two source
+ * facts it depends on. Each star starts with a no-break space, and the star is
+ * a plain inline box. Chrome will break before an inline-block even after a
+ * no-break space, which left the star alone at the start of the next line.
+ * Nothing here forces the link onto one line, so a long title still wraps.
+ */
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const source = (name) => readFile(new URL(`../src/components/${name}`, import.meta.url), 'utf8');
+
+test('every inline star starts with a no-break space', async () => {
+	for (const name of ['StarredLinksScript.astro', 'BacklinksScript.astro']) {
+		const text = await source(name);
+		const stars = [...text.matchAll(/star\.textContent = '([^']*)'/g)].map((m) => m[1]);
+		assert.ok(stars.length > 0, `${name} sets no star text`);
+		for (const star of stars) assert.equal(star, '\\u00A0⭐', `${name} star text`);
+	}
+});
+
+test('the inline star is a plain inline box and nothing forces the link onto one line', async () => {
+	const text = await source('HeaderStarScript.astro');
+	const rule = text.match(/\.star-indicator-inline \{([^}]*)\}/)?.[1];
+	assert.ok(rule, 'no .star-indicator-inline rule');
+	assert.match(rule, /display:\s*inline;/);
+	for (const name of ['StarredLinksScript.astro', 'BacklinksScript.astro']) {
+		assert.doesNotMatch(await source(name), /whiteSpace|white-space/, `${name} sets white-space`);
+	}
+});
