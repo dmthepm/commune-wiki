@@ -5,7 +5,8 @@
  * It adds the `x-link` class (the icon) and, straight after the link, a hidden
  * static card built from the post's committed snapshot, tied to the link with
  * `aria-describedby`. Nothing here makes a request: no snapshot means the
- * link is left exactly as it was, and the missing post is warned about.
+ * link is left exactly as it was, and the missing or unreadable snapshot is
+ * warned about.
  *
  * The card is built out of hast text nodes only. Post text is someone else's
  * words, so it is never put anywhere it could be read as markup, and the only
@@ -13,6 +14,8 @@
  */
 
 import { createHash } from 'node:crypto';
+import { access } from 'node:fs/promises';
+import path from 'node:path';
 import { visit } from 'unist-util-visit';
 import type { Element, ElementContent, Root } from 'hast';
 import {
@@ -21,6 +24,7 @@ import {
 	isSafeMediaFile,
 	parseXStatusUrl,
 	readSnapshot,
+	snapshotPath,
 	type XSnapshot,
 } from './lib/x-embeds.ts';
 
@@ -30,6 +34,29 @@ export interface XCardsOptions {
 }
 
 const warned = new Set<string>();
+
+/**
+ * What to say about a post that gets no card. `readSnapshot` answers `null`
+ * both when there is no file and when the file is there but unusable (not
+ * JSON, or not the shape a card needs), and those want different advice: a
+ * missing post wants fetching, a broken file wants looking at, since it may
+ * be the only copy of a post that has since gone from X. `commune embeds
+ * fetch` replaces it only when X still has the post; for one that is gone it
+ * reports a failure and leaves the file alone, so fixing it by hand is the
+ * only way back to the captured text.
+ */
+async function missingSnapshotWarning(root: string, id: string): Promise<string> {
+	const file = snapshotPath(root, id);
+	try {
+		await access(file);
+	} catch {
+		return `x embeds: no snapshot for post ${id}; leaving a plain link. Run \`commune embeds fetch\`.`;
+	}
+	return (
+		`x embeds: the snapshot for post ${id} at ${path.relative(root, file)} is not valid JSON or not a snapshot; ` +
+		`leaving a plain link. Fix it by hand, or run \`commune embeds fetch\` to capture the post again if X still has it.`
+	);
+}
 
 function el(tagName: string, className: string, children: ElementContent[], properties: Element['properties'] = {}): Element {
 	return { type: 'element', tagName, properties: { className: [className], ...properties }, children };
@@ -146,7 +173,7 @@ export default function rehypeXCards({ root = process.cwd() }: XCardsOptions = {
 			if (!snapshot) {
 				if (!warned.has(id)) {
 					warned.add(id);
-					console.warn(`x embeds: no snapshot for post ${id}; leaving a plain link. Run \`commune embeds fetch\`.`);
+					console.warn(await missingSnapshotWarning(root, id));
 				}
 				continue;
 			}

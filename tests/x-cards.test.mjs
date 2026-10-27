@@ -458,3 +458,31 @@ test('the deprecated integration option changes nothing', async () => {
 	assert.deepEqual(await listed(old.dir), await listed(plain.dir));
 	assert.equal(await readFile(path.join(old.dir, 'dist/embeds/x/1111111111111111111/1.png'), 'utf8'), 'IMAGE');
 });
+
+test('a broken snapshot file is warned about as broken, not as missing', async () => {
+	const dir = await mkdtemp(path.join(tmpdir(), 'x-embeds-'));
+	await mkdir(path.join(dir, '.commune/embeds/x'), { recursive: true });
+	await writeFile(path.join(dir, '.commune/embeds/x/4401.json'), '{ not json');
+	await writeFile(path.join(dir, '.commune/embeds/x/4402.json'), JSON.stringify({ ...good, id: '4402', source: 'other' }));
+	const renderer = await communeMarkdown({ site: SITE, root: dir, embeds: { x: true } }).createRenderer({});
+
+	const warnings = [];
+	const original = console.warn;
+	console.warn = (message) => warnings.push(String(message));
+	try {
+		for (const id of ['4401', '4402', '4403']) {
+			const html = (await renderer.render(post(id), { frontmatter: {} })).code;
+			assert.doesNotMatch(html, /x-card|x-link/);
+		}
+	} finally {
+		console.warn = original;
+	}
+
+	// Ids 4401 and 4402 have a file that is no use; 4403 has none.
+	assert.equal(warnings.length, 3, warnings.join('\n'));
+	for (const [i, id] of ['4401', '4402'].entries()) {
+		assert.match(warnings[i], new RegExp(`snapshot for post ${id} at \\.commune/embeds/x/${id}\\.json is not valid JSON or not a snapshot`));
+		assert.match(warnings[i], /Fix it by hand/);
+	}
+	assert.match(warnings[2], /no snapshot for post 4403; leaving a plain link\. Run `commune embeds fetch`\./);
+});
