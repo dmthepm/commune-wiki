@@ -10,7 +10,7 @@
  */
 
 import type { AstroIntegration } from 'astro';
-import { access, copyFile, readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
+import { access, copyFile, lstat, readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -195,6 +195,21 @@ async function htmlFiles(dir: string): Promise<string[]> {
 }
 
 /**
+ * Whether `file` (already vetted by `isSafeMediaFile`) is a regular file in a
+ * real folder under `base`. A symlink at either level could point anywhere on
+ * the machine, and following it would publish whatever it names.
+ */
+async function isPlainSnapshotFile(base: string, file: string): Promise<boolean> {
+	try {
+		const folder = await lstat(path.join(base, file.split('/')[0]));
+		const image = await lstat(path.join(base, file));
+		return folder.isDirectory() && image.isFile();
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Copy the snapshot images the built pages use into the build, at
  * `/embeds/x/<id>/<n>.<ext>`.
  *
@@ -208,8 +223,18 @@ async function htmlFiles(dir: string): Promise<string[]> {
  */
 async function copyXImages(root: string, outDir: string): Promise<number> {
 	const base = path.join(root, SNAPSHOT_DIR);
+	// A site that never captured a post reads no HTML at all.
+	try {
+		await lstat(base);
+	} catch {
+		return 0;
+	}
 	const wanted = new Set<string>();
 	const marker = `${PUBLIC_PREFIX}/`;
+	// Deliberately loose. This can also match `data-src=` or quoted markup in a
+	// code block, which is harmless: every match goes back through
+	// `isSafeMediaFile`, and all it can cause is a copy of an image that already
+	// exists in the snapshot folder.
 	const pattern = /\bsrc=["']?\/embeds\/x\/([^"'\s>]+)/g;
 	for (const page of await htmlFiles(outDir)) {
 		const html = await readFile(page, 'utf8');
@@ -225,18 +250,18 @@ async function copyXImages(root: string, outDir: string): Promise<number> {
 		const destination = path.join(outDir, PUBLIC_PREFIX, file);
 		try {
 			// Checked before the folder is made, so a missing image leaves no empty one.
-			await access(path.join(base, file));
+			if (!(await isPlainSnapshotFile(base, file))) continue;
 			await mkdir(path.dirname(destination), { recursive: true });
 			await copyFile(path.join(base, file), destination);
 			copied += 1;
 		} catch {
-			// Not on disk. Nothing to copy.
+			// Vanished between the check and the copy. Nothing to copy.
 		}
 	}
 	return copied;
 }
 
-export default function commune(options: CommuneOptions = {}): AstroIntegration {
+export default function commune(_options: CommuneOptions = {}): AstroIntegration {
 	// `astro:build:done` is not handed the resolved config, so the two paths
 	// the graph needs are captured in `astro:config:setup` — which Astro always
 	// runs first — and closed over. Per-instance rather than module-level: one
@@ -284,7 +309,9 @@ export default function commune(options: CommuneOptions = {}): AstroIntegration 
 						const file = pathname.slice(PUBLIC_PREFIX.length + 1);
 						const id = file.split('/')[0];
 						if (!isSafeMediaFile(file, id)) return next();
-						return readFile(path.join(root, SNAPSHOT_DIR, file)).then(
+						return isPlainSnapshotFile(path.join(root, SNAPSHOT_DIR), file)
+							.then((plain) => (plain ? readFile(path.join(root, SNAPSHOT_DIR, file)) : Promise.reject(new Error('not a plain file'))))
+							.then(
 							(image) => {
 								response.setHeader('Content-Type', mimeOf(file));
 								response.end(request.method === 'HEAD' ? undefined : image);

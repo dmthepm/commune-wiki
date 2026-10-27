@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -354,7 +354,7 @@ test('a refetch that finds the post gone keeps the text and marks it removed', a
  * `{ 'index.html': '...' }` written into `dist/` first, standing in for what
  * Astro rendered; `commune()` gets no options, as the one-switch design intends.
  */
-async function buildWithPages(pages, snapshots = {}) {
+async function buildWithPages(pages, snapshots = {}, { options, setup } = {}) {
 	const dir = await mkdtemp(path.join(tmpdir(), 'x-copy-'));
 	await mkdir(path.join(dir, 'src/content/notes'), { recursive: true });
 	await writeFile(path.join(dir, 'src/content/notes/A.md'), '---\ntitle: A\nvisibility: public\n---\n\nA.\n');
@@ -368,7 +368,8 @@ async function buildWithPages(pages, snapshots = {}) {
 	}
 	const messages = [];
 	const logger = { info: (m) => messages.push(m), warn() {}, error() {} };
-	const integration = commune();
+	if (setup) await setup(dir);
+	const integration = commune(options);
 	await integration.hooks['astro:config:setup']({
 		config: { root: pathToFileURL(dir + '/'), publicDir: pathToFileURL(path.join(dir, 'public/')) },
 		logger,
@@ -420,4 +421,40 @@ test('an unsafe or missing image path in a page is not copied and does not fail 
 		{ '1111111111111111111/1.svg': 'x', '2.jpg': 'x', 'abc/1.jpg': 'x' }
 	);
 	assert.deepEqual(await listed(dir), []);
+});
+
+test('a symlinked image or folder in the snapshots is never published', async (t) => {
+	const page = '<img src="/embeds/x/1111111111111111111/1.png"><img src="/embeds/x/2222222222222222222/1.png">';
+	let outcome;
+	try {
+		outcome = await buildWithPages({ 'index.html': page }, { '1111111111111111111/0.png': 'x' }, {
+			setup: async (dir) => {
+				const secret = path.join(dir, 'secret.txt');
+				await writeFile(secret, 'SECRET');
+				await symlink(secret, path.join(dir, '.commune/embeds/x/1111111111111111111/1.png'));
+				await mkdir(path.join(dir, 'elsewhere'));
+				await writeFile(path.join(dir, 'elsewhere/1.png'), 'SECRET');
+				await symlink(path.join(dir, 'elsewhere'), path.join(dir, '.commune/embeds/x/2222222222222222222'));
+			},
+		});
+	} catch (error) {
+		if (error?.syscall === 'symlink') return t.skip('this platform cannot create symlinks');
+		throw error;
+	}
+	assert.deepEqual(await listed(outcome.dir), []);
+});
+
+test('a site with no snapshot folder reads no HTML', async () => {
+	// A page directory that cannot be read would throw if the walk began.
+	const { dir } = await buildWithPages({ 'index.html': '<img src="/embeds/x/1111111111111111111/1.png">' });
+	assert.deepEqual(await listed(dir), []);
+});
+
+test('the deprecated integration option changes nothing', async () => {
+	const pages = { 'index.html': '<img src="/embeds/x/1111111111111111111/1.png">' };
+	const snapshots = { '1111111111111111111/1.png': 'IMAGE' };
+	const plain = await buildWithPages(pages, snapshots);
+	const old = await buildWithPages(pages, snapshots, { options: { embeds: { x: true } } });
+	assert.deepEqual(await listed(old.dir), await listed(plain.dir));
+	assert.equal(await readFile(path.join(old.dir, 'dist/embeds/x/1111111111111111111/1.png'), 'utf8'), 'IMAGE');
 });
