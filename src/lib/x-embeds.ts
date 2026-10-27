@@ -160,6 +160,9 @@ function decodeEntities(value: string): string {
 }
 
 /** Syndication JSON to a snapshot, or null when the payload has no post in it. */
+/** Syndication cuts long posts at about 280 UTF-16 units; live ones came back at 269 to 315. */
+const NOTE_CUT_MIN = 250;
+
 export function fromSyndication(
 	id: string,
 	data: any,
@@ -172,7 +175,8 @@ export function fromSyndication(
 	// `display_text_range` is the part X shows: it leaves out a reply's leading
 	// @mentions and a trailing media link. Its offsets are UTF-16 units over
 	// the text as sent, so they are applied first, with String#slice. A range
-	// that does not fit is ignored.
+	// that does not fit is ignored. (The `indices` on entities are code points,
+	// not UTF-16, which is one reason entities are matched by URL below.)
 	const range = data.display_text_range;
 	if (
 		Array.isArray(range) &&
@@ -195,8 +199,10 @@ export function fromSyndication(
 	text = decodeEntities(text).replace(/[ \t]+\n/g, '\n').trim();
 	// A long post comes back cut at about 280 characters, with only the id of
 	// its full text. Mark the cut, so the card does not end mid-sentence as if
-	// that were all; "Open on X" has the rest.
-	if (data.note_tweet && text) text += '…';
+	// that were all; "Open on X" has the rest. A short post can carry
+	// `note_tweet` too (for formatting), and arrives whole, so only text near
+	// the limit is marked.
+	if (data.note_tweet && data.text.length >= NOTE_CUT_MIN && text && !text.endsWith('…')) text += '…';
 
 	// `sources` runs parallel to `media`: where to download each image from.
 	// It is not part of the snapshot, so it can never reach the committed JSON.

@@ -323,14 +323,29 @@ test('a reply drops the leading @mentions X does not show', () => {
 });
 
 test('a long post, which syndication cuts short, is marked as cut', () => {
-	const text = 'The first part of a long post that X cut here';
-	assert.equal(syndText({ text, display_text_range: [0, 45], note_tweet: { id: 'x' } }), `${text}…`);
-	assert.equal(syndText({ text, display_text_range: [0, 45] }), text);
+	const text = 'The first part of a long post that X cut here. '.repeat(6).trim();
+	const range = [0, text.length];
+	assert.equal(syndText({ text, display_text_range: range, note_tweet: { id: 'x' } }), `${text}…`);
+	assert.equal(syndText({ text, display_text_range: range }), text);
+	// A short post can carry note_tweet and is whole; one ending in … is not marked twice.
+	assert.equal(syndText({ text: 'Short and **formatted**', note_tweet: { id: 'x' } }), 'Short and **formatted**');
+	assert.equal(syndText({ text: `${text}…`, note_tweet: { id: 'x' } }), `${text}…`);
 });
 
 test('the range counts UTF-16 units over the text as sent', () => {
-	// 𝕏 is two UTF-16 units, and &amp; is counted as five characters, as sent.
-	assert.equal(syndText({ text: '@a 𝕏 &amp; me https://t.co/z', display_text_range: [3, 14] }), '𝕏 & me');
+	// Each 𝕏 is two UTF-16 units, so code points would end two characters late.
+	assert.equal(syndText({ text: '@a 𝕏𝕏 ok https://t.co/z', display_text_range: [3, 10] }), '𝕏𝕏 ok');
+	// &amp; counts as five characters, as sent, not as the one it decodes to.
+	assert.equal(syndText({ text: '@a x &amp; me https://t.co/z', display_text_range: [3, 13] }), 'x & me');
+});
+
+test('a reply with an expanded link and a trailing media link', () => {
+	const text = '@a see https://t.co/aaa for more https://t.co/mmm';
+	assert.equal(syndText({
+		text,
+		display_text_range: [3, 32],
+		entities: { urls: [{ url: 'https://t.co/aaa', display_url: 'example.com/x' }], media: [{ url: 'https://t.co/mmm' }] },
+	}), 'see example.com/x for more');
 });
 
 test('a range that does not fit the text is ignored', () => {
