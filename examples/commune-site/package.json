@@ -15,7 +15,7 @@
     "check": "commune check"
   },
   "dependencies": {
-    "@dmthepm/commune": "0.14.3",
+    "@dmthepm/commune": "0.14.4",
     "@astrojs/markdown-remark": "^7.3.0",
     "@fontsource-variable/instrument-sans": "5.3.0",
     "@fontsource/instrument-serif": "5.3.0",
