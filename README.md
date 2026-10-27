@@ -365,7 +365,7 @@ Exit codes report whether the command finished, never what it found — `0` fini
 
 ## X post cards
 
-A link to a post on X (`x.com` or `twitter.com`, `/<user>/status/<id>`) can show a card on hover or focus: the author, the text, the date, any images and an "Open on X" link. It is off by default, and with it off your site builds exactly as before. There is no new markdown syntax, so any bare or markdown link to a post gets the card.
+A link to a post on X (`x.com` or `twitter.com`, `/<user>/status/<id>`) can show a card on hover or focus: the author, the text, the date, any images and an "Open on X" link. It is off by default. With it off your content builds byte-identical to before; the page still carries the card script and styles of `SlidingPanes`, which do nothing without a card. There is no new markdown syntax, so any bare or markdown link to a post gets the card.
 
 Turn it on in both places that take options, so the pipeline builds the cards and the integration copies their images into the build:
 

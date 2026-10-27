@@ -26,7 +26,7 @@ import {
 	type SiteSummary,
 } from './lib/graph.ts';
 import { findMarkdownTwin } from './lib/markdown-twin.ts';
-import { PUBLIC_PREFIX, SNAPSHOT_DIR, isSafeMediaFile } from './lib/x-embeds.ts';
+import { PUBLIC_PREFIX, SNAPSHOT_DIR, isSafeMediaFile, readSnapshot } from './lib/x-embeds.ts';
 
 function buildBacklinksGraph(
 	entries: ContentEntry[],
@@ -186,27 +186,34 @@ export interface CommuneOptions {
 }
 
 /**
- * Copy the images of every snapshot into the build, at `/embeds/x/<id>/<n>.<ext>`.
+ * Copy the images the snapshots refer to into the build, at `/embeds/x/<id>/<n>.<ext>`.
  *
- * Only files the card renderer would link to are copied; anything else in the
- * folder stays out of the site.
+ * A file in a snapshot's folder that no snapshot names (left behind when a
+ * post's media changed) is not copied, so the site serves what the cards use.
  */
 async function copyXImages(root: string, outDir: string): Promise<number> {
 	const base = path.join(root, SNAPSHOT_DIR);
-	let copied = 0;
-	let ids: string[];
+	let names: string[];
 	try {
-		ids = (await readdir(base, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
+		names = await readdir(base);
 	} catch {
 		return 0;
 	}
-	for (const id of ids) {
-		for (const name of await readdir(path.join(base, id))) {
-			if (!isSafeMediaFile(`${id}/${name}`, id)) continue;
-			const destination = path.join(outDir, PUBLIC_PREFIX, id, name);
+	let copied = 0;
+	for (const name of names.filter((n) => /^\d{1,25}\.json$/.test(n))) {
+		const id = name.slice(0, -5);
+		const snapshot = await readSnapshot(root, id);
+		for (const item of snapshot?.media ?? []) {
+			if (!item.file || !isSafeMediaFile(item.file, id)) continue;
+			const destination = path.join(outDir, PUBLIC_PREFIX, item.file);
 			await mkdir(path.dirname(destination), { recursive: true });
-			await copyFile(path.join(base, id, name), destination);
-			copied += 1;
+			try {
+				await copyFile(path.join(base, item.file), destination);
+				copied += 1;
+			} catch {
+				// A snapshot naming an image that is not on disk is a card without
+				// one, not a failed build.
+			}
 		}
 	}
 	return copied;

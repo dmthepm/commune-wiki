@@ -23,7 +23,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 interface Row {
 	id: string;
-	result: 'saved' | 'removed' | 'failed' | 'fresh';
+	result: 'saved' | 'removed' | 'failed' | 'fresh' | 'removed (kept)';
 	detail?: string;
 }
 
@@ -43,7 +43,7 @@ export async function embedsFetchCommand(
 		// A removed post is not asked about again unless someone asks for all.
 		const skip = existing && !options.refresh && (existing.removedAt || age < options.staleDays * DAY);
 		if (skip) {
-			rows.push({ id, result: 'fresh' });
+			rows.push({ id, result: existing.removedAt ? 'removed (kept)' : 'fresh' });
 			continue;
 		}
 		const outcome: FetchOutcome = await fetchSnapshot(root, id, fetcher, now);

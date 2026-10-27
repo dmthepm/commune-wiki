@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,7 @@ import {
 	findXStatusIds,
 	fromOembed,
 	fromSyndication,
+	isSafeMediaFile,
 	parseXStatusUrl,
 } from '../src/lib/x-embeds.ts';
 
@@ -47,7 +48,6 @@ test('other X URLs, other hosts and lookalikes are not posts', () => {
 	for (const href of [
 		'https://x.com/example',
 		'https://x.com/example/status/abc',
-		'https://x.com/example/status/123/photo/1',
 		'https://x.com/i/status/123?x=1#y',
 		'https://evilx.com/example/status/123',
 		'https://x.com.evil.example/example/status/123',
@@ -61,6 +61,18 @@ test('other X URLs, other hosts and lookalikes are not posts', () => {
 		else assert.equal(result, null, href);
 	}
 	assert.deepEqual(findXStatusIds(`${post('1')} and https://twitter.com/a/status/2 and https://x.com/a`), ['1', '2']);
+});
+
+test('the link scan and the card agree on what a post link is', () => {
+	for (const [href, id] of [
+		['https://x.com/i/web/status/77', '77'],
+		['https://x.com/example/status/78/photo/1', '78'],
+		['https://x.com/example/status/79/video/1', '79'],
+	]) {
+		assert.equal(parseXStatusUrl(href)?.id, id, href);
+		assert.deepEqual(findXStatusIds(href), [id], href);
+	}
+	assert.equal(parseXStatusUrl('https://x.com/example/status/80/analytics'), null);
 });
 
 test('with the option off the output is the same as a pipeline that never heard of it', async () => {
@@ -127,7 +139,7 @@ test('a post with no snapshot stays a plain link', async () => {
 const json = (status, body) => new Response(JSON.stringify(body), { status });
 
 test('syndication JSON becomes a snapshot with links expanded and media links removed', () => {
-	const snapshot = fromSyndication('5', {
+	const { snapshot, sources } = fromSyndication('5', {
 		text: 'Hello &amp; welcome https://t.co/aaa https://t.co/bbb',
 		created_at: '2026-10-01T00:00:00.000Z',
 		user: { name: 'N', screen_name: 'n' },
@@ -141,6 +153,136 @@ test('syndication JSON becomes a snapshot with links expanded and media links re
 	assert.equal(snapshot.text, 'Hello & welcome example.com/x');
 	assert.equal(snapshot.author.handle, 'n');
 	assert.equal(snapshot.media.length, 1);
+	assert.deepEqual(sources, ['https://pbs.twimg.com/media/a.jpg']);
+	assert.equal(JSON.stringify(snapshot).includes('pbs.twimg.com'), false);
+});
+
+test('a syndication handle that is not a handle is refused', () => {
+	assert.equal(fromSyndication('5', { text: 't', user: { name: 'N', screen_name: '../x' } }, 'now'), null);
+});
+
+test('the live x.com oEmbed payload gives a handle and a working URL', async () => {
+	const data = JSON.parse(await readFile(path.join(ROOT, 'oembed-x-com.json'), 'utf8'));
+	const snapshot = fromOembed('20', data, '2026-10-26T00:00:00.000Z');
+
+	assert.equal(snapshot.author.handle, 'jack');
+	assert.equal(snapshot.url, 'https://x.com/jack/status/20');
+	assert.equal(snapshot.text, 'just setting up my twttr');
+	assert.equal(snapshot.createdAt, '2006-03-21');
+});
+
+test('an oEmbed payload with no usable handle falls back, never to an empty one', () => {
+	const data = { author_name: 'N', author_url: 'https://x.com/', html: '<blockquote><p>t</p>&mdash; N <a href="x">March 21, 2006</a></blockquote>' };
+
+	assert.equal(fromOembed('20', data, 'now', 'kept').author.handle, 'kept');
+	const bare = fromOembed('20', data, 'now');
+	assert.equal(bare.author.handle, '');
+	assert.equal(bare.url, 'https://x.com/i/status/20');
+});
+
+test('media file names are checked as digits and plain names, with no pattern built from the id', () => {
+	assert.equal(isSafeMediaFile('12/1.jpg', '12'), true);
+	assert.equal(isSafeMediaFile('12/1.svg', '12'), false);
+	assert.equal(isSafeMediaFile('12/a/b/1.jpg', '12'), false);
+	assert.equal(isSafeMediaFile('(a+)+b/1.jpg', '(a+)+b'), false);
+	assert.equal(isSafeMediaFile('./1.jpg', '.*'), false);
+	assert.equal(isSafeMediaFile('12/1.jpg', '13'), false);
+});
+
+test('a post link inside a heading keeps the heading id and gets no card', async () => {
+	const withCard = await render(`## Heading with ${post(LIVE)}\n`, { x: true });
+	const without = await render(`## Heading with ${post(LIVE)}\n`, undefined);
+
+	const id = (html) => /<h2 id="([^"]*)"/.exec(html)?.[1];
+	assert.ok(id(without));
+	assert.equal(id(withCard), id(without));
+	assert.doesNotMatch(withCard, /x-card"/);
+	assert.match(withCard, /class="x-link"/);
+});
+
+// --- hostile snapshots -----------------------------------------------------
+
+async function renderWithSnapshot(snapshot) {
+	const dir = await mkdtemp(path.join(tmpdir(), 'x-embeds-'));
+	await mkdir(path.join(dir, '.commune/embeds/x'), { recursive: true });
+	await writeFile(path.join(dir, '.commune/embeds/x/44.json'), JSON.stringify(snapshot));
+	const renderer = await communeMarkdown({ site: SITE, root: dir, embeds: { x: true } }).createRenderer({});
+	return (await renderer.render(post('44'), { frontmatter: {} })).code;
+}
+
+const good = {
+	id: '44', url: 'https://x.com/a/status/44', source: 'syndication', author: { name: 'A', handle: 'a' },
+	text: 'hi', media: [], capturedAt: '2026-10-25T00:00:00.000Z',
+};
+
+test('a malformed snapshot is a plain link, never a failed build', async () => {
+	for (const bad of [
+		{ ...good, media: [null] },
+		{ ...good, media: ['x'] },
+		{ ...good, createdAt: 12345 },
+		{ ...good, removedAt: {} },
+		{ ...good, source: 'other' },
+		{ ...good, url: 5 },
+		{ ...good, author: null },
+		[],
+		'text',
+	]) {
+		const html = await renderWithSnapshot(bad);
+		assert.doesNotMatch(html, /x-card/, JSON.stringify(bad));
+	}
+});
+
+test('"Open on X" never carries another scheme or another post', async () => {
+	for (const url of ['javascript:alert(document.domain)', 'https://evil.example/a/status/44', 'https://x.com/a/status/45']) {
+		const html = await renderWithSnapshot({ ...good, url });
+		assert.match(html, /class="x-card-open" href="https:\/\/x\.com\/a\/status\/44"/, url);
+	}
+	const odd = await renderWithSnapshot({ ...good, url: 'javascript:1', author: { name: 'A', handle: '"><b>' } });
+	assert.match(odd, /class="x-card-open" href="https:\/\/x\.com\/i\/status\/44"/);
+});
+
+// --- media download ---------------------------------------------------------
+
+const synd = (src) => ({
+	text: 't', created_at: '2026-10-01T00:00:00.000Z', user: { name: 'N', screen_name: 'n' },
+	mediaDetails: [{ type: 'photo', media_url_https: src }],
+});
+const image = (type, body = 'x') => new Response(body, { status: 200, headers: { 'content-type': type } });
+
+async function fetchWithImage(src, answer) {
+	const dir = await mkdtemp(path.join(tmpdir(), 'x-embeds-'));
+	const seen = [];
+	const outcome = await fetchSnapshot(dir, '55', async (url, init) => {
+		if (url.includes('syndication')) return json(200, synd(src));
+		seen.push({ url, init });
+		return answer();
+	});
+	return { outcome, seen, dir };
+}
+
+test('an image is saved with the extension of its exact type, and redirects are refused', async () => {
+	const { outcome, seen } = await fetchWithImage('https://pbs.twimg.com/media/a', () => image('image/png; charset=x'));
+
+	assert.equal(outcome.snapshot.media[0].file, '55/1.png');
+	assert.equal(seen[0].init.redirect, 'error');
+});
+
+test('a non-image answer and a foreign host leave a text-only card', async () => {
+	assert.equal((await fetchWithImage('https://pbs.twimg.com/a', () => image('text/html'))).outcome.snapshot.media[0].file, undefined);
+	const foreign = await fetchWithImage('https://evil.example/a.jpg', () => image('image/jpeg'));
+	assert.equal(foreign.outcome.snapshot.media[0].file, undefined);
+	assert.equal(foreign.seen.length, 0);
+});
+
+test('an image over the size cap is refused, declared or streamed', async () => {
+	const big = 10 * 1024 * 1024 + 1;
+	const declared = await fetchWithImage('https://pbs.twimg.com/a', () =>
+		new Response('x', { status: 200, headers: { 'content-type': 'image/jpeg', 'content-length': String(big) } }));
+	assert.equal(declared.outcome.snapshot.media[0].file, undefined);
+
+	const streamed = await fetchWithImage('https://pbs.twimg.com/a', () =>
+		image('image/jpeg', new Uint8Array(big)));
+	assert.equal(streamed.outcome.snapshot.media[0].file, undefined);
 });
 
 test('oEmbed HTML gives text and a day, with tags removed', () => {

@@ -15,7 +15,7 @@
  * as plain text, and it only ever reaches a page as a hast text node.
  */
 
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 /** Where snapshots live, relative to the site root. */
@@ -49,6 +49,18 @@ export interface XSnapshot {
 
 const STATUS_HOSTS = new Set(['x.com', 'www.x.com', 'mobile.x.com', 'twitter.com', 'www.twitter.com', 'mobile.twitter.com']);
 
+const HANDLE = '[A-Za-z0-9_]{1,15}';
+// One pattern for "this is a post", shared by the link scan and the card. The
+// `/i/web/status/<id>` form is what X's own share sheet produces; a `/photo/1`
+// tail is a link to one image of the same post.
+const POST_PATH = `/(i/web|${HANDLE})/status/(\\d{1,25})(?:/(?:photo|video)/\\d{1,2})?/?`;
+const POST_URL = new RegExp(`^${POST_PATH}$`);
+
+/** Whether a string can stand for a handle in a URL. */
+export function isHandle(value: unknown): value is string {
+	return typeof value === 'string' && new RegExp(`^${HANDLE}$`).test(value);
+}
+
 /** The post id of an X status URL, or null for anything else. */
 export function parseXStatusUrl(href: string): { id: string; handle: string } | null {
 	let url: URL;
@@ -58,14 +70,15 @@ export function parseXStatusUrl(href: string): { id: string; handle: string } | 
 		return null;
 	}
 	if (url.protocol !== 'https:' || !STATUS_HOSTS.has(url.hostname)) return null;
-	const match = /^\/([A-Za-z0-9_]{1,15})\/status\/(\d{1,25})\/?$/.exec(url.pathname);
-	return match ? { handle: match[1], id: match[2] } : null;
+	const match = POST_URL.exec(url.pathname);
+	return match ? { handle: match[1] === 'i/web' ? 'i' : match[1], id: match[2] } : null;
 }
 
 /** Every distinct post id linked from a piece of markdown or HTML. */
 export function findXStatusIds(text: string): string[] {
 	const ids = new Set<string>();
-	for (const match of text.matchAll(/https:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/[A-Za-z0-9_]{1,15}\/status\/\d{1,25}/g)) {
+	const scan = new RegExp(`https://(?:www\\.|mobile\\.)?(?:x|twitter)\\.com${POST_PATH}`, 'g');
+	for (const match of text.matchAll(scan)) {
 		const parsed = parseXStatusUrl(match[0]);
 		if (parsed) ids.add(parsed.id);
 	}
@@ -90,20 +103,38 @@ function isSnapshot(value: unknown, id: string): value is XSnapshot {
 	if (!value || typeof value !== 'object') return false;
 	const v = value as Record<string, unknown>;
 	const author = v.author as Record<string, unknown> | undefined;
+	const optionalString = (x: unknown) => x === undefined || typeof x === 'string';
 	return (
 		v.id === id &&
+		typeof v.url === 'string' &&
+		(v.source === 'syndication' || v.source === 'oembed') &&
 		typeof v.text === 'string' &&
 		typeof v.capturedAt === 'string' &&
-		Array.isArray(v.media) &&
+		optionalString(v.createdAt) &&
+		optionalString(v.removedAt) &&
 		!!author &&
+		typeof author === 'object' &&
 		typeof author.name === 'string' &&
-		typeof author.handle === 'string'
+		typeof author.handle === 'string' &&
+		Array.isArray(v.media) &&
+		v.media.every((item) => {
+			if (!item || typeof item !== 'object') return false;
+			const m = item as Record<string, unknown>;
+			return typeof m.kind === 'string' && optionalString(m.file) && optionalString(m.alt);
+		})
 	);
 }
 
-/** Image files may only be plain names under the snapshot folder; anything else is not served. */
+/**
+ * Image files may only be plain names under the snapshot folder; anything else is not served.
+ *
+ * `id` is checked as digits before anything else: it comes from a request path
+ * in the dev server and from directory names on disk, and it is compared as a
+ * string, never built into a pattern.
+ */
 export function isSafeMediaFile(file: string, id: string): boolean {
-	return new RegExp(`^${id}/\\d{1,2}\\.(?:jpg|jpeg|png|webp|gif)$`).test(file);
+	if (!/^\d{1,25}$/.test(id) || !file.startsWith(`${id}/`)) return false;
+	return /^\d{1,2}\.(?:jpg|jpeg|png|webp|gif)$/.test(file.slice(id.length + 1));
 }
 
 // --- Fetching --------------------------------------------------------------
@@ -129,8 +160,13 @@ function decodeEntities(value: string): string {
 }
 
 /** Syndication JSON to a snapshot, or null when the payload has no post in it. */
-export function fromSyndication(id: string, data: any, capturedAt: string): XSnapshot | null {
+export function fromSyndication(
+	id: string,
+	data: any,
+	capturedAt: string
+): { snapshot: XSnapshot; sources: string[] } | null {
 	if (!data || typeof data !== 'object' || typeof data.text !== 'string' || !data.user) return null;
+	if (!isHandle(data.user.screen_name)) return null;
 
 	let text: string = data.text;
 	// Syndication `text` is the post with t.co links; entities say what they
@@ -143,18 +179,20 @@ export function fromSyndication(id: string, data: any, capturedAt: string): XSna
 	}
 	text = decodeEntities(text).replace(/[ \t]+\n/g, '\n').trim();
 
+	// `sources` runs parallel to `media`: where to download each image from.
+	// It is not part of the snapshot, so it can never reach the committed JSON.
 	const media: XMedia[] = [];
+	const sources: string[] = [];
 	for (const item of data.mediaDetails ?? []) {
 		if (typeof item?.media_url_https !== 'string') continue;
 		media.push({
 			kind: item.type === 'video' ? 'video' : item.type === 'animated_gif' ? 'gif' : 'photo',
 			...(typeof item.ext_alt_text === 'string' ? { alt: item.ext_alt_text } : {}),
-			// Only used by the fetcher to download the image; replaced by `file`.
-			...({ _src: item.media_url_https } as object),
 		});
+		sources.push(item.media_url_https);
 	}
 
-	return {
+	const snapshot: XSnapshot = {
 		id,
 		url: `https://x.com/${data.user.screen_name}/status/${id}`,
 		source: 'syndication',
@@ -164,10 +202,11 @@ export function fromSyndication(id: string, data: any, capturedAt: string): XSna
 		media,
 		capturedAt,
 	};
+	return { snapshot, sources };
 }
 
 /** The text-only snapshot oEmbed can give. Parses the blockquote with no HTML parser, on purpose. */
-export function fromOembed(id: string, data: any, capturedAt: string): XSnapshot | null {
+export function fromOembed(id: string, data: any, capturedAt: string, fallbackHandle = ''): XSnapshot | null {
 	if (!data || typeof data.html !== 'string' || typeof data.author_name !== 'string') return null;
 	const html: string = data.html;
 	const paragraph = /<p[^>]*>([\s\S]*?)<\/p>/.exec(html);
@@ -179,10 +218,14 @@ export function fromOembed(id: string, data: any, capturedAt: string): XSnapshot
 	).trim();
 	const date = /<\/p>[\s\S]*?<a [^>]*>([^<]+)<\/a>\s*<\/blockquote>/.exec(html);
 	const parsed = date ? new Date(`${decodeEntities(date[1])} UTC`) : null;
-	const handle = /twitter\.com\/([A-Za-z0-9_]{1,15})(?:\/|$|\?)/.exec(String(data.author_url ?? ''))?.[1] ?? '';
+	// X answers with x.com URLs today and twitter.com ones before; the post's
+	// own URL is the best source, then the author's, then what the caller knew.
+	const fromAuthor = /^https:\/\/(?:www\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/?$/.exec(String(data.author_url ?? ''))?.[1];
+	const candidates = [parseXStatusUrl(String(data.url ?? ''))?.handle, fromAuthor, fallbackHandle];
+	const handle = candidates.find((h) => isHandle(h) && h !== 'i') ?? '';
 	return {
 		id,
-		url: `https://x.com/${handle}/status/${id}`,
+		url: `https://x.com/${handle || 'i'}/status/${id}`,
 		source: 'oembed',
 		author: { name: data.author_name, handle },
 		text,
@@ -223,7 +266,9 @@ export async function fetchSnapshot(
 			fetcher,
 			`https://cdn.syndication.twimg.com/tweet-result?id=${id}&token=${Math.floor(Math.random() * 1e9).toString(36)}`
 		);
-		let snapshot = synd.status === 200 ? fromSyndication(id, synd.body, capturedAt) : null;
+		const parsedSynd = synd.status === 200 ? fromSyndication(id, synd.body, capturedAt) : null;
+		let snapshot: XSnapshot | null = parsedSynd?.snapshot ?? null;
+		let sources = parsedSynd?.sources ?? [];
 		const goneHint =
 			synd.status === 404 ||
 			(synd.status === 200 &&
@@ -232,13 +277,13 @@ export async function fetchSnapshot(
 
 		let oembedStatus = 0;
 		if (!snapshot) {
-			const handle = previous?.author.handle ?? 'i';
+			const handle = previous?.author.handle || 'i';
 			const embed = await getJson(
 				fetcher,
 				`https://publish.twitter.com/oembed?omit_script=1&url=${encodeURIComponent(`https://twitter.com/${handle}/status/${id}`)}`
 			);
 			oembedStatus = embed.status;
-			if (embed.status === 200) snapshot = fromOembed(id, embed.body, capturedAt);
+			if (embed.status === 200) snapshot = fromOembed(id, embed.body, capturedAt, previous?.author.handle);
 		}
 
 		if (!snapshot) {
@@ -253,7 +298,7 @@ export async function fetchSnapshot(
 
 		// A text-only refetch must not throw away images already saved.
 		if (snapshot.source === 'oembed' && previous?.media.length) snapshot.media = previous.media;
-		snapshot.media = await saveMedia(root, id, snapshot.media, fetcher, previous?.media);
+		snapshot.media = await saveMedia(root, id, snapshot.media, sources, fetcher, previous?.media);
 		await writeSnapshot(root, snapshot);
 		return { status: 'saved', snapshot };
 	} catch (error) {
@@ -261,40 +306,63 @@ export async function fetchSnapshot(
 	}
 }
 
+const IMAGE_TYPES: Record<string, string> = {
+	'image/jpeg': 'jpg',
+	'image/png': 'png',
+	'image/webp': 'webp',
+	'image/gif': 'gif',
+};
+
+/** The body of a response, refusing to hold more than `max` bytes. */
+async function readCapped(response: Response, max: number): Promise<Buffer> {
+	const declared = Number(response.headers.get('content-length'));
+	if (declared > max) throw new Error('image too large');
+	if (!response.body) throw new Error('no body');
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+		total += chunk.byteLength;
+		if (total > max) throw new Error('image too large');
+		chunks.push(chunk);
+	}
+	return Buffer.concat(chunks);
+}
+
 async function saveMedia(
 	root: string,
 	id: string,
 	media: XMedia[],
+	sources: string[],
 	fetcher: Fetcher,
 	previous: XMedia[] | undefined
 ): Promise<XMedia[]> {
 	const saved: XMedia[] = [];
-	let n = 0;
-	for (const item of media) {
-		n += 1;
-		const { _src, ...rest } = item as XMedia & { _src?: string };
-		if (!_src) {
-			saved.push(rest);
+	for (const [index, item] of media.entries()) {
+		const n = index + 1;
+		const from = sources[index];
+		if (!from) {
+			saved.push(item);
 			continue;
 		}
 		try {
-			const source = new URL(_src);
+			const source = new URL(from);
 			if (source.protocol !== 'https:' || !/(^|\.)twimg\.com$/.test(source.hostname)) throw new Error('not a twimg URL');
-			const response = await fetcher(source.href, { redirect: 'follow' });
+			// Media URLs do not redirect; one that does is not followed, so the
+			// host check above cannot be walked around.
+			const response = await fetcher(source.href, { redirect: 'error' });
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-			const buffer = Buffer.from(await response.arrayBuffer());
-			if (buffer.byteLength > MAX_IMAGE_BYTES) throw new Error('image too large');
-			const type = response.headers.get('content-type') ?? '';
-			const ext = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : type.includes('gif') ? 'gif' : 'jpg';
+			const ext = IMAGE_TYPES[(response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()];
+			if (!ext) throw new Error('not an image');
+			const buffer = await readCapped(response, MAX_IMAGE_BYTES);
 			const file = `${id}/${n}.${ext}`;
 			await mkdir(path.join(root, SNAPSHOT_DIR, id), { recursive: true });
 			await writeFile(path.join(root, SNAPSHOT_DIR, file), buffer);
-			saved.push({ ...rest, file });
+			saved.push({ ...item, file });
 		} catch {
 			// An image that will not download leaves a text-only card, and a
 			// previously saved copy of the same slot is kept.
-			const old = previous?.[n - 1];
-			saved.push(old?.file ? old : rest);
+			const old = previous?.[index];
+			saved.push(old?.file ? old : item);
 		}
 	}
 	return saved;
@@ -303,15 +371,4 @@ async function saveMedia(
 async function writeSnapshot(root: string, snapshot: XSnapshot): Promise<void> {
 	await mkdir(path.join(root, SNAPSHOT_DIR), { recursive: true });
 	await writeFile(snapshotPath(root, snapshot.id), JSON.stringify(snapshot, null, 2) + '\n');
-}
-
-/** Ids that already have a snapshot on disk. */
-export async function listSnapshotIds(root: string): Promise<string[]> {
-	try {
-		return (await readdir(path.join(root, SNAPSHOT_DIR)))
-			.filter((name) => /^\d+\.json$/.test(name))
-			.map((name) => name.slice(0, -5));
-	} catch {
-		return [];
-	}
 }

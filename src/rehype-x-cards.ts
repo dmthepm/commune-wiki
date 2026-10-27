@@ -17,6 +17,7 @@ import { visit } from 'unist-util-visit';
 import type { Element, ElementContent, Root } from 'hast';
 import {
 	PUBLIC_PREFIX,
+	isHandle,
 	isSafeMediaFile,
 	parseXStatusUrl,
 	readSnapshot,
@@ -50,11 +51,24 @@ function postText(value: string): ElementContent[] {
 	return nodes;
 }
 
+/**
+ * Where "Open on X" goes. The snapshot's `url` is used only when it is a
+ * status URL for this very post; anything else is rebuilt from the id, so a
+ * snapshot cannot put another scheme or another post behind the link.
+ */
+function postHref(snapshot: XSnapshot): string {
+	if (parseXStatusUrl(snapshot.url)?.id === snapshot.id) return snapshot.url;
+	const handle = isHandle(snapshot.author.handle) ? snapshot.author.handle : 'i';
+	return `https://x.com/${handle}/status/${snapshot.id}`;
+}
+
 export function buildCard(snapshot: XSnapshot, cardId: string): Element {
 	const children: ElementContent[] = [
 		el('span', 'x-card-head', [
 			el('span', 'x-card-name', [text(snapshot.author.name)]),
-			el('span', 'x-card-handle', [text(`@${snapshot.author.handle}`)]),
+			...(snapshot.author.handle
+				? [el('span', 'x-card-handle', [text(`@${snapshot.author.handle}`)])]
+				: []),
 		]),
 		el('span', 'x-card-text', postText(snapshot.text)),
 	];
@@ -89,7 +103,7 @@ export function buildCard(snapshot: XSnapshot, cardId: string): Element {
 	}
 	foot.push(
 		el('a', 'x-card-open', [text('Open on X')], {
-			href: snapshot.url,
+			href: postHref(snapshot),
 			target: '_blank',
 			rel: ['noopener', 'noreferrer'],
 		})
@@ -103,6 +117,17 @@ export default function rehypeXCards({ root = process.cwd() }: XCardsOptions = {
 	return async function transformer(tree: Root, file?: { path?: string }) {
 		const found: { node: Element; parent: Element | Root; index: number; id: string }[] = [];
 
+		// A card inside a heading would be slugged into the heading's id and
+		// into its table-of-contents text, which moves every `[[Note#Heading]]`
+		// link to it. Those links keep the icon and get no card.
+		const inHeading = new Set<Element>();
+		visit(tree, 'element', (node) => {
+			if (!/^h[1-6]$/.test(node.tagName)) return;
+			visit(node, 'element', (inner) => {
+				inHeading.add(inner);
+			});
+		});
+
 		visit(tree, 'element', (node, index, parent) => {
 			if (node.tagName !== 'a' || parent === undefined || index === undefined) return;
 			const href = node.properties?.href;
@@ -113,10 +138,10 @@ export default function rehypeXCards({ root = process.cwd() }: XCardsOptions = {
 
 		// Scope ids to the document: panes put several notes in one page.
 		const scope = createHash('sha1').update(file?.path ?? '').digest('hex').slice(0, 6);
-		let count = 0;
 
-		// Back to front, so inserting a card does not move the next link's index.
-		for (const { node, parent, index, id } of found.reverse()) {
+		const cards: { parent: Element | Root; index: number; card: Element }[] = [];
+		let count = 0;
+		for (const { node, parent, index, id } of found) {
 			const snapshot = await readSnapshot(root, id);
 			if (!snapshot) {
 				if (!warned.has(id)) {
@@ -125,12 +150,17 @@ export default function rehypeXCards({ root = process.cwd() }: XCardsOptions = {
 				}
 				continue;
 			}
-			count += 1;
-			const cardId = `x-card-${scope}-${id}-${count}`;
 			const classes = Array.isArray(node.properties.className) ? node.properties.className : [];
 			node.properties.className = [...classes, 'x-link'] as string[];
+			if (inHeading.has(node)) continue;
+
+			count += 1;
+			const cardId = `x-card-${scope}-${id}-${count}`;
 			node.properties.ariaDescribedBy = [cardId];
-			parent.children.splice(index + 1, 0, buildCard(snapshot, cardId));
+			cards.push({ parent, index, card: buildCard(snapshot, cardId) });
 		}
+
+		// Back to front, so inserting a card does not move the next link's index.
+		for (const { parent, index, card } of cards.reverse()) parent.children.splice(index + 1, 0, card);
 	};
 }
