@@ -159,10 +159,10 @@ function decodeEntities(value: string): string {
 		.replace(/&amp;/g, '&');
 }
 
-/** Syndication JSON to a snapshot, or null when the payload has no post in it. */
 /** Syndication cuts long posts at about 280 UTF-16 units; live ones came back at 269 to 315. */
 const NOTE_CUT_MIN = 250;
 
+/** Syndication JSON to a snapshot, or null when the payload has no post in it. */
 export function fromSyndication(
 	id: string,
 	data: any,

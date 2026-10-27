@@ -328,7 +328,7 @@ test('a long post, which syndication cuts short, is marked as cut', () => {
 	assert.equal(syndText({ text, display_text_range: range, note_tweet: { id: 'x' } }), `${text}…`);
 	assert.equal(syndText({ text, display_text_range: range }), text);
 	// A short post can carry note_tweet and is whole; one ending in … is not marked twice.
-	assert.equal(syndText({ text: 'Short and **formatted**', note_tweet: { id: 'x' } }), 'Short and **formatted**');
+	assert.equal(syndText({ text: 'Short and whole', note_tweet: { id: 'x' } }), 'Short and whole');
 	assert.equal(syndText({ text: `${text}…`, note_tweet: { id: 'x' } }), `${text}…`);
 });
 
