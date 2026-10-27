@@ -10,7 +10,7 @@
  */
 
 import type { AstroIntegration } from 'astro';
-import { access, copyFile, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { access, copyFile, readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -26,6 +26,7 @@ import {
 	type SiteSummary,
 } from './lib/graph.ts';
 import { findMarkdownTwin } from './lib/markdown-twin.ts';
+import { PUBLIC_PREFIX, SNAPSHOT_DIR, isSafeMediaFile, readSnapshot } from './lib/x-embeds.ts';
 
 function buildBacklinksGraph(
 	entries: ContentEntry[],
@@ -156,6 +157,11 @@ async function warnUnrenderedRoutes(
 	}
 }
 
+function mimeOf(file: string): string {
+	const ext = path.extname(file).slice(1);
+	return ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+}
+
 function summarize(graph: Graph): string {
 	return `📊 ${graph.totalBacklinks} total backlinks across ${Object.keys(graph.nodes).length} entries`;
 }
@@ -163,16 +169,57 @@ function summarize(graph: Graph): string {
 /**
  * Options for the integration.
  *
- * Empty, and deliberately so: everything the graph needs is already in the
- * consumer's `defineConfig` — the root to read content from, the public
- * directory to write the index to — and reading it from there is what stops a
- * second, drifting copy of Astro's own configuration existing. The parameter
- * is here so that the day something *is* configurable, `commune({ … })` is
- * already the spelling in every consumer's config.
+ * Almost everything the graph needs is already in the consumer's
+ * `defineConfig` — the root to read content from, the public directory to
+ * write the index to — and reading it from there is what stops a second,
+ * drifting copy of Astro's own configuration existing.
+ *
+ * `embeds` is the exception, and it is one that has to be said twice: the
+ * markdown pipeline decides which links get a card (`communeMarkdown({ embeds })`),
+ * and this integration decides whether the snapshots' images are copied into
+ * the build. Both default to off, and a site with them off builds exactly as
+ * it did before.
  */
-export interface CommuneOptions {}
+export interface CommuneOptions {
+	/** Hover cards for X posts. Pass the same value to `communeMarkdown`. */
+	embeds?: { x?: boolean };
+}
 
-export default function commune(_options: CommuneOptions = {}): AstroIntegration {
+/**
+ * Copy the images the snapshots refer to into the build, at `/embeds/x/<id>/<n>.<ext>`.
+ *
+ * A file in a snapshot's folder that no snapshot names (left behind when a
+ * post's media changed) is not copied, so the site serves what the cards use.
+ */
+async function copyXImages(root: string, outDir: string): Promise<number> {
+	const base = path.join(root, SNAPSHOT_DIR);
+	let names: string[];
+	try {
+		names = await readdir(base);
+	} catch {
+		return 0;
+	}
+	let copied = 0;
+	for (const name of names.filter((n) => /^\d{1,25}\.json$/.test(n))) {
+		const id = name.slice(0, -5);
+		const snapshot = await readSnapshot(root, id);
+		for (const item of snapshot?.media ?? []) {
+			if (!item.file || !isSafeMediaFile(item.file, id)) continue;
+			const destination = path.join(outDir, PUBLIC_PREFIX, item.file);
+			await mkdir(path.dirname(destination), { recursive: true });
+			try {
+				await copyFile(path.join(base, item.file), destination);
+				copied += 1;
+			} catch {
+				// A snapshot naming an image that is not on disk is a card without
+				// one, not a failed build.
+			}
+		}
+	}
+	return copied;
+}
+
+export default function commune(options: CommuneOptions = {}): AstroIntegration {
 	// `astro:build:done` is not handed the resolved config, so the two paths
 	// the graph needs are captured in `astro:config:setup` — which Astro always
 	// runs first — and closed over. Per-instance rather than module-level: one
@@ -216,6 +263,18 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 				server.middlewares.use((request, response, next) => {
 					const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
 					if (request.method !== 'GET' && request.method !== 'HEAD') return next();
+					if (options.embeds?.x && pathname.startsWith(`${PUBLIC_PREFIX}/`)) {
+						const file = pathname.slice(PUBLIC_PREFIX.length + 1);
+						const id = file.split('/')[0];
+						if (!isSafeMediaFile(file, id)) return next();
+						return readFile(path.join(root, SNAPSHOT_DIR, file)).then(
+							(image) => {
+								response.setHeader('Content-Type', mimeOf(file));
+								response.end(request.method === 'HEAD' ? undefined : image);
+							},
+							() => next()
+						);
+					}
 					if (!pathname.endsWith('.md')) return next();
 					// Vite's own module and file requests are never twins, and each
 					// lookup reads the whole vault, so they skip it.
@@ -253,6 +312,10 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 					await writeSiteFile(publicSite, site);
 
 					const written = await writeMarkdownFiles(entries, root, fileURLToPath(dir));
+					if (options.embeds?.x) {
+						const images = await copyXImages(root, fileURLToPath(dir));
+						logger.info(`𝕏 ${images} embedded post images copied to ${PUBLIC_PREFIX}`);
+					}
 					await warnUnrenderedRoutes(entries, fileURLToPath(dir), logger);
 
 					logger.info(`✅ Backlinks index written to /backlinks.json (dist + public)`);

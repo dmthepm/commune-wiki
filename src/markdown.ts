@@ -17,6 +17,7 @@
 import { unified } from '@astrojs/markdown-remark';
 import remarkWikiLinks from './remark-wikilinks.ts';
 import rehypeExternalLinks from './rehype-external-links.ts';
+import rehypeXCards, { type XCardsOptions } from './rehype-x-cards.ts';
 import type { GraphOptions } from './lib/graph.ts';
 
 export interface CommuneMarkdownOptions extends GraphOptions {
@@ -31,11 +32,25 @@ export interface CommuneMarkdownOptions extends GraphOptions {
 	 * project directory — the same case `astro build --root` exists for.
 	 */
 	root?: string;
+	/**
+	 * Hover cards for links to posts on X. Off unless asked for.
+	 *
+	 * Cards come from snapshots committed under `.commune/embeds/x/`, so the
+	 * build makes no request. Pass the same option to `commune()` so the
+	 * snapshots' images reach the build output.
+	 */
+	embeds?: { x?: boolean };
 }
 
-export function communeMarkdown({ site, root }: CommuneMarkdownOptions = {}) {
+export function communeMarkdown({ site, root, embeds }: CommuneMarkdownOptions = {}) {
 	return unified({
 		remarkPlugins: [[remarkWikiLinks, { root }]],
-		rehypePlugins: [[rehypeExternalLinks, { site }]],
+		// After the external-links pass: the card is built around a link that
+		// already opens in a new tab. When embeds are off the list is the one
+		// it always was.
+		rehypePlugins: [
+			[rehypeExternalLinks, { site }],
+			...(embeds?.x ? [[rehypeXCards, { root }] as [typeof rehypeXCards, XCardsOptions]] : []),
+		],
 	});
 }
