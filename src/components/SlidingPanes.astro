@@ -675,9 +675,12 @@ if (window.wikiInitialized) {
   /* The icon is plain inline, sized by padding, and its content is a word
      joiner (U+2060), so the line cannot break between it and the link text.
      An inline-block icon left a break opportunity after it, and on a narrow
-     screen a long bare URL dropped to the next line without its icon. */
+     screen a long bare URL dropped to the next line without its icon. The
+     empty alt text keeps the joiner out of the link's accessible name.
+     Browsers without alt text use the first line. */
   a.x-link::before {
     content: '\2060';
+    content: '\2060' / '';
     padding-left: 0.8em;
     margin-right: 0.3em;
     background-color: currentColor;
