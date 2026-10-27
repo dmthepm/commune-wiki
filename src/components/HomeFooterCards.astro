@@ -108,10 +108,16 @@ if (!isHomePage) return null;
     margin: 0;
   }
 
+  /* The row box matches the old padded block link, so spacing is unchanged. */
   .backlinks-list li {
-    margin-bottom: 0.75rem;
+    padding: 0.5rem 0 calc(0.5rem + 1px);
+    margin-bottom: 0.25rem;
     position: relative;
     z-index: 0;
+  }
+
+  .backlinks-list li:first-child {
+    margin-top: -0.5rem;
   }
 
   /* The link stays inline so a star after it sits on its last line. The
@@ -126,7 +132,7 @@ if (!isHomePage) return null;
   .backlinks-list a::after {
     content: '';
     position: absolute;
-    inset: -0.5rem;
+    inset: 0 -0.5rem;
     z-index: -1;
     border-radius: var(--c-radius-sm);
     transition: background 0.15s ease;
