@@ -10,7 +10,7 @@
  */
 
 import type { AstroIntegration } from 'astro';
-import { access, copyFile, readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
+import { access, copyFile, lstat, readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -26,7 +26,7 @@ import {
 	type SiteSummary,
 } from './lib/graph.ts';
 import { findMarkdownTwin } from './lib/markdown-twin.ts';
-import { PUBLIC_PREFIX, SNAPSHOT_DIR, isSafeMediaFile, readSnapshot } from './lib/x-embeds.ts';
+import { PUBLIC_PREFIX, SNAPSHOT_DIR, isSafeMediaFile } from './lib/x-embeds.ts';
 
 function buildBacklinksGraph(
 	entries: ContentEntry[],
@@ -174,52 +174,94 @@ function summarize(graph: Graph): string {
  * write the index to — and reading it from there is what stops a second,
  * drifting copy of Astro's own configuration existing.
  *
- * `embeds` is the exception, and it is one that has to be said twice: the
- * markdown pipeline decides which links get a card (`communeMarkdown({ embeds })`),
- * and this integration decides whether the snapshots' images are copied into
- * the build. Both default to off, and a site with them off builds exactly as
- * it did before.
+ * X cards need no option here. `communeMarkdown({ embeds })` decides which
+ * links get a card, and the build copies whatever images the built pages
+ * point at, so there is nothing to keep in step between the two.
  */
 export interface CommuneOptions {
-	/** Hover cards for X posts. Pass the same value to `communeMarkdown`. */
+	/** @deprecated No longer needed and does nothing; set `embeds` on `communeMarkdown` only. */
 	embeds?: { x?: boolean };
 }
 
+/** Every `.html` file under `dir`. */
+async function htmlFiles(dir: string): Promise<string[]> {
+	const found: string[] = [];
+	for (const entry of await readdir(dir, { withFileTypes: true })) {
+		const full = path.join(dir, entry.name);
+		if (entry.isDirectory()) found.push(...(await htmlFiles(full)));
+		else if (entry.name.endsWith('.html')) found.push(full);
+	}
+	return found;
+}
+
 /**
- * Copy the images the snapshots refer to into the build, at `/embeds/x/<id>/<n>.<ext>`.
+ * Whether `file` (already vetted by `isSafeMediaFile`) is a regular file in a
+ * real folder under `base`. A symlink at either level could point anywhere on
+ * the machine, and following it would publish whatever it names.
+ */
+async function isPlainSnapshotFile(base: string, file: string): Promise<boolean> {
+	try {
+		const folder = await lstat(path.join(base, file.split('/')[0]));
+		const image = await lstat(path.join(base, file));
+		return folder.isDirectory() && image.isFile();
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Copy the snapshot images the built pages use into the build, at
+ * `/embeds/x/<id>/<n>.<ext>`.
  *
- * A file in a snapshot's folder that no snapshot names (left behind when a
- * post's media changed) is not copied, so the site serves what the cards use.
+ * The pages are the source of truth: a card's `<img src>` is the only thing
+ * that can 404, so the copy is driven by those `src` values and not by what
+ * happens to be on disk. A site with no cards references nothing, so nothing
+ * is copied and its output is untouched. A path that is not a plain image name
+ * under a numeric id is ignored, so a page cannot ask for a file outside the
+ * snapshot folder, and a referenced image that is not on disk is a card
+ * without one, not a failed build.
  */
 async function copyXImages(root: string, outDir: string): Promise<number> {
 	const base = path.join(root, SNAPSHOT_DIR);
-	let names: string[];
+	// A site that never captured a post reads no HTML at all.
 	try {
-		names = await readdir(base);
+		await lstat(base);
 	} catch {
 		return 0;
 	}
+	const wanted = new Set<string>();
+	const marker = `${PUBLIC_PREFIX}/`;
+	// Deliberately loose. This can also match `data-src=` or quoted markup in a
+	// code block, which is harmless: every match goes back through
+	// `isSafeMediaFile`, and all it can cause is a copy of an image that already
+	// exists in the snapshot folder.
+	const pattern = /\bsrc=["']?\/embeds\/x\/([^"'\s>]+)/g;
+	for (const page of await htmlFiles(outDir)) {
+		const html = await readFile(page, 'utf8');
+		// Most pages have no card, so skip the scan unless the path is there.
+		if (!html.includes(marker)) continue;
+		for (const match of html.matchAll(pattern)) {
+			const file = match[1];
+			if (isSafeMediaFile(file, file.split('/')[0])) wanted.add(file);
+		}
+	}
 	let copied = 0;
-	for (const name of names.filter((n) => /^\d{1,25}\.json$/.test(n))) {
-		const id = name.slice(0, -5);
-		const snapshot = await readSnapshot(root, id);
-		for (const item of snapshot?.media ?? []) {
-			if (!item.file || !isSafeMediaFile(item.file, id)) continue;
-			const destination = path.join(outDir, PUBLIC_PREFIX, item.file);
+	for (const file of wanted) {
+		const destination = path.join(outDir, PUBLIC_PREFIX, file);
+		try {
+			// Checked before the folder is made, so a missing image leaves no empty one.
+			if (!(await isPlainSnapshotFile(base, file))) continue;
 			await mkdir(path.dirname(destination), { recursive: true });
-			try {
-				await copyFile(path.join(base, item.file), destination);
-				copied += 1;
-			} catch {
-				// A snapshot naming an image that is not on disk is a card without
-				// one, not a failed build.
-			}
+			await copyFile(path.join(base, file), destination);
+			copied += 1;
+		} catch {
+			// Vanished between the check and the copy. Nothing to copy.
 		}
 	}
 	return copied;
 }
 
-export default function commune(options: CommuneOptions = {}): AstroIntegration {
+export default function commune(_options: CommuneOptions = {}): AstroIntegration {
 	// `astro:build:done` is not handed the resolved config, so the two paths
 	// the graph needs are captured in `astro:config:setup` — which Astro always
 	// runs first — and closed over. Per-instance rather than module-level: one
@@ -263,11 +305,13 @@ export default function commune(options: CommuneOptions = {}): AstroIntegration 
 				server.middlewares.use((request, response, next) => {
 					const pathname = new URL(request.url ?? '/', 'http://localhost').pathname;
 					if (request.method !== 'GET' && request.method !== 'HEAD') return next();
-					if (options.embeds?.x && pathname.startsWith(`${PUBLIC_PREFIX}/`)) {
+					if (pathname.startsWith(`${PUBLIC_PREFIX}/`)) {
 						const file = pathname.slice(PUBLIC_PREFIX.length + 1);
 						const id = file.split('/')[0];
 						if (!isSafeMediaFile(file, id)) return next();
-						return readFile(path.join(root, SNAPSHOT_DIR, file)).then(
+						return isPlainSnapshotFile(path.join(root, SNAPSHOT_DIR), file)
+							.then((plain) => (plain ? readFile(path.join(root, SNAPSHOT_DIR, file)) : Promise.reject(new Error('not a plain file'))))
+							.then(
 							(image) => {
 								response.setHeader('Content-Type', mimeOf(file));
 								response.end(request.method === 'HEAD' ? undefined : image);
@@ -312,10 +356,8 @@ export default function commune(options: CommuneOptions = {}): AstroIntegration 
 					await writeSiteFile(publicSite, site);
 
 					const written = await writeMarkdownFiles(entries, root, fileURLToPath(dir));
-					if (options.embeds?.x) {
-						const images = await copyXImages(root, fileURLToPath(dir));
-						logger.info(`𝕏 ${images} embedded post images copied to ${PUBLIC_PREFIX}`);
-					}
+					const images = await copyXImages(root, fileURLToPath(dir));
+					if (images > 0) logger.info(`𝕏 ${images} embedded post images copied to ${PUBLIC_PREFIX}`);
 					await warnUnrenderedRoutes(entries, fileURLToPath(dir), logger);
 
 					logger.info(`✅ Backlinks index written to /backlinks.json (dist + public)`);

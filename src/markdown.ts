@@ -36,8 +36,8 @@ export interface CommuneMarkdownOptions extends GraphOptions {
 	 * Hover cards for links to posts on X. Off unless asked for.
 	 *
 	 * Cards come from snapshots committed under `.commune/embeds/x/`, so the
-	 * build makes no request. Pass the same option to `commune()` so the
-	 * snapshots' images reach the build output.
+	 * build makes no request. This is the only place to turn it on: the
+	 * integration copies the images the built pages use, whatever its options.
 	 */
 	embeds?: { x?: boolean };
 }

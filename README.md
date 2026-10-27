@@ -367,12 +367,14 @@ Exit codes report whether the command finished, never what it found — `0` fini
 
 A link to a post on X (`x.com` or `twitter.com`, `/<user>/status/<id>`) can show a card on hover or focus: the author, the text, the date, any images and an "Open on X" link. It is off by default. With it off your content builds byte-identical to before; the page still carries the card script and styles of `SlidingPanes`, which do nothing without a card. There is no new markdown syntax, so any bare or markdown link to a post gets the card.
 
-Turn it on in both places that take options, so the pipeline builds the cards and the integration copies their images into the build:
+Turn it on in `communeMarkdown`. That is the only switch: the integration copies into the build the snapshot images your pages use.
 
 ```js
 markdown: { processor: communeMarkdown({ site, embeds: { x: true } }) },
-integrations: [commune({ embeds: { x: true } })],
+integrations: [commune()],
 ```
+
+Older configs that also pass `embeds` to `commune()` keep working; that option is deprecated and does nothing.
 
 Run `npx commune embeds fetch`. It finds the post links in your notes and saves one snapshot each under `.commune/embeds/x/`, which you commit:
 
