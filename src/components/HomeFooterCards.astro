@@ -110,21 +110,33 @@ if (!isHomePage) return null;
 
   .backlinks-list li {
     margin-bottom: 0.75rem;
+    position: relative;
+    z-index: 0;
   }
 
+  /* The link stays inline so a star after it sits on its last line. The
+     ::after box keeps the whole row clickable and carries the hover. */
   .backlinks-list a {
     color: var(--c-text-accent);
     text-decoration: none;
     border-bottom: 1px solid transparent;
     transition: all 0.15s ease;
-    display: block;
-    padding: 0.5rem;
-    margin: -0.5rem;
+  }
+
+  .backlinks-list a::after {
+    content: '';
+    position: absolute;
+    inset: -0.5rem;
+    z-index: -1;
     border-radius: var(--c-radius-sm);
+    transition: background 0.15s ease;
+  }
+
+  .backlinks-list a:hover::after {
+    background: var(--c-bg);
   }
 
   .backlinks-list a:hover {
-    background: var(--c-bg);
     border-bottom-color: var(--c-accent);
   }
 

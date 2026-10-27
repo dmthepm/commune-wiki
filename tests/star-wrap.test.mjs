@@ -32,3 +32,10 @@ test('the inline star is a plain inline box and nothing forces the link onto one
 		assert.doesNotMatch(await source(name), /whiteSpace|white-space/, `${name} sets white-space`);
 	}
 });
+
+test('the footer card link is inline, so a star after it is not pushed to its own line', async () => {
+	const text = await source('HomeFooterCards.astro');
+	const rule = text.match(/\.backlinks-list a \{([^}]*)\}/)?.[1];
+	assert.ok(rule, 'no .backlinks-list a rule');
+	assert.doesNotMatch(rule, /display:\s*(block|flex|grid|inline-block)/);
+});
