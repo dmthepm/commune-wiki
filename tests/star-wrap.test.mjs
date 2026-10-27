@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 
 const source = (name) => readFile(new URL(`../src/components/${name}`, import.meta.url), 'utf8');
 
@@ -38,4 +38,16 @@ test('the footer card link is inline, so a star after it is not pushed to its ow
 	const rule = text.match(/\.backlinks-list a \{([^}]*)\}/)?.[1];
 	assert.ok(rule, 'no .backlinks-list a rule');
 	assert.doesNotMatch(rule, /display:\s*(block|flex|grid|inline-block)/);
+});
+
+test('no stylesheet rule gives the inline star any display but inline', async () => {
+	const root = new URL('../src/', import.meta.url);
+	const files = (await readdir(root, { recursive: true })).filter((f) => /\.(astro|css)$/.test(f));
+	for (const file of files) {
+		const text = await readFile(new URL(file, root), 'utf8');
+		for (const [, selector, body] of text.matchAll(/([^{}]*star-indicator-inline[^{}]*)\{([^}]*)\}/g)) {
+			const display = body.match(/display:\s*([\w-]+)/)?.[1];
+			if (display) assert.equal(display, 'inline', `${file}: ${selector.trim()}`);
+		}
+	}
 });
