@@ -672,15 +672,17 @@ if (window.wikiInitialized) {
 <style is:global>
   /* --- X post cards (rehype-x-cards) --- */
   .x-card { display: none; }
+  /* The icon is plain inline, sized by padding, and its content is a word
+     joiner (U+2060), so the line cannot break between it and the link text.
+     An inline-block icon left a break opportunity after it, and on a narrow
+     screen a long bare URL dropped to the next line without its icon. */
   a.x-link::before {
-    content: '';
-    display: inline-block;
-    width: 0.8em;
-    height: 0.8em;
+    content: '\2060';
+    padding-left: 0.8em;
     margin-right: 0.3em;
     background-color: currentColor;
-    -webkit-mask: var(--x-icon) center / contain no-repeat;
-    mask: var(--x-icon) center / contain no-repeat;
+    -webkit-mask: var(--x-icon) center / 0.8em 0.8em no-repeat;
+    mask: var(--x-icon) center / 0.8em 0.8em no-repeat;
     --x-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.9 2H22l-7.6 8.7L23 22h-6.8l-5.3-6.9L4.8 22H1.7l8.1-9.3L1.3 2h7l4.8 6.3L18.9 2zm-1.2 18h1.7L6.6 3.9H4.8L17.7 20z'/%3E%3C/svg%3E");
   }
   #note-hover.x-hover { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; line-height: 1.4; color: var(--c-text); }
