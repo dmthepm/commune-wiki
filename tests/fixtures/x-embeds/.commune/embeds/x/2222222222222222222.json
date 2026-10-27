@@ -1,0 +1,11 @@
+{
+  "id": "2222222222222222222",
+  "url": "https://x.com/gone/status/2222222222222222222",
+  "source": "syndication",
+  "author": { "name": "Gone Person", "handle": "gone" },
+  "text": "A post that was deleted later.",
+  "createdAt": "2026-09-01T08:00:00.000Z",
+  "media": [],
+  "capturedAt": "2026-09-02T10:00:00.000Z",
+  "removedAt": "2026-10-25T12:00:00.000Z"
+}

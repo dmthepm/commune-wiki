@@ -9,6 +9,7 @@ Usage:
   commune [--root <dir>] update        [--recent <duration|date>] [--write] [--json]
   commune [--root <dir>] rename        <from> <to> [--move-url] [--dry-run] [--json]
   commune [--root <dir>] check         [--json]
+  commune [--root <dir>] embeds fetch  [--refresh] [--stale-days <n>] [--json]
   commune [--root <dir>] gate          [--dist <dir>] [--json]
   commune --version
 
@@ -51,6 +52,10 @@ rename options:
   --dry-run      Print the plan (the move, every line changed, the URL decision)
                  and write nothing.
 
+embeds fetch options:
+  --refresh          Fetch every linked X post, not only missing or stale ones.
+  --stale-days <n>   Refetch snapshots older than this. Default: 30.
+
 gate options:
   --dist <dir>   The built site to check, relative to --root. Default: dist.
 
@@ -65,6 +70,11 @@ Exit codes:
   the way every other verb does, in the payload with exit 0.`;
 
 export const COMMAND_USAGE: Record<string, string> = {
+	'embeds fetch': `Usage: commune [--root <dir>] embeds fetch [--refresh] [--stale-days <n>] [--json]
+
+Capture the X posts the site links to into .commune/embeds/x/, text and images,
+for the hover cards. The only command that contacts X; a build never does. A
+post that has been deleted keeps its captured text and is marked removed.`,
 	'graph query':
 		'Usage: commune [--root <dir>] graph query [--collection <c>]... [--tag <t>]... [--status <s>] [--orphans] [--deadends] [--unreferenced] [--recent <duration|date>] [--json]',
 	'graph related':

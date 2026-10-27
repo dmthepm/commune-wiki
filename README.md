@@ -341,6 +341,7 @@ npx commune gate
 | `render <path\|->` | The markdown as HTML, through the site's own pipeline: WikiLinks resolved, external links marked. Takes stdin, so you can see a draft before it is a page. |
 | `update` | Scaffold a dated update entry from what changed. Prints it; `--write` files it. |
 | `rename <from> <to>` | Move a note and rewrite every link to it, in every form the graph reads. The URL stays unless `--move-url`. `--dry-run` prints the plan. |
+| `embeds fetch` | Capture the X posts your notes link to, for the hover cards below. The only verb that contacts X. `--refresh` refetches all, `--stale-days <n>` sets how old a snapshot may get (default 30). |
 | `check` | Broken links, broken heading links, duplicate names, ambiguous targets, non-canonical titles. |
 | `gate` | Run after a build, against the built site. |
 
@@ -361,6 +362,30 @@ When a file was renamed outside `commune rename`, `check` still reports the old 
 Exit codes report whether the command finished, never what it found — `0` finished, `1` could not finish, `2` invalid invocation. Findings live in the payload. A command that exits non-zero because it *found* something is indistinguishable, to a shell, from one that crashed. `gate` is the one deliberate exception: a gate's entire job is a yes/no and a build has to stop on it, so `gate` exits `1` when the build it checked is wrong.
 
 `commune --help` prints the full surface. `commune --version` prints the installed version, which is the way to know what you have.
+
+## X post cards
+
+A link to a post on X (`x.com` or `twitter.com`, `/<user>/status/<id>`) can show a card on hover or focus: the author, the text, the date, any images and an "Open on X" link. It is off by default, and with it off your site builds exactly as before. There is no new markdown syntax, so any bare or markdown link to a post gets the card.
+
+Turn it on in both places that take options, so the pipeline builds the cards and the integration copies their images into the build:
+
+```js
+markdown: { processor: communeMarkdown({ site, embeds: { x: true } }) },
+integrations: [commune({ embeds: { x: true } })],
+```
+
+Run `npx commune embeds fetch`. It finds the post links in your notes and saves one snapshot each under `.commune/embeds/x/`, which you commit:
+
+```
+.commune/embeds/x/<id>.json       the text, author, date and image list
+.commune/embeds/x/<id>/<n>.jpg    the images, served from /embeds/x/<id>/<n>.jpg
+```
+
+A build only reads snapshots. It never contacts X, and neither does a reader's browser: the page loads no X script and no X image. A link with no snapshot stays a plain link, and the build prints a warning telling you to run the fetch. Fetching uses X's syndication endpoint first, which is undocumented and can change without notice, and falls back to oEmbed for text only. If neither answers, nothing is written and nothing breaks. Snapshots you already have keep working.
+
+If a refetch finds a post deleted, the snapshot keeps its text, author and date and the card says "Removed from X, captured <date>". Keeping a deleted post's words and serving a copy of its images are your choice as the site's owner. Make it with the authors' rights in mind; delete a snapshot to drop one.
+
+Without JavaScript a post link is the link with an X icon. With it, focus opens the card and Escape closes it. On a touch screen the first tap opens the card and a second tap, or its link, goes to X. The card shares the note-preview hover card of `SlidingPanes`, so a site that renders its own page shell needs that component's script.
 
 ## Author with the skills
 

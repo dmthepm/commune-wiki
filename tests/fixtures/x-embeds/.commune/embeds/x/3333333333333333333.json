@@ -1,0 +1,12 @@
+{
+  "id": "3333333333333333333",
+  "url": "https://x.com/evil/status/3333333333333333333",
+  "source": "oembed",
+  "author": { "name": "<img src=x onerror=alert(1)>", "handle": "evil" },
+  "text": "<script>alert(1)</script> <img src=\"https://pbs.twimg.com/a.jpg\"> & more",
+  "media": [
+    { "kind": "photo", "file": "../../../etc/passwd" },
+    { "kind": "photo", "file": "https://pbs.twimg.com/media/a.jpg" }
+  ],
+  "capturedAt": "2026-10-25T12:00:00.000Z"
+}

@@ -50,7 +50,7 @@ if (window.wikiInitialized) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-  const showPreview = (el, html, x, y) => {
+  const showPreview = (el, html, x, y, { className = '', interactive = false } = {}) => {
     try {
       let card = document.getElementById('note-hover');
       if(!card){
@@ -68,6 +68,10 @@ if (window.wikiInitialized) {
         document.body.appendChild(card);
       }
       card.innerHTML = html;
+      // X post cards share this card and its placement; they differ in a
+      // class for their inner layout and in being clickable on touch.
+      card.className = className;
+      card.style.pointerEvents = interactive ? 'auto' : 'none';
 
       // Viewport-aware positioning
       const padding = 16;
@@ -116,6 +120,66 @@ if (window.wikiInitialized) {
     }
   };
 
+
+  // --- X post cards ---
+  // `rehype-x-cards` leaves a hidden card right after each link to an X post,
+  // so there is nothing to fetch: the card is shown through the same floating
+  // element and placement as a note preview. Without this script the link is
+  // simply a link.
+  const xCardFor = (a) => {
+    const next = a.nextElementSibling;
+    return next && next.classList.contains('x-card') && next.id === a.getAttribute('aria-describedby') ? next : null;
+  };
+  let xOpenLink = null;
+  const showXCard = (a, x, y, interactive) => {
+    const source = xCardFor(a);
+    if (!source) return false;
+    showPreview(a, source.innerHTML, x, y, { className: 'x-hover', interactive });
+    xOpenLink = a;
+    return true;
+  };
+  const hideXCard = () => {
+    if (!xOpenLink) return;
+    xOpenLink = null;
+    hidePreview();
+  };
+  const noHover = () => window.matchMedia('(hover: none)').matches;
+  const xLink = (e) => e.target?.closest?.('a.x-link');
+
+  document.addEventListener('mouseenter', (e) => {
+    const a = xLink(e);
+    if (a && !noHover()) showXCard(a, e.clientX, e.clientY, false);
+  }, true);
+  document.addEventListener('mouseleave', (e) => {
+    if (xLink(e) && !noHover()) hideXCard();
+  }, true);
+  document.addEventListener('focusin', (e) => {
+    const a = xLink(e);
+    if (!a) return;
+    const rect = a.getBoundingClientRect();
+    showXCard(a, rect.left, rect.bottom, false);
+  });
+  document.addEventListener('focusout', (e) => {
+    if (xLink(e)) hideXCard();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideXCard();
+  });
+  // On touch the first tap opens the card, which carries its own "Open on X"
+  // link; a second tap on the same link, or that link, goes to X. A tap
+  // anywhere else closes it.
+  document.addEventListener('click', (e) => {
+    const a = xLink(e);
+    if (a && noHover() && xOpenLink !== a) {
+      const rect = a.getBoundingClientRect();
+      if (showXCard(a, rect.left, rect.bottom, true)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
+    if (xOpenLink && !a && !e.target?.closest?.('#note-hover')) hideXCard();
+  }, true);
 
   // --- Preview Event Handler ---
   const handlePreviewHover = async (e) => {
@@ -593,6 +657,34 @@ if (window.wikiInitialized) {
 </script>
 
 <style is:global>
+  /* --- X post cards (rehype-x-cards) --- */
+  .x-card { display: none; }
+  a.x-link::before {
+    content: '';
+    display: inline-block;
+    width: 0.8em;
+    height: 0.8em;
+    margin-right: 0.3em;
+    background-color: currentColor;
+    -webkit-mask: var(--x-icon) center / contain no-repeat;
+    mask: var(--x-icon) center / contain no-repeat;
+    --x-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.9 2H22l-7.6 8.7L23 22h-6.8l-5.3-6.9L4.8 22H1.7l8.1-9.3L1.3 2h7l4.8 6.3L18.9 2zm-1.2 18h1.7L6.6 3.9H4.8L17.7 20z'/%3E%3C/svg%3E");
+  }
+  #note-hover.x-hover { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; line-height: 1.4; color: var(--c-text); }
+  #note-hover.x-hover[hidden] { display: none; }
+  #note-hover.x-hover > span { display: block; }
+  #note-hover.x-hover .x-card-name { font-weight: 600; }
+  #note-hover.x-hover .x-card-handle { color: var(--c-text-muted); margin-left: 0.4em; }
+  #note-hover.x-hover .x-card-text { white-space: normal; overflow-wrap: anywhere; }
+  #note-hover.x-hover .x-card-media { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  #note-hover.x-hover .x-card-media img { max-width: 100%; max-height: 180px; border-radius: var(--c-radius-lg); object-fit: cover; }
+  #note-hover.x-hover .x-card-foot { color: var(--c-text-muted); font-size: 0.8rem; display: flex; flex-wrap: wrap; gap: 0.2rem 0.8rem; }
+  #note-hover.x-hover .x-card-removed { font-style: italic; }
+  @media (prefers-reduced-motion: no-preference) {
+    #note-hover.x-hover { animation: x-card-in 0.12s ease-out; }
+    @keyframes x-card-in { from { opacity: 0; } to { opacity: 1; } }
+  }
+
   /* Ensure body scroll is locked on desktop as the pane container handles it */
   @media (min-width: 1024px) {
     body {

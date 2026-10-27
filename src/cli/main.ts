@@ -62,13 +62,19 @@ const RENAME_OPTIONS: ParseArgsOptionsConfig = {
 	'dry-run': { type: 'boolean', default: false },
 };
 
+const EMBEDS_OPTIONS: ParseArgsOptionsConfig = {
+	...GLOBAL,
+	refresh: { type: 'boolean', default: false },
+	'stale-days': { type: 'string', default: '30' },
+};
+
 const GATE_OPTIONS: ParseArgsOptionsConfig = {
 	...GLOBAL,
 	dist: { type: 'string' },
 };
 
 /** Every route, longest first, so `graph query` is matched before a bare `graph`. */
-const ROUTES = ['graph query', 'graph related', 'check', 'gate', 'update', 'render', 'rename'];
+const ROUTES = ['embeds fetch', 'graph query', 'graph related', 'check', 'gate', 'update', 'render', 'rename'];
 
 interface Route {
 	name: string;
@@ -271,6 +277,22 @@ async function dispatch(args: string[]): Promise<number> {
 				values['move-url'] as boolean,
 				values['dry-run'] as boolean,
 				values.json as boolean
+			);
+		}
+		case 'embeds fetch': {
+			const { values } = parseStrict(rest, EMBEDS_OPTIONS, false, usage);
+			if (values.help) {
+				process.stdout.write(`${usage}\n`);
+				return EXIT_OK;
+			}
+			const staleDays = Number(values['stale-days']);
+			if (!Number.isFinite(staleDays) || staleDays < 0) {
+				throw usageError(`--stale-days takes a number of days, not ${values['stale-days']}`, usage);
+			}
+			const { embedsFetchCommand } = await import('./embeds.ts');
+			return embedsFetchCommand(
+				await resolveRoot(values.root as string | undefined),
+				{ refresh: values.refresh as boolean, staleDays, json: values.json as boolean }
 			);
 		}
 		case 'gate': {
