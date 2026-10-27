@@ -313,6 +313,32 @@ test('an image over the size cap is refused, declared or streamed', async () => 
 	assert.equal(streamed.outcome.snapshot.media[0].file, undefined);
 });
 
+// Shapes seen in live syndication answers, with made-up text.
+const syndText = (fields) => fromSyndication('7', { user: { name: 'N', screen_name: 'n' }, ...fields }, 'now').snapshot.text;
+
+test('a reply drops the leading @mentions X does not show', () => {
+	assert.equal(syndText({ text: '@alice @bob_2 Agreed, and thanks', display_text_range: [14, 32] }), 'Agreed, and thanks');
+	// A mention inside the shown part stays.
+	assert.equal(syndText({ text: '@alice ask @carol', display_text_range: [7, 17] }), 'ask @carol');
+});
+
+test('a long post, which syndication cuts short, is marked as cut', () => {
+	const text = 'The first part of a long post that X cut here';
+	assert.equal(syndText({ text, display_text_range: [0, 45], note_tweet: { id: 'x' } }), `${text}…`);
+	assert.equal(syndText({ text, display_text_range: [0, 45] }), text);
+});
+
+test('the range counts UTF-16 units over the text as sent', () => {
+	// 𝕏 is two UTF-16 units, and &amp; is counted as five characters, as sent.
+	assert.equal(syndText({ text: '@a 𝕏 &amp; me https://t.co/z', display_text_range: [3, 14] }), '𝕏 & me');
+});
+
+test('a range that does not fit the text is ignored', () => {
+	for (const display_text_range of [[0, 99], [5, 2], [-1, 3], ['0', '3'], null, 'x']) {
+		assert.equal(syndText({ text: '@a hi', display_text_range }), '@a hi', JSON.stringify(display_text_range));
+	}
+});
+
 test('oEmbed HTML gives text and a day, with tags removed', () => {
 	const snapshot = fromOembed('6', {
 		author_name: 'Name',

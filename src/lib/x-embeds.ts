@@ -169,6 +169,21 @@ export function fromSyndication(
 	if (!isHandle(data.user.screen_name)) return null;
 
 	let text: string = data.text;
+	// `display_text_range` is the part X shows: it leaves out a reply's leading
+	// @mentions and a trailing media link. Its offsets are UTF-16 units over
+	// the text as sent, so they are applied first, with String#slice. A range
+	// that does not fit is ignored.
+	const range = data.display_text_range;
+	if (
+		Array.isArray(range) &&
+		Number.isInteger(range[0]) &&
+		Number.isInteger(range[1]) &&
+		range[0] >= 0 &&
+		range[0] <= range[1] &&
+		range[1] <= text.length
+	) {
+		text = text.slice(range[0], range[1]);
+	}
 	// Syndication `text` is the post with t.co links; entities say what they
 	// stand for. Media links are dropped, because the media is shown.
 	for (const entity of data.entities?.urls ?? []) {
@@ -178,6 +193,10 @@ export function fromSyndication(
 		if (typeof entity?.url === 'string') text = text.split(entity.url).join('');
 	}
 	text = decodeEntities(text).replace(/[ \t]+\n/g, '\n').trim();
+	// A long post comes back cut at about 280 characters, with only the id of
+	// its full text. Mark the cut, so the card does not end mid-sentence as if
+	// that were all; "Open on X" has the rest.
+	if (data.note_tweet && text) text += '…';
 
 	// `sources` runs parallel to `media`: where to download each image from.
 	// It is not part of the snapshot, so it can never reach the committed JSON.
