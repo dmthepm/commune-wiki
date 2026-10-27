@@ -131,11 +131,18 @@ if (window.wikiInitialized) {
     return next && next.classList.contains('x-card') && next.id === a.getAttribute('aria-describedby') ? next : null;
   };
   let xOpenLink = null;
+  // True once a tap, not focus or hover, opened the card. A touch tap fires
+  // pointerdown, touchstart, touchend, mousedown, focusin, mouseup, click in
+  // that order, so focusin has already run by the time click does: without
+  // this, the click would see its own tap's focus as an open card and take it
+  // for the second tap.
+  let xTapped = false;
   const showXCard = (a, x, y, interactive) => {
     const source = xCardFor(a);
     if (!source) return false;
     showPreview(a, source.innerHTML, x, y, { className: 'x-hover', interactive });
     xOpenLink = a;
+    xTapped = false;
     return true;
   };
   const hideXCard = () => {
@@ -151,7 +158,10 @@ if (window.wikiInitialized) {
     if (a && !noHover()) showXCard(a, e.clientX, e.clientY, false);
   }, true);
   document.addEventListener('mouseleave', (e) => {
-    if (xLink(e) && !noHover()) hideXCard();
+    // Capture phase, so this also fires when the pointer leaves an element
+    // inside the link; only leaving the link itself closes the card.
+    const a = xLink(e);
+    if (a && e.target === a && !noHover()) hideXCard();
   }, true);
   document.addEventListener('focusin', (e) => {
     const a = xLink(e);
@@ -160,7 +170,9 @@ if (window.wikiInitialized) {
     showXCard(a, rect.left, rect.bottom, false);
   });
   document.addEventListener('focusout', (e) => {
-    if (xLink(e)) hideXCard();
+    // Tapping the card's own link moves focus off the post link; the card
+    // has to survive that or the tap lands on the text underneath.
+    if (xLink(e) && !e.relatedTarget?.closest?.('#note-hover')) hideXCard();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') hideXCard();
@@ -170,9 +182,10 @@ if (window.wikiInitialized) {
   // anywhere else closes it.
   document.addEventListener('click', (e) => {
     const a = xLink(e);
-    if (a && noHover() && xOpenLink !== a) {
+    if (a && noHover() && !(xOpenLink === a && xTapped)) {
       const rect = a.getBoundingClientRect();
       if (showXCard(a, rect.left, rect.bottom, true)) {
+        xTapped = true;
         e.preventDefault();
         e.stopPropagation();
       }
