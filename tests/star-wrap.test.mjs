@@ -46,8 +46,9 @@ test('no stylesheet rule gives the inline star any display but inline', async ()
 	for (const file of files) {
 		const text = await readFile(new URL(file, root), 'utf8');
 		for (const [, selector, body] of text.matchAll(/([^{}]*star-indicator-inline[^{}]*)\{([^}]*)\}/g)) {
-			const display = body.match(/display:\s*([\w-]+)/)?.[1];
-			if (display) assert.equal(display, 'inline', `${file}: ${selector.trim()}`);
+			for (const [, display] of body.matchAll(/display:\s*([\w-]+)/g)) {
+				assert.equal(display, 'inline', `${file}: ${selector.trim()}`);
+			}
 		}
 	}
 });
