@@ -37,7 +37,9 @@
             // The star must not land on a line of its own, but the link itself
             // has to wrap like any other run of text: a whole-link nowrap
             // pushed long titles onto their own line on phones. A no-break
-            // space glues the star to the link's last word and nothing else.
+            // space glues the star to the link's last word and nothing else,
+            // which only holds while the star is a plain inline box (see
+            // .star-indicator-inline in HeaderStarScript).
             const wrapper = document.createElement('span');
 
             // Create star as a separate clickable element (not part of the link)
