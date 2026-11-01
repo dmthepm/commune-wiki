@@ -12,7 +12,7 @@ Usage:
   commune [--root <dir>] import        <vault> [--public] [--dry-run] [--json]
   commune [--root <dir>] check         [--json]
   commune [--root <dir>] embeds fetch  [--refresh] [--stale-days <n>] [--json]
-  commune [--root <dir>] gate          [--dist <dir>] [--json]
+  commune [--root <dir>] gate          [--dist <dir>] [--allow-labels] [--json]
   commune --version
 
 Global options:
@@ -67,6 +67,8 @@ embeds fetch options:
 
 gate options:
   --dist <dir>   The built site to check, relative to --root. Default: dist.
+  --allow-labels Skip the exact-title assertion, so [[Name|label]] and [[name in
+                 another case]] pass. Every other assertion still runs.
 
 Exit codes:
   0  finished, findings or not (a dry run included)
@@ -131,10 +133,11 @@ skipped when they do not. Every repair and every skip is listed. Images and
 other attachments are counted and not copied. Refuses, before writing anything,
 if a target file already exists.`,
 	check: 'Usage: commune [--root <dir>] check [--json]',
-	gate: `Usage: commune [--root <dir>] gate [--dist <dir>] [--json]
+	gate: `Usage: commune [--root <dir>] gate [--dist <dir>] [--allow-labels] [--json]
 
 Run after a build. Asserts that every standalone page is in the search index,
 that every resolving WikiLink uses its target's exact title, and that WikiLinks
-to standalone pages rendered as hrefs. Exits 1 if any of that is false — the
+to standalone pages rendered as hrefs. --allow-labels skips the exact-title
+assertion only. Exits 1 if any of that is false — the
 one verb whose exit code encodes a finding.`,
 };

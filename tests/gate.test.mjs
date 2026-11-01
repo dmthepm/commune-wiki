@@ -156,3 +156,41 @@ test('an unknown flag is an invocation error, not a finding', async () => {
 	assert.equal(code, 2);
 	assert.equal(stdout, '');
 });
+
+test('--allow-labels lets a piped link and a link in another case through', async () => {
+	await withProject({ link: '[[About|the about page]] and [[about]]' }, async (root) => {
+		const strict = await commune('--root', root, 'gate');
+		assert.equal(strict.code, 1);
+		const { code, stderr } = await commune('--root', root, 'gate', '--allow-labels');
+		assert.equal(code, 0, stderr);
+		assert.match(stderr, /^PASS: /);
+		assert.doesNotMatch(stderr, /exact title/);
+	});
+});
+
+test('--allow-labels skips only the canonical-titles assertion', async () => {
+	const labelled = '[[About|the about page]]';
+	await withProject({ link: labelled, index: {} }, async (root) => {
+		const { code, stderr } = await commune('--root', root, 'gate', '--allow-labels');
+		assert.equal(code, 1);
+		assert.match(stderr, /missing from search index/);
+	});
+	await withProject({ link: labelled, html: '<html><body>About</body></html>' }, async (root) => {
+		const { code, stderr } = await commune('--root', root, 'gate', '--allow-labels');
+		assert.equal(code, 1);
+		assert.match(stderr, /did not render/);
+	});
+	await withProject({ link: labelled }, async (root) => {
+		await writeFile(path.join(root, 'src/content/notes/Other.md'), '---\ntitle: Other\nvisibility: public\nroutes: [/about/]\n---\nx\n');
+		const { code, stderr } = await commune('--root', root, 'gate', '--allow-labels');
+		assert.equal(code, 1);
+		assert.match(stderr, /routes must not share an address|collision|share/i);
+	});
+});
+
+test('the starter build uses --allow-labels, and the usage text lists it', async () => {
+	const { readFile } = await import('node:fs/promises');
+	const starter = JSON.parse(await readFile(new URL('../examples/starter/package.json', import.meta.url), 'utf8'));
+	assert.equal(starter.scripts.build, 'astro build && commune gate --allow-labels');
+	assert.match((await commune('--help')).stdout, /--allow-labels/);
+});

@@ -78,6 +78,7 @@ const EMBEDS_OPTIONS: ParseArgsOptionsConfig = {
 const GATE_OPTIONS: ParseArgsOptionsConfig = {
 	...GLOBAL,
 	dist: { type: 'string' },
+	'allow-labels': { type: 'boolean', default: false },
 };
 
 /** Every route, longest first, so `graph query` is matched before a bare `graph`. */
@@ -349,7 +350,8 @@ async function dispatch(args: string[]): Promise<number> {
 			return gateCommand(
 				await resolveRoot(values.root as string | undefined),
 				(values.dist as string | undefined) ?? 'dist',
-				values.json as boolean
+				values.json as boolean,
+				values['allow-labels'] as boolean
 			);
 		}
 		default:

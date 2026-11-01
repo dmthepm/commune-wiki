@@ -15,6 +15,10 @@
  * with the package — was the one repo that could not run it. The three
  * assertions are unchanged; only the way you invoke them is.
  *
+ * `--allow-labels` skips assertion 2 and nothing else, for a vault whose links
+ * render fine as `[[Name|label]]` or in another case. `commune check` still
+ * reports them.
+ *
  * Four assertions:
  *   1. every page in the `pages` collection is present in the search index
  *   2. every WikiLink that resolves uses the target's exact title (no pipes,
@@ -186,7 +190,7 @@ async function pageLinksRender(
 	];
 }
 
-export async function gateCommand(root: string, dist: string, json: boolean): Promise<number> {
+export async function gateCommand(root: string, dist: string, json: boolean, allowLabels = false): Promise<number> {
 	const index = await readSearchIndex(root);
 	const entries = await loadContentEntries({ root });
 	const pages = entries.filter((entry) => entry.collection === 'pages');
@@ -196,7 +200,7 @@ export async function gateCommand(root: string, dist: string, json: boolean): Pr
 	// things should say so once, not across two rebuilds.
 	const failures: GateFailure[] = [
 		...pagesAreIndexed(pages, index),
-		...titlesAreCanonical(entries),
+		...(allowLabels ? [] : titlesAreCanonical(entries)),
 		...routesAreFree(entries),
 		...(await pageLinksRender(entries, pages, distDir)),
 	];
@@ -205,7 +209,7 @@ export async function gateCommand(root: string, dist: string, json: boolean): Pr
 	// Name what was checked, not only the standalone-page count. A starter
 	// wiki has no standalone pages, and "0 pages indexed" alone reads as if
 	// the gate looked at nothing.
-	const checked = `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} checked, every resolved WikiLink uses its target's exact title`;
+	const checked = `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'} checked, ${allowLabels ? 'labels and other spellings in WikiLinks allowed' : "every resolved WikiLink uses its target's exact title"}`;
 	const indexed = pages.length
 		? `${pages.length} standalone page${pages.length === 1 ? '' : 's'} indexed for search and linked from notes`
 		: 'no standalone pages to index';

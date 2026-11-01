@@ -317,3 +317,152 @@ test('refuses a vault that contains the wiki', async () => {
 		assert.match(stderr, /inside the vault/);
 	});
 });
+
+// ---- round 2 ----
+
+import { parse as parseYaml } from 'yaml';
+
+/** What Astro's content layer reads, with its own options. */
+const astroRead = (file) => {
+	const block = file.split(/\n---/)[0].replace(/^---\n/, '');
+	return parseYaml(block, { schema: 'core', merge: true, customTags: ['timestamp'] });
+};
+
+const TRICKY_STEMS = [
+	'2024-01-15', '2024-01-15 10.30', '2024-01-15T10:30:00', '2024-01-15 10:30:00', '2024-01-15T10:30:00Z',
+	'1234', '1.5', '0x1F', 'null', 'Null', 'true', 'False', '~', 'yes', 'no', 'on', 'off', 'y', 'n', '-12', '1_000',
+];
+
+test('every title the import writes reads back as the same text under both parsers', async () => {
+	const files = Object.fromEntries(TRICKY_STEMS.map((stem) => [`${stem}.md`, 'body\n']));
+	await withDirs(files, async ({ vault, wiki, read }) => {
+		const { code, json } = await importJson(wiki, vault);
+		assert.equal(code, 0);
+		assert.equal(json.summary.imported, TRICKY_STEMS.length);
+		for (const stem of TRICKY_STEMS) {
+			const text = await read(`${stem}.md`);
+			assert.strictEqual(astroRead(text).title, stem, `astro reads ${stem}`);
+			assert.strictEqual(parseFrontmatter(text).data.title, stem, `graph reads ${stem}`);
+		}
+		const check = await commune('--root', wiki, 'check', '--json');
+		assert.equal(check.code, 0, check.stderr);
+	});
+});
+
+test('a daily note with no frontmatter checks clean', async () => {
+	await withDirs({ '2024-01-15.md': 'Today I [[2024-01-16]].\n', '2024-01-16.md': 'x\n' }, async ({ vault, wiki }) => {
+		await importJson(wiki, vault, '--public');
+		const check = await commune('--root', wiki, 'check', '--json');
+		assert.equal(check.code, 0, check.stderr);
+		assert.equal(JSON.parse(check.stdout).summary.errors, 0);
+	});
+});
+
+test('repairs of title and summary write text that reads back as text', async () => {
+	await withDirs(
+		{
+			'a.md': '---\ntitle: 2024-01-15\nsummary: 2024-01-16\n---\nb',
+			'b.md': '---\ntitle: 2024-01-15T10:30:00Z\nsummary: 12\n---\nb',
+			'c.md': '---\ntitle: true\nsummary: false\n---\nb',
+			'd.md': '---\ntitle:\nsummary: 1e3\n---\nb',
+		},
+		async ({ vault, wiki, read }) => {
+			const { code } = await importJson(wiki, vault);
+			assert.equal(code, 0);
+			const expect = { 'a.md': ['2024-01-15', '2024-01-16'], 'b.md': ['2024-01-15T10:30:00Z', '12'], 'c.md': ['true', 'false'], 'd.md': ['d', '1e3'] };
+			for (const [file, [title, summary]] of Object.entries(expect)) {
+				const text = await read(file);
+				for (const data of [astroRead(text), parseFrontmatter(text).data]) {
+					assert.strictEqual(data.title, title, file);
+					assert.strictEqual(data.summary, summary, file);
+				}
+			}
+		}
+	);
+});
+
+test('--public never publishes a note that says publish: false, draft: true or private: true', async () => {
+	await withDirs(
+		{
+			'Off.md': '---\ntitle: Off\npublish: false\n---\nPUBLISHFALSEMARKER',
+			'Off2.md': '---\ntitle: Off2\npublish: False\n---\nx',
+			'Off3.md': '---\ntitle: Off3\nPublish: "FALSE"\n---\nx',
+			'Drafty.md': '---\ntitle: Drafty\ndraft: true\n---\nDRAFTTRUEMARKER',
+			'Drafty2.md': '---\ntitle: Drafty2\nDRAFT: TRUE\n---\nx',
+			'Priv.md': '---\ntitle: Priv\nprivate: true\n---\nx',
+			'Priv2.md': '---\ntitle: Priv2\nprivate: "True"\n---\nx',
+			'Fine.md': '---\ntitle: Fine\npublish: true\ndraft: false\nprivate: false\n---\nx',
+			'Explicit.md': '---\ntitle: Explicit\nvisibility: public\npublish: false\n---\nx',
+		},
+		async ({ vault, wiki, read }) => {
+			const { code, json } = await importJson(wiki, vault, '--public');
+			assert.equal(code, 0);
+			const vis = async (f) => parseFrontmatter(await read(f)).data.visibility;
+			for (const f of ['Off', 'Off2', 'Off3', 'Drafty', 'Drafty2', 'Priv', 'Priv2']) {
+				assert.notEqual(await vis(`${f}.md`), 'public', f);
+			}
+			assert.equal(await vis('Fine.md'), 'public');
+			assert.equal(await vis('Explicit.md'), 'public', 'an explicit visibility is the author\'s word');
+			const held = Object.fromEntries(json.heldPrivate.map((h) => [h.file, h.reason]));
+			assert.deepEqual(Object.keys(held).sort(), ['Drafty.md', 'Drafty2.md', 'Off.md', 'Off2.md', 'Off3.md', 'Priv.md', 'Priv2.md']);
+			assert.match(held['Off.md'], /publish: false/);
+			assert.match(held['Drafty.md'], /draft: true/);
+			assert.match(held['Priv.md'], /private: true/);
+		}
+	);
+});
+
+test('the text output lists a note that was held private, with its reason', async () => {
+	await withDirs({ 'Off.md': '---\ntitle: Off\npublish: false\n---\nx', 'Ok.md': 'x' }, async ({ vault, wiki }) => {
+		const out = await commune('--root', wiki, 'import', vault, '--public', '--dry-run');
+		assert.match(out.stdout, /kept private\tOff\.md\tpublish: false/);
+		assert.match(out.stdout, /1 public, 1 private/);
+	});
+});
+
+test('--public keeps a note private when it holds an Obsidian comment outside code', async () => {
+	const body = '\nVisible %%SECRETCOMMENTMARKER like this%% text\r\n';
+	await withDirs(
+		{
+			'Commented.md': body,
+			'Block.md': 'a\n%%\nhidden\nlines\n%%\nb\n',
+			'InFence.md': 'a\n```\n%%not a comment%%\n```\nb\n',
+			'InSpan.md': 'a `%%x%%` b\n',
+			'Plain.md': '100% sure\n',
+		},
+		async ({ vault, wiki, read }) => {
+			const { code, json } = await importJson(wiki, vault, '--public');
+			assert.equal(code, 0);
+			const vis = async (f) => parseFrontmatter(await read(f)).data.visibility;
+			assert.notEqual(await vis('Commented.md'), 'public');
+			assert.notEqual(await vis('Block.md'), 'public');
+			assert.equal(await vis('InFence.md'), 'public');
+			assert.equal(await vis('InSpan.md'), 'public');
+			assert.equal(await vis('Plain.md'), 'public');
+			assert.equal(parseFrontmatter(await read('Commented.md')).content, body, 'body is byte for byte');
+			const held = Object.fromEntries(json.heldPrivate.map((h) => [h.file, h.reason]));
+			assert.deepEqual(Object.keys(held).sort(), ['Block.md', 'Commented.md']);
+			assert.match(held['Commented.md'], /%% comment/);
+		}
+	);
+});
+
+test('a note held private is still private without --public, and the folder warning prints when private notes exist', async () => {
+	await withDirs({ 'a.md': 'x', 'b.md': '---\ntitle: B\nvisibility: public\n---\nx' }, async ({ vault, wiki }) => {
+		const out = await commune('--root', wiki, 'import', vault, '--dry-run');
+		assert.match(out.stdout, /Visibility controls the site, not the folder\. Private notes are still files in the wiki, so if the wiki is pushed to a public repo they are public\./);
+	});
+	await withDirs({ 'b.md': '---\ntitle: B\nvisibility: public\n---\nx' }, async ({ vault, wiki }) => {
+		const out = await commune('--root', wiki, 'import', vault, '--dry-run');
+		assert.doesNotMatch(out.stdout, /Visibility controls the site/);
+	});
+});
+
+test('the closing line is true about the gate and tells older wikis what to change', async () => {
+	await withDirs({ 'a.md': '---\ntitle: A\nvisibility: public\n---\nx' }, async ({ vault, wiki }) => {
+		const out = await commune('--root', wiki, 'import', vault, '--dry-run');
+		assert.doesNotMatch(out.stdout, /stops at its gate/);
+		assert.match(out.stdout, /commune gate --allow-labels/);
+		assert.match(out.stdout, /made before this release/);
+	});
+});

@@ -27,7 +27,7 @@ import { lstat, mkdir, readFile, readdir, realpath, stat, unlink, writeFile } fr
 import path from 'node:path';
 import { isMap, isScalar, parseDocument, stringify } from 'yaml';
 import type { Pair } from 'yaml';
-import { CONTENT_DIRS, linkKey, toRoutePath } from '../lib/graph.ts';
+import { CONTENT_DIRS, linkKey, stripCode, toRoutePath } from '../lib/graph.ts';
 import { SCHEMA, writeJson, writeLines } from './output.ts';
 import { EXIT_OK, failure } from './errors.ts';
 
@@ -56,9 +56,11 @@ interface Planned {
 	title: string;
 	/** Keys the import added because the note had none. */
 	added: string[];
+	/** Why `--public` left this note private, when it did. */
+	held?: string;
 }
 
-type Outcome = { skip: string } | { text: string; visibility: Visibility; title: string; added: string[]; repairs: string[] };
+type Outcome = { skip: string } | { text: string; visibility: Visibility; title: string; added: string[]; repairs: string[]; held?: string };
 
 interface Edit {
 	start: number;
@@ -72,6 +74,42 @@ const yamlValue = (value: unknown, flow = false): string =>
 		.trimEnd();
 
 const quote = (text: string) => JSON.stringify(text);
+
+/**
+ * Text as a YAML value that reads back as the same string. Plain when the
+ * parser Astro uses and the graph uses (YAML 1.2 core plus the timestamp tag)
+ * gives the text back, double-quoted when it would read as a date, number,
+ * boolean or null.
+ */
+function textValue(text: string): string {
+	const plain = yamlValue(text);
+	if (plain.includes('\n')) return quote(text);
+	const doc = parseDocument(`k: ${plain}`, { customTags: ['timestamp'], merge: true, schema: 'core' });
+	return !doc.errors.length && (doc.toJS() as { k?: unknown })?.k === text ? plain : quote(text);
+}
+
+const OFF = new Set(['false', 'no', 'off', '0']);
+const ON = new Set(['true', 'yes', 'on', '1']);
+
+/** Whether the author wrote `key` (in any case) as a yes or a no. */
+function says(data: Record<string, unknown>, key: string, want: 'on' | 'off'): boolean {
+	for (const [name, value] of Object.entries(data)) {
+		if (name.trim().toLowerCase() !== key) continue;
+		const word = String(value).trim().toLowerCase();
+		if ((want === 'on' ? ON : OFF).has(word)) return true;
+	}
+	return false;
+}
+
+/** Why `--public` must not publish this note, or `''`. */
+function holdReason(data: Record<string, unknown>, body: string): string {
+	const reasons: string[] = [];
+	if (says(data, 'publish', 'off')) reasons.push('publish: false');
+	if (says(data, 'draft', 'on')) reasons.push('draft: true');
+	if (says(data, 'private', 'on')) reasons.push('private: true');
+	if (stripCode(body).includes('%%')) reasons.push('an Obsidian %% comment, which a reader of the vault never sees, would ship in the page');
+	return reasons.join(', ');
+}
 
 /** The note's block, split the way `parseFrontmatter` splits it. */
 function splitBlock(text: string): { open: string; block: string; rest: string } | 'none' | 'unclosed' {
@@ -115,13 +153,16 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 	if (split === 'unclosed') return { skip: 'the frontmatter starts with --- but never closes' };
 
 	if (split === 'none') {
-		const lines = [`title: ${yamlValue(stem)}`, ...(makePublic ? ['visibility: public'] : [])];
+		const held = makePublic ? holdReason({}, text) : '';
+		const publish = makePublic && !held;
+		const lines = [`title: ${textValue(stem)}`, ...(publish ? ['visibility: public'] : [])];
 		return {
 			text: `${bom}---${eol}${lines.join(eol)}${eol}---${eol}${text}`,
-			visibility: makePublic ? 'public' : 'private',
+			visibility: publish ? 'public' : 'private',
 			title: stem,
-			added: makePublic ? ['title', 'visibility'] : ['title'],
+			added: publish ? ['title', 'visibility'] : ['title'],
 			repairs: [],
+			...(held ? { held } : {}),
 		};
 	}
 
@@ -174,17 +215,17 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 	let title: string;
 	if (!pairs.has('title')) {
 		title = stem;
-		appended.push(`title: ${yamlValue(stem)}`);
+		appended.push(`title: ${textValue(stem)}`);
 		added.push('title');
 	} else if (unset('title') || data.title === '') {
 		title = stem;
-		replace('title', yamlValue(stem));
+		replace('title', textValue(stem));
 		repairs.push(`title was empty, now the file name ${quote(stem)}`);
 	} else if (typeof data.title === 'string') {
 		title = data.title;
 	} else if (typeof data.title === 'number' || typeof data.title === 'boolean' || data.title instanceof Date) {
 		title = sourceOf(pairs.get('title')!);
-		replace('title', yamlValue(title));
+		replace('title', textValue(title));
 		repairs.push(`title was ${describe(data.title)}, not text, now ${quote(title)}`);
 	} else {
 		title = stem;
@@ -198,9 +239,11 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 		remove('visibility');
 		repairs.push('visibility was empty, so it is treated as missing');
 	}
+	let held = '';
 	if (unset('visibility')) {
-		visibility = makePublic ? 'public' : 'private';
-		if (makePublic) {
+		held = makePublic ? holdReason(data, rest) : '';
+		visibility = makePublic && !held ? 'public' : 'private';
+		if (makePublic && !held) {
 			appended.push('visibility: public');
 			added.push('visibility');
 		}
@@ -241,7 +284,7 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 			repairs.push('summary was empty, so it is treated as missing');
 		} else if (typeof summary === 'number' || typeof summary === 'boolean' || summary instanceof Date) {
 			const asText = sourceOf(pairs.get('summary')!);
-			replace('summary', yamlValue(asText));
+			replace('summary', textValue(asText));
 			repairs.push(`summary was ${describe(summary)}, not text, now ${quote(asText)}`);
 		} else if (typeof summary !== 'string') {
 			problems.push('summary is a list or a map, and it should be text');
@@ -285,7 +328,7 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 	}
 
 	if (problems.length) return { skip: problems.join('; ') };
-	if (!edits.length && !appended.length) return { text: raw, visibility, title, added, repairs };
+	if (!edits.length && !appended.length) return { text: raw, visibility, title, added, repairs, ...(held ? { held } : {}) };
 
 	if ((doc.contents as { flow?: boolean } | null)?.flow) {
 		return { skip: 'the frontmatter is written as one {...} map and cannot be edited in place' };
@@ -296,7 +339,7 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 	}
 	const blockEol = block.includes('\r\n') ? '\r\n' : '\n';
 	if (appended.length) edited += appended.map((line) => line + blockEol).join('');
-	return { text: `${bom}${open}${edited}${rest}`, visibility, title, added, repairs };
+	return { text: `${bom}${open}${edited}${rest}`, visibility, title, added, repairs, ...(held ? { held } : {}) };
 }
 
 interface Found {
@@ -372,7 +415,7 @@ export async function importCommand(
 			return;
 		}
 		for (const message of outcome.repairs) repairs.push({ file, field: message.split(' ')[0], message });
-		planned.push({ file, target: `${notesDir}/${file}`, text: outcome.text, visibility: outcome.visibility, title: outcome.title, added: outcome.added });
+		planned.push({ file, target: `${notesDir}/${file}`, text: outcome.text, visibility: outcome.visibility, title: outcome.title, added: outcome.added, held: outcome.held });
 	});
 	const byFile = (a: { file: string }, b: { file: string }) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0);
 	planned.sort(byFile);
@@ -425,6 +468,8 @@ export async function importCommand(
 		attachments: found.attachments,
 		duplicateTitles: duplicateTitles.length,
 	};
+	const heldPrivate = planned.filter((note) => note.held).map((note) => ({ file: note.file, reason: note.held! }));
+	const folderNote = 'Visibility controls the site, not the folder. Private notes are still files in the wiki, so if the wiki is pushed to a public repo they are public.';
 	const hint = `${summary.public === 0 ? 'Nothing is public yet, so the site will look empty. ' : ''}To publish a note, set visibility: public in its frontmatter. To publish every imported note that has no visibility, import into a fresh wiki with --public.`;
 
 	if (json) {
@@ -438,8 +483,9 @@ export async function importCommand(
 			imports: planned.map((note) => ({ file: note.file, target: note.target, visibility: note.visibility, added: note.added })),
 			repairs,
 			skipped,
+			heldPrivate,
 			duplicateTitles,
-			hint,
+			hint: summary.private + summary.draft ? `${hint} ${folderNote}` : hint,
 		});
 		return EXIT_OK;
 	}
@@ -448,6 +494,7 @@ export async function importCommand(
 	if (dryRun) lines.push(...planned.map((note) => `copy\t${note.file}\t${note.target}\t${note.visibility}`));
 	lines.push(...repairs.map((repair) => `repair\t${repair.file}\t${repair.message}`));
 	lines.push(...skipped.map((skip) => `skip\t${skip.file}\t${skip.reason}`));
+	lines.push(...heldPrivate.map((held) => `kept private\t${held.file}\t${held.reason}`));
 	lines.push(
 		`${dryRun ? 'Dry run, nothing written. Would import' : 'Imported'} ${summary.imported} of ${summary.found} notes into ${notesDir}.`,
 		`${summary.public} public, ${summary.private} private${summary.draft ? `, ${summary.draft} draft` : ''}. ${summary.titled} got a title from the file name. ${repairs.length} ${repairs.length === 1 ? 'value was' : 'values were'} repaired in ${summary.repaired} ${summary.repaired === 1 ? 'note' : 'notes'}. ${summary.skipped} skipped.`
@@ -458,8 +505,9 @@ export async function importCommand(
 	}
 	if (duplicateTitles.length > 10) lines.push(`${duplicateTitles.length - 10} more shared titles.`);
 	lines.push(hint);
+	if (summary.private + summary.draft) lines.push(folderNote);
 	if (summary.public) {
-		lines.push('Run commune check next. npm run build stops at its gate on a link such as [[Name|label]], or one spelled differently from the note\'s title, in a public note. check lists each one.');
+		lines.push('Run commune check next. It lists links such as [[Name|label]], or spelled in another case, which render fine. The starter\'s build runs commune gate --allow-labels, so it accepts them. A wiki made before this release needs --allow-labels added to the gate in its build script.');
 	}
 	writeLines(lines);
 	return EXIT_OK;

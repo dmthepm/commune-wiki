@@ -88,6 +88,17 @@ test('copier writes the registry latest when the pinned version is not published
   assert.equal(manifest.dependencies.astro, JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8')).dependencies.astro);
 });
 
+test('copier drops --allow-labels from the build when it falls back to an older release', async t => {
+  const cwd = await sandbox(t);
+  await exec(process.execPath, [copier, 'wiki'], { cwd, env: npmEnv('missing') });
+  const manifest = JSON.parse(await readFile(path.join(cwd, 'wiki/package.json'), 'utf8'));
+  assert.equal(manifest.scripts.build, 'astro build && commune gate');
+  const pinned = await sandbox(t);
+  await exec(process.execPath, [copier, 'wiki'], { cwd: pinned, env: npmEnv('exists') });
+  const kept = JSON.parse(await readFile(path.join(pinned, 'wiki/package.json'), 'utf8'));
+  assert.equal(kept.scripts.build, 'astro build && commune gate --allow-labels');
+});
+
 test('copier keeps the pin and says nothing when the registry cannot be asked', async t => {
   const cwd = await sandbox(t);
   const { stdout, stderr } = await exec(process.execPath, [copier, 'wiki'], { cwd, env: npmEnv('fail') });
