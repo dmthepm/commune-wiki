@@ -20,7 +20,7 @@
 import { glob } from 'tinyglobby';
 import { slug as githubSlug } from 'github-slugger';
 import { parseFrontmatter, type FrontmatterWarning } from './frontmatter.ts';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
 	readContentHistory,
@@ -95,6 +95,8 @@ export interface ContentEntry {
 	modifiedInGit?: string;
 	/** Markdown body with frontmatter stripped. */
 	body: string;
+	/** Relative markdown image paths in the body that exist on disk beside the note. */
+	besideImages?: string[];
 	/** Parsed frontmatter. Kept because links can live in it. */
 	frontmatter: Record<string, unknown>;
 	/** What `yaml` warned about in the frontmatter. Absent when it had nothing to say. */
@@ -389,6 +391,12 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 
 			if (!isPublic(collection, data)) continue;
 
+			// A hand-written `title: {{title}}` is a map, and nothing downstream can
+			// use one. Like a bad `routes:`, it fails here with the file named.
+			if (data.title !== undefined && data.title !== null && typeof data.title !== 'string') {
+				throw new Error(`${file}: title must be text, e.g. title: My note`);
+			}
+
 			const { slug, urlPath } = toUrlPath(file, collection, data);
 			const summary = typeof data.summary === 'string' ? data.summary : undefined;
 			const dates = await resolveDates(root, file, data, history);
@@ -405,6 +413,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 				...(summary ? { summary } : {}),
 				...dates,
 				body: content,
+				besideImages: await existingBesideImages(root, file, content),
 				frontmatter: data,
 				...(warnings.length ? { frontmatterWarnings: warnings } : {}),
 				file,
@@ -648,6 +657,61 @@ export function noteDir(file: string, collection: CollectionName = 'notes'): str
 	const prefix = `${CONTENT_DIRS[collection]}/`;
 	const inside = relative.startsWith(prefix) ? relative.slice(prefix.length) : relative;
 	return inside.includes('/') ? inside.slice(0, inside.lastIndexOf('/')) : '';
+}
+
+/**
+ * The relative images a body writes as `![alt](path)`, as paths: percent-decoded,
+ * without a query or fragment. Absolute paths and anything with a scheme are
+ * not in the list, because they are never rewritten or checked.
+ */
+export function markdownImagePaths(body: string): string[] {
+	const paths = new Set<string>();
+	for (const match of stripCode(body).matchAll(MARKDOWN_LINK)) {
+		if (!match[0].startsWith('!')) continue;
+		const destination = relativeImagePath(match[1].replace(/^<|>$/g, ''));
+		if (destination) paths.add(destination);
+	}
+	return [...paths];
+}
+
+/** One image destination as a relative, decoded path, or `undefined` when it is external or absolute. */
+export function relativeImagePath(destination: string): string | undefined {
+	const raw = destination.trim();
+	if (!raw || raw.startsWith('/') || raw.startsWith('#') || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return undefined;
+	const decoded = decodePath(raw.split(/[?#]/)[0]).replace(/\\/g, '/');
+	return decoded || undefined;
+}
+
+/**
+ * The file in the attachments folder that a relative markdown image means:
+ * the path from the note's folder if it is there, else the way a `![[name]]`
+ * is read, by the end of the path.
+ */
+export function resolveMarkdownImage(index: ImageIndex, destination: string, fromDir = ''): string | undefined {
+	const joined = path.posix.normalize(fromDir ? `${fromDir}/${destination}` : destination);
+	if (!joined.startsWith('../')) {
+		const exact = index.files.find((file) => file.toLowerCase() === joined.toLowerCase());
+		if (exact) return exact;
+	}
+	return resolveImage(index, destination.replace(/^(\.{1,2}\/)+/, ''), fromDir);
+}
+
+/** The ones of a note's relative markdown images that are files next to it. */
+async function existingBesideImages(root: string, file: string, body: string): Promise<string[]> {
+	const here = path.dirname(path.join(root, file));
+	const found: string[] = [];
+	for (const image of markdownImagePaths(body)) {
+		const info = await stat(path.join(here, ...image.split('/'))).catch(() => undefined);
+		if (info?.isFile()) found.push(image);
+	}
+	return found;
+}
+
+/** The relative markdown images of a body that are nowhere: not beside the note, not in the attachments. */
+export async function missingMarkdownImages(root: string, body: string, file: string | undefined, images: ImageIndex): Promise<string[]> {
+	const beside = file ? await existingBesideImages(root, file, body) : [];
+	const fromDir = file ? noteDir(file) : '';
+	return markdownImagePaths(body).filter((image) => !beside.includes(image) && !resolveMarkdownImage(images, image, fromDir));
 }
 
 /** Every image under `public/attachments` of one project. */
@@ -1061,7 +1125,7 @@ export interface Diagnostic {
 	/** Canonical URL of the entry the finding is in. Carried so build output can name the route. */
 	urlPath?: string;
 	/** How the offending link was spelled, which decides `[[name]]` vs `(url)` rendering. */
-	kind?: LinkKind;
+	kind?: LinkKind | 'image';
 	/** urlPaths in contention, for `ambiguous-target` and `duplicate-name`. */
 	candidates?: string[];
 	/** The spelling a `noncanonical-title` finding should have used. */
@@ -1189,6 +1253,7 @@ export function buildGraph(entries: ContentEntry[], images?: ImageIndex): Graph 
 	// the public artifact and holds resolved urlPaths only.
 	const extracted = new Map<string, ExtractedLink[]>();
 	const files = new Map<string, string>();
+	const entryByUrl = new Map(entries.map((entry) => [entry.urlPath, entry]));
 
 	for (const entry of entries) {
 		extracted.set(entry.urlPath, extractLinks(entry.body, entry.frontmatter));
@@ -1275,6 +1340,22 @@ export function buildGraph(entries: ContentEntry[], images?: ImageIndex): Graph 
 		}
 
 		note.outbound = resolvedOutbound;
+
+		// A relative `![alt](path)` that is neither beside the note nor in the
+		// attachments is dropped from the page, and is reported here.
+		const entry = entryByUrl.get(fromUrl)!;
+		for (const image of markdownImagePaths(entry.body)) {
+			if (entry.besideImages?.includes(image) || (images && resolveMarkdownImage(images, image, noteDir(entry.file, entry.collection)))) continue;
+			diagnostics.push({
+				rule: 'broken-link',
+				severity: 'warning',
+				file: entry.file,
+				urlPath: fromUrl,
+				kind: 'image',
+				target: image,
+				message: `${spellLink({ kind: 'image', target: image })} does not resolve`,
+			});
+		}
 	}
 
 	// Calculate which notes get stars
@@ -1300,7 +1381,8 @@ export function buildGraph(entries: ContentEntry[], images?: ImageIndex): Graph 
 }
 
 /** How a link was written, in the spelling its kind uses. */
-function spellLink(link: Pick<ExtractedLink, 'kind' | 'target'>): string {
+function spellLink(link: { kind: LinkKind | 'image'; target: string }): string {
+	if (link.kind === 'image') return `![](${link.target})`;
 	return link.kind === 'url' ? `(${link.target})` : `[[${link.target}]]`;
 }
 

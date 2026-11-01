@@ -29,6 +29,7 @@ import {
 	extractLinks,
 	loadContentEntries,
 	loadImageIndex,
+	missingMarkdownImages,
 	isImageName,
 	noteDir,
 	resolveImage,
@@ -69,7 +70,9 @@ export async function renderCommand(
 	const images = await loadImageIndex({ root });
 	// An image that is there is shown on the page, so it is not a name that points at nothing.
 	const fromDir = source.file ? noteDir(source.file) : '';
-	const links = extractLinks(source.text, source.frontmatter)
+	const missing = await missingMarkdownImages(root, source.text, source.file, images);
+	const links = [
+		...extractLinks(source.text, source.frontmatter)
 		.filter((link) => !(link.kind === 'name' && isImageName(link.target) && resolveImage(images, link.target, fromDir)))
 		.map((link) => {
 		const target = resolveLink(link, byName, byUrl);
@@ -81,7 +84,9 @@ export async function renderCommand(
 				? { urlPath: entry.urlPath, title: entry.title, collection: entry.collection }
 				: null,
 		};
-	});
+	}),
+		...missing.map((target) => ({ kind: 'image' as const, target, resolved: null })),
+	];
 
 	const renderer = await communeMarkdown({ site, root }).createRenderer({});
 	const { code } = await renderer.render(source.text, {

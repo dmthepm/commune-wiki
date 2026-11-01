@@ -342,6 +342,128 @@ test('a status outside the schema loses the value, keeps the note and names the 
 	);
 });
 
+// ------------------------------------------------- markdown image links
+
+const MD = '![alt](img/mdstyle.png) and ![](img/mdstyle.png) and ![ext](https://example.test/x.png) and ![abs](/abs/x.png)';
+
+test('a markdown image that resolves through the attachments is not broken, one that resolves nowhere is', async () => {
+	await withWiki(
+		{
+			[`${NOTES}/A.md`]: note('A', '![a](img/mdstyle.png) ![b](img/gone.png) ![c](https://example.test/x.png)'),
+			'public/attachments/img/mdstyle.png': PNG,
+		},
+		async (wiki) => {
+			const report = await check(wiki);
+			assert.deepEqual(broken(report), ['img/gone.png']);
+			const finding = report.findings.find((f) => f.rule === 'broken-link');
+			assert.equal(finding.file, `${NOTES}/A.md`);
+		}
+	);
+});
+
+test('a relative image beside the note on disk is not broken and is left to Astro', async () => {
+	await withWiki(
+		{ [`${NOTES}/Dir/A.md`]: note('A', '![a](pics/here%20now.png)'), [`${NOTES}/Dir/pics/here now.png`]: PNG },
+		async (wiki) => {
+			assert.deepEqual(broken(await check(wiki)), []);
+			const html = await render(wiki, '', `${NOTES}/Dir/A.md`);
+			// Astro's own marker, with the path as written, means it is left for Astro.
+			assert.match(html, /__ASTRO_IMAGE_=.*pics\/here now\.png/);
+		}
+	);
+});
+
+test('a markdown image renders from the attachments, as alt text when it is nowhere, and external ones are untouched', async () => {
+	await withWiki({ [`${NOTES}/A.md`]: note('A', 'x'), 'public/attachments/img/mdstyle.png': PNG }, async (wiki) => {
+		const html = await render(wiki, `${MD} ![](gone.png) ![lost](gone.png)\n`);
+		assert.match(html, /<img src="\/attachments\/img\/mdstyle\.png" alt="alt">/);
+		assert.match(html, /<img src="https:\/\/example\.test\/x\.png" alt="ext">/);
+		assert.match(html, /<img src="\/abs\/x\.png" alt="abs">/);
+		assert.match(html, /lost/);
+		assert.doesNotMatch(html, /gone\.png/);
+	});
+});
+
+test('render and related list a missing markdown image as unresolved, and not one that is there', async () => {
+	await withWiki({ [`${NOTES}/A.md`]: note('A', '![a](img/mdstyle.png) ![b](gone.png)'), 'public/attachments/img/mdstyle.png': PNG }, async (wiki) => {
+		const rendered = JSON.parse((await commune('--root', wiki, 'render', `${NOTES}/A.md`, '--site', 'https://example.test', '--json')).stdout);
+		assert.deepEqual(rendered.unresolved, ['gone.png']);
+		const related = JSON.parse((await commune('--root', wiki, 'graph', 'related', `${NOTES}/A.md`, '--json')).stdout);
+		assert.equal(related.summary.unresolved, 1);
+	});
+});
+
+test('import copies a markdown-linked image only when a public note links it, and decodes the path', async () => {
+	await withVault(
+		{
+			'Public.md': '![a](Pics/my%20photo.png) ![b](../outside-missing.png)\n',
+			'Pics/my photo.png': PNG,
+			'Secret.md': '---\nvisibility: private\n---\n![s](secret-photo.png)\n',
+			'secret-photo.png': PNG,
+			'unused.png': PNG,
+		},
+		async ({ wiki, imp }) => {
+			const { json } = await imp('--public');
+			assert.deepEqual(json.images.files.map((f) => f.target), ['public/attachments/Pics/my photo.png']);
+			assert.equal(json.images.heldBack, 1);
+			assert.ok(!(await exists(path.join(wiki, 'public/attachments/secret-photo.png'))));
+			assert.deepEqual(broken(await check(wiki)), ['../outside-missing.png']);
+		}
+	);
+});
+
+// ------------------------------------------------------ a title that is not text
+
+test('a hand-written title: {{title}} fails check and names the file', async () => {
+	await withWiki({ [`${NOTES}/Tpl.md`]: `---\nvisibility: public\ntitle: {{title}}\n---\nbody\n` }, async (wiki) => {
+		const result = await commune('--root', wiki, 'check', '--json');
+		assert.notEqual(result.code, 0);
+		assert.match(result.stderr, /src\/content\/notes\/Tpl\.md/);
+		assert.match(result.stderr, /title must be text/);
+		assert.doesNotMatch(result.stderr, /trim is not a function/);
+	});
+});
+
+// ------------------------------------------------- removal keeps its neighbours
+
+const REMOVE_SHAPES = {
+	'a block list': 'status:\n  - "[[Published]]"\ncreated: 2024-01-01\n',
+	'a block list that is not indented': 'status:\n- "[[Published]]"\ncreated: 2024-01-01\n',
+	'a flow list': 'status: ["[[Published]]"]\ncreated: 2024-01-01\n',
+	'a scalar': 'status: done\ncreated: 2024-01-01\n',
+	'an empty value': 'status:\ncreated: 2024-01-01\n',
+	'a block map': 'status:\n  a: 1\n  b: 2\ncreated: 2024-01-01\n',
+	'a literal block': 'status: |\n  one\n  two\ncreated: 2024-01-01\n',
+	'a value then a blank line': 'status:\n  - x\n\ncreated: 2024-01-01\n',
+	'a value then a comment': 'status: [x]\n# note\ncreated: 2024-01-01\n',
+	'a trailing comment': 'status: done # why\ncreated: 2024-01-01\n',
+};
+
+for (const [shape, yaml] of Object.entries(REMOVE_SHAPES)) {
+	for (const eol of ['\n', '\r\n']) {
+		test(`removing a bad status keeps every other key: ${shape}${eol === '\r\n' ? ', CRLF' : ''}`, async () => {
+			const fm = `title: T\n${yaml}author: me\n`.replace(/\n/g, eol);
+			await withVault({ 'N.md': `---${eol}${fm}---${eol}body${eol}` }, async ({ wiki, imp }) => {
+				const { json } = await imp('--public');
+				assert.equal(json.summary.imported, 1);
+				const out = await readFile(path.join(wiki, NOTES, 'N.md'), 'utf8');
+				assert.doesNotMatch(out, /status/);
+				assert.match(out, /^title: T\r?$/m);
+				assert.match(out, /^created: 2024-01-01\r?$/m);
+				assert.match(out, /^author: me\r?$/m);
+				if (shape.includes('comment') && !shape.includes('trailing')) assert.match(out, /^# note\r?$/m);
+			});
+		});
+	}
+}
+
+test('removing the last key keeps the keys before it', async () => {
+	await withVault({ 'N.md': '---\ntitle: T\ncreated: 2024-01-01\nstatus:\n  - x\n---\nbody\n' }, async ({ wiki, imp }) => {
+		await imp('--public');
+		assert.equal(await readFile(path.join(wiki, NOTES, 'N.md'), 'utf8'), '---\ntitle: T\ncreated: 2024-01-01\nvisibility: public\n---\nbody\n');
+	});
+});
+
 // ------------------------------------------------------- frontmatter noise
 
 const TEMPLATE = '---\ntitle: T\ncreated: {{date}}\n---\nbody\n';

@@ -27,6 +27,7 @@ import {
 	extractLinks,
 	loadContentEntries,
 	loadImageIndex,
+	missingMarkdownImages,
 	isImageName,
 	noteDir,
 	resolveImage,
@@ -193,7 +194,9 @@ export async function relatedCommand(root: string, input: string, json: boolean)
 	const self = source.file ? entries.find((entry) => entry.file === source.file) : undefined;
 
 	const fromDir = source.file ? noteDir(source.file) : '';
-	const links = extractLinks(source.text, source.frontmatter)
+	const missing = await missingMarkdownImages(root, source.text, source.file, images);
+	const links = [
+		...extractLinks(source.text, source.frontmatter)
 		.filter((link) => !(link.kind === 'name' && isImageName(link.target) && resolveImage(images, link.target, fromDir)))
 		.map((link) => {
 		const target = resolveLink(link, byName, byUrl);
@@ -203,7 +206,9 @@ export async function relatedCommand(root: string, input: string, json: boolean)
 			target: link.target,
 			resolved: entry ? toReference(entry) : null,
 		};
-	});
+	}),
+		...missing.map((target) => ({ kind: 'image' as const, target, resolved: null })),
+	];
 
 	const prose = stripLinkSyntax(stripCode(source.text));
 	const linkedPaths = new Set(

@@ -22,7 +22,8 @@
  * whatever is in it. An image is copied into `public/attachments`, keeping its
  * vault path, only when a note that the import leaves public embeds it. One
  * that only private or draft notes embed stays in the vault. Files over 10 MB
- * are listed and left. Other attachments are counted and left.
+ * are listed and left. Other attachments are counted and left. A relative
+ * `![alt](path)` image counts as an embed, percent-decoded, like `![[...]]`.
  *
  * The order is plan, then write. Every note is read and checked in memory, a
  * target that already exists refuses the whole import, and `--dry-run` stops
@@ -40,7 +41,9 @@ import {
 	buildImageIndex,
 	isImageName,
 	linkKey,
+	markdownImagePaths,
 	resolveImage,
+	resolveMarkdownImage,
 	splitWikilinkTarget,
 	stripCode,
 	toRoutePath,
@@ -75,8 +78,10 @@ interface Planned {
 	added: string[];
 	/** Why `--public` left this note private, when it did. */
 	held?: string;
-	/** The image files its body names, as written. */
+	/** The image files its body names with `![[...]]` or `[[...]]`, as written. */
 	embeds: string[];
+	/** The relative paths of its `![alt](path)` images, decoded. */
+	pictures: string[];
 }
 
 type Outcome = { skip: string } | { text: string; visibility: Visibility; title: string; added: string[]; repairs: string[]; held?: string };
@@ -226,8 +231,15 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 		// The end of the value itself, not range[2], which runs on to the next key.
 		const valueEnd = (pair.value as { range?: [number, number, number] } | null)?.range?.[1] ?? keyStart;
 		const from = block.lastIndexOf('\n', keyStart - 1) + 1;
-		const next = block.indexOf('\n', Math.max(valueEnd, block.indexOf(':', keyStart)));
-		edits.push({ start: from, end: next === -1 ? block.length : next + 1, text: '' });
+		// A block list, map or literal already ends past its newline. Searching on
+		// from there would take the next key's line too. A flow value or a scalar
+		// ends mid-line, and the rest of that line (a comment) goes with it.
+		let end = valueEnd;
+		if (end <= keyStart || block.charAt(end - 1) !== '\n') {
+			const next = block.indexOf('\n', Math.max(valueEnd, block.indexOf(':', keyStart)));
+			end = next === -1 ? block.length : next + 1;
+		}
+		edits.push({ start: from, end, text: '' });
 	};
 	const unset = (key: string) => data[key] === undefined || data[key] === null;
 
@@ -461,7 +473,7 @@ export async function importCommand(
 		for (const message of outcome.repairs) repairs.push({ file, field: message.split(' ')[0], message });
 		const split = splitBlock(outcome.text.replace(/^\uFEFF/, ''));
 		const body = typeof split === 'object' ? split.rest : outcome.text;
-		planned.push({ file, target: `${notesDir}/${file}`, text: outcome.text, visibility: outcome.visibility, title: outcome.title, added: outcome.added, held: outcome.held, embeds: imageNames(body) });
+		planned.push({ file, target: `${notesDir}/${file}`, text: outcome.text, visibility: outcome.visibility, title: outcome.title, added: outcome.added, held: outcome.held, embeds: imageNames(body), pictures: markdownImagePaths(body) });
 	});
 	const byFile = (a: { file: string }, b: { file: string }) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0);
 	planned.sort(byFile);
@@ -476,6 +488,10 @@ export async function importCommand(
 		const dir = path.posix.dirname(note.file) === '.' ? '' : path.posix.dirname(note.file);
 		for (const name of note.embeds) {
 			const image = resolveImage(index, name, dir);
+			if (image) embeddedBy.set(image, (embeddedBy.get(image) ?? false) || note.visibility === 'public');
+		}
+		for (const picture of note.pictures) {
+			const image = resolveMarkdownImage(index, picture, dir);
 			if (image) embeddedBy.set(image, (embeddedBy.get(image) ?? false) || note.visibility === 'public');
 		}
 	}

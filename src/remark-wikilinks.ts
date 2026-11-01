@@ -12,6 +12,10 @@
  *   [[Folder/Note]] → the note at that path, when no title is spelled that way
  *   ![[photo.png]] → an image, found by file name under `public/attachments`
  *   ![[photo.png|300]] → the same image, 300 pixels wide
+ *   ![alt](img/photo.png) → left to Astro when the file is beside the note,
+ *     else the image under `public/attachments`, else its alt text. Astro stops
+ *     the whole build on a relative image it cannot find, so none is left to it
+ *     that is not there. External and absolute URLs are never touched.
  *
  * Inside a table Obsidian writes `[[Name\|label]]`; the backslash is not part
  * of the name.
@@ -21,9 +25,10 @@
  * graph core in `src/lib/graph.ts` — not here.
  */
 
-import { visit } from 'unist-util-visit';
+import { visit, SKIP } from 'unist-util-visit';
 import type { Root } from 'mdast';
 import path from 'node:path';
+import { statSync } from 'node:fs';
 import {
 	getImageIndex,
 	getLinkLookup,
@@ -31,7 +36,9 @@ import {
 	isImageName,
 	linkKey,
 	noteDir,
+	relativeImagePath,
 	resolveImage,
+	resolveMarkdownImage,
 	splitWikilinkTarget,
 	type GraphOptions,
 } from './lib/graph.ts';
@@ -176,6 +183,20 @@ export default function remarkWikiLinks({ root }: WikiLinksOptions = {}) {
 			if (newNodes.length > 0) {
 				parent.children.splice(index, 1, ...newNodes);
 			}
+		});
+
+		const here = file?.path ? path.dirname(file.path) : '';
+		visit(tree, 'image', (node, index, parent) => {
+			const wanted = relativeImagePath(node.url);
+			if (!wanted || !parent || index === undefined) return;
+			if (here && statSync(path.join(here, ...wanted.split('/')), { throwIfNoEntry: false })?.isFile()) return;
+			const found = resolveMarkdownImage(images, wanted, fromDir);
+			if (found) {
+				node.url = imageUrl(found);
+				return;
+			}
+			parent.children.splice(index, 1, ...(node.alt ? [{ type: 'text' as const, value: node.alt }] : []));
+			return [SKIP, index];
 		});
 	};
 }
