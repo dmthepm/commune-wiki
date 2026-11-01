@@ -186,9 +186,10 @@ jobs:
           # The create command, from the tarball. The starter pins a version
           # that may not be published yet, so the install below is pointed at
           # the same tarball.
-          # Typed the way a reader types it, so the shell's own npx wrapper runs.
-          npx $tgz create my-wiki
-          if ($LASTEXITCODE -ne 0) { throw 'failed: npx $tgz create my-wiki' }
+          # A path alone would be run as a program, so name it as the package.
+          npx -p $tgz commune create my-wiki
+          if ($LASTEXITCODE -ne 0) { throw 'failed: npx create my-wiki' }
+          if (-not (Test-Path my-wiki/package.json)) { throw 'create made no wiki' }
           Set-Location my-wiki
           npm pkg set "dependencies.@dmthepm/commune=file:$tgz"
           if ($LASTEXITCODE -ne 0) { throw 'failed: npm pkg set dependencies.@dmthepm/commune=file:$tgz' }
