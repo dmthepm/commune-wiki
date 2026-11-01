@@ -131,9 +131,12 @@ const readme = `${siteConfig.repo}#readme`;
     <section class="columns">
       <div id="start">
         <h2 class="section-title section-title--sm">Build two linked notes.</h2>
-        <p>You need Node 22.12 or newer, npm and Git. One paste creates an Astro 7 starter wiki from a clone of the repository.</p>
+        <p>You need Node 22.12 or newer and npm. One paste creates an Astro 7 starter wiki and runs it.</p>
         <div class="cmd-wrap">
-          <pre class="cmd" tabindex="0"><code id="start-cmd">git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev</code></pre>
+          <pre class="cmd" tabindex="0"><code id="start-cmd">npx -y @dmthepm/commune create my-wiki
+cd my-wiki
+npm install
+npm run dev</code></pre>
           <button type="button" class="copy" data-copy="#start-cmd" hidden>Copy command</button>
           <p class="copy-status" role="status" aria-live="polite"></p>
         </div>
