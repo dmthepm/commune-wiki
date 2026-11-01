@@ -140,3 +140,85 @@ jobs:
       # The refactor's invariant, enforced on every PR rather than remembered:
       # backlinks.json is committed and a build must not change it.
       - run: git diff --exit-code public/backlinks.json
+
+  # The first run on Windows PowerShell 5.1, which ships with Windows and is
+  # what `shell: powershell` runs. It does not parse `&&`, so a README or a
+  # script that brings that back fails here. Only the path a new reader walks
+  # runs on Windows: the copy, install, build, check, verify, a note with a
+  # space in its name in a nested folder, and the dev server. The engine test
+  # suite does not, since part of it still fails on Windows for separate reasons.
+  windows-first-run:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # The package as this commit would publish it, not the registry's. `pack`
+      # runs `prepare`, which compiles `lib/`.
+      - name: pack this commit
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+          $out = Join-Path $env:RUNNER_TEMP 'pack'
+          New-Item -ItemType Directory -Path $out | Out-Null
+          pnpm pack --out "$out/commune.tgz"
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm pack failed' }
+
+      - name: copy the starter, install, build, check and verify
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Step {
+            & $args[0] $args[1..($args.Length - 1)]
+            if ($LASTEXITCODE -ne 0) { throw "failed: $args" }
+          }
+          $tgz = (Join-Path $env:RUNNER_TEMP 'pack/commune.tgz') -replace '\\', '/'
+          $work = Join-Path $env:RUNNER_TEMP 'first-run'
+          New-Item -ItemType Directory -Path $work | Out-Null
+          Set-Location $work
+          # The create command, from the tarball. The starter pins a version
+          # that may not be published yet, so the install below is pointed at
+          # the same tarball.
+          Step npx --yes "--package=$tgz" -- commune create my-wiki
+          Set-Location my-wiki
+          Step npm pkg set "dependencies.@dmthepm/commune=file:$tgz"
+          Step npm install --no-audit --no-fund
+          Step npm run build
+          Step npx commune check
+          Step npm run verify
+
+      - name: a spaced note in a nested folder, and the dev server
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Location (Join-Path $env:RUNNER_TEMP 'first-run/my-wiki')
+          $folder = 'src/content/notes/Nested Folder'
+          New-Item -ItemType Directory -Path $folder | Out-Null
+          Set-Content -Path "$folder/Spaced Note.md" -Encoding UTF8 -Value "---`ntitle: Spaced Note`nvisibility: public`nstatus: seedling`nsummary: A note with a space in its name.`n---`n`nLinks back to [[Welcome]].`n"
+          npx commune check
+          if ($LASTEXITCODE -ne 0) { throw 'check failed after adding the note' }
+          $server = Start-Process -FilePath npm.cmd -ArgumentList 'run', 'dev', '--', '--port', '4321' -PassThru -NoNewWindow
+          try {
+            foreach ($path in '/', '/notes/nested-folder/spaced-note/') {
+              $status = 0
+              for ($i = 0; $i -lt 60 -and $status -ne 200; $i++) {
+                try { $status = (Invoke-WebRequest -UseBasicParsing "http://localhost:4321$path").StatusCode }
+                catch { Start-Sleep -Seconds 2 }
+              }
+              if ($status -ne 200) { throw "dev server did not answer 200 on $path" }
+              Write-Host "200 $path"
+            }
+          } finally {
+            taskkill /PID $server.Id /T /F | Out-Null
+          }

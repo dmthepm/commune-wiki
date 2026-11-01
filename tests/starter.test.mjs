@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { mkdtemp, readFile, readdir, mkdir, writeFile, symlink, rm, lstat } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, mkdir, writeFile, symlink, rm, lstat, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const exec = promisify(execFile);
 const copier = fileURLToPath(new URL('../scripts/create-wiki.mjs', import.meta.url));
+const bin = fileURLToPath(new URL('../bin/commune.mjs', import.meta.url));
 const source = fileURLToPath(new URL('../examples/starter/', import.meta.url));
 const root = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 // A stand-in `npm` first on PATH, so no test here asks the real registry.
@@ -135,4 +136,68 @@ test('published starter installs, builds, and passes semantic link/privacy check
     try { await exec('npm', args, options); }
     catch (error) { assert.fail(`npm ${args.join(' ')} failed:\n${error.stdout}\n${error.stderr}`); }
   }
+});
+
+test('commune create is the same copier, reachable without a clone or a shell', async t => {
+  const cwd = await sandbox(t);
+  const { stdout } = await exec(process.execPath, [bin, 'create', 'a wiki'], { cwd, env: npmEnv('missing') });
+  assert.ok(stdout.startsWith(`@dmthepm/commune ${root.version} is not on npm yet, using 0.0.9\n`));
+  assert.match(stdout, /Created a wiki\n\nNext:\n  cd 'a wiki'\n  npm install\n/);
+  assert.match(stdout, /No dependencies were installed/);
+  const destination = path.join(cwd, 'a wiki');
+  const manifest = JSON.parse(await readFile(path.join(destination, 'package.json'), 'utf8'));
+  assert.equal(manifest.dependencies['@dmthepm/commune'], '0.0.9');
+  assert.match(await readFile(path.join(destination, '.gitignore'), 'utf8'), /node_modules/);
+  assert.deepEqual((await readdir(destination)).filter(name => ['node_modules', 'dist', '.astro'].includes(name)), []);
+});
+
+test('commune create refuses what the script refuses', async t => {
+  const cwd = await sandbox(t);
+  await mkdir(path.join(cwd, 'empty'));
+  await assert.rejects(exec(process.execPath, [bin, 'create', 'empty'], { cwd, env: npmEnv('fail') }), /Could not create wiki/);
+  for (const args of [[], ['one', 'two'], ['--bogus']]) {
+    await assert.rejects(exec(process.execPath, [bin, 'create', ...args], { cwd, env: npmEnv('fail') }), /Usage/);
+  }
+  await assert.rejects(exec(process.execPath, [bin, 'create', path.join(source, 'nested-copy')], { cwd, env: npmEnv('fail') }), /outside examples\/starter/);
+  assert.deepEqual(await readdir(cwd), ['empty']);
+});
+
+test('commune create is listed in the usage text', async () => {
+  const { stdout } = await exec(process.execPath, [bin, '--help']);
+  assert.match(stdout, /commune create\s+<dir>/);
+});
+
+test('the package ships the starter and none of its build output', async t => {
+  const cwd = await sandbox(t);
+  await mkdir(path.join(source, 'node_modules/.junk'), { recursive: true });
+  await mkdir(path.join(source, 'dist'), { recursive: true });
+  await writeFile(path.join(source, 'dist/x.html'), 'junk');
+  await writeFile(path.join(source, 'node_modules/.junk/x.js'), 'junk');
+  t.after(() => Promise.all([rm(path.join(source, 'node_modules'), { recursive: true, force: true }), rm(path.join(source, 'dist'), { recursive: true, force: true })]));
+  const { stdout } = await exec('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: fileURLToPath(new URL('..', import.meta.url)), maxBuffer: 8 * 1024 * 1024 });
+  const files = JSON.parse(stdout)[0].files.map(file => file.path);
+  for (const wanted of ['examples/starter/package.json', 'examples/starter/src/pages/index.astro', 'examples/starter/scripts/verify-build.mjs', 'examples/starter/LICENSE', 'bin/create.mjs']) {
+    assert.ok(files.includes(wanted), `${wanted} is packed`);
+  }
+  assert.deepEqual(files.filter(file => /(^|\/)(node_modules|dist|\.astro)\//.test(file) || /backlinks\.json|site\.json/.test(file)), []);
+});
+
+test('the README install has no && and no line that PowerShell 5.1 would refuse', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const starter = await readFile(new URL('../examples/starter/README.md', import.meta.url), 'utf8');
+  for (const [name, text] of [['README.md', readme], ['starter README', starter]]) {
+    const blocks = [...text.matchAll(/```(?:bash|sh|powershell|cmd)?\n([\s\S]*?)```/g)].map(match => match[1]);
+    for (const line of blocks.join('\n').split('\n')) assert.doesNotMatch(line, /&&|\|\|/, `${name}: ${line}`);
+  }
+  assert.match(readme, /npx @dmthepm\/commune create my-wiki/);
+});
+
+test('the ignore file an installed package writes matches the starter\'s own', async t => {
+  const cwd = await sandbox(t);
+  const hidden = path.join(source, '.gitignore');
+  const original = await readFile(hidden, 'utf8');
+  await rename(hidden, hidden + '.moved');
+  t.after(() => rename(hidden + '.moved', hidden));
+  await exec(process.execPath, [bin, 'create', 'wiki'], { cwd, env: npmEnv('fail') });
+  assert.equal(await readFile(path.join(cwd, 'wiki/.gitignore'), 'utf8'), original);
 });

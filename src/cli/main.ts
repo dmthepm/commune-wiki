@@ -74,7 +74,7 @@ const GATE_OPTIONS: ParseArgsOptionsConfig = {
 };
 
 /** Every route, longest first, so `graph query` is matched before a bare `graph`. */
-const ROUTES = ['embeds fetch', 'graph query', 'graph related', 'check', 'gate', 'update', 'render', 'rename'];
+const ROUTES = ['create', 'embeds fetch', 'graph query', 'graph related', 'check', 'gate', 'update', 'render', 'rename'];
 
 interface Route {
 	name: string;
@@ -278,6 +278,24 @@ async function dispatch(args: string[]): Promise<number> {
 				values['dry-run'] as boolean,
 				values.json as boolean
 			);
+		}
+		case 'create': {
+			const { values, positionals } = parseStrict(rest, { help: GLOBAL.help }, true, usage);
+			if (values.help) {
+				process.stdout.write(`${usage}\n`);
+				return EXIT_OK;
+			}
+			if (positionals.length !== 1) {
+				throw usageError(
+					`create takes one new directory, got ${positionals.length}${positionals.length ? `: ${positionals.join(' ')}` : ''}. A name containing spaces has to be quoted.`,
+					usage
+				);
+			}
+			// Plain JavaScript shared with scripts/create-wiki.mjs, which runs
+			// from a clone with no build step. It is `bin/create.mjs` in the
+			// package as well, one level above `lib/cli/` as it is above `src/cli/`.
+			const { createWiki } = await import('../../bin/create.mjs');
+			return createWiki(positionals[0]);
 		}
 		case 'embeds fetch': {
 			const { values } = parseStrict(rest, EMBEDS_OPTIONS, false, usage);
