@@ -26,6 +26,10 @@ import {
 	buildUrlLookup,
 	extractLinks,
 	loadContentEntries,
+	loadImageIndex,
+	isImageName,
+	noteDir,
+	resolveImage,
 	MARKDOWN_LINK,
 	resolveLink,
 	stripCode,
@@ -177,7 +181,8 @@ function findMentions(prose: string, haystack: Normalized, name: string): Hits {
 
 export async function relatedCommand(root: string, input: string, json: boolean): Promise<number> {
 	const entries = await loadContentEntries({ root });
-	const graph = buildGraph(entries);
+	const images = await loadImageIndex({ root });
+	const graph = buildGraph(entries, images);
 	const byName = buildLinkLookup(entries);
 	const byUrl = buildUrlLookup(entries);
 	const byUrlPath = new Map(entries.map((entry) => [entry.urlPath, entry]));
@@ -187,7 +192,10 @@ export async function relatedCommand(root: string, input: string, json: boolean)
 	// draft outside the vault, or raw text, has none by definition.
 	const self = source.file ? entries.find((entry) => entry.file === source.file) : undefined;
 
-	const links = extractLinks(source.text, source.frontmatter).map((link) => {
+	const fromDir = source.file ? noteDir(source.file) : '';
+	const links = extractLinks(source.text, source.frontmatter)
+		.filter((link) => !(link.kind === 'name' && isImageName(link.target) && resolveImage(images, link.target, fromDir)))
+		.map((link) => {
 		const target = resolveLink(link, byName, byUrl);
 		const entry = target ? byUrlPath.get(target.urlPath) : undefined;
 		return {

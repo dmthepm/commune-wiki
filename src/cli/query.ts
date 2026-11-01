@@ -10,6 +10,7 @@
 import {
 	buildGraph,
 	loadContentEntries,
+	loadImageIndex,
 	toIsoDay,
 	type CollectionName,
 	type ContentEntry,
@@ -200,7 +201,7 @@ export async function queryCommand(
 	json: boolean
 ): Promise<number> {
 	const entries = await loadContentEntries({ root });
-	const graph = buildGraph(entries);
+	const graph = buildGraph(entries, await loadImageIndex({ root }));
 	const results = entries.map((entry) => toQueryEntry(entry, graph)).filter((entry) => matches(entry, filters));
 
 	const summary = summarize(results, filters.since);

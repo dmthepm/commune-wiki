@@ -16,6 +16,7 @@ import {
 	checkEntries,
 	findBrokenAnchors,
 	loadContentEntries,
+	loadImageIndex,
 	type ContentEntry,
 	type Diagnostic,
 	type DiagnosticRule,
@@ -82,7 +83,7 @@ function headingIdsOf(root: string) {
 
 export async function checkCommand(root: string, json: boolean): Promise<number> {
 	const entries = await loadContentEntries({ root });
-	const graph = buildGraph(entries);
+	const graph = buildGraph(entries, await loadImageIndex({ root }));
 	const headingIds = headingIdsOf(root);
 	const anchors = await findBrokenAnchors(entries, headingIds, (notes) => {
 		// stderr in both modes, so `--json` stays what a parser expects on stdout.

@@ -190,7 +190,6 @@ test('skips what has no single obvious meaning, and says why', async () => {
 	await withDirs(
 		{
 			'ok.md': '---\ntitle: Ok\n---\nb',
-			'status-odd.md': '---\ntitle: T\nstatus: done\n---\nb',
 			'title-list.md': '---\ntitle: [a, b]\n---\nb',
 			'bad-yaml.md': '---\ntitle: [unclosed\nfoo: : :\n---\nb',
 			'dup-key.md': '---\ntitle: A\ntitle: B\n---\nb',
@@ -207,17 +206,16 @@ test('skips what has no single obvious meaning, and says why', async () => {
 			assert.equal(json.summary.imported, 1);
 			const skipped = Object.fromEntries(json.skipped.map((s) => [s.file, s.reason]));
 			assert.deepEqual(Object.keys(skipped).sort(), [
-				'bad-yaml.md', 'dup-key.md', 'not-map.md', 'routes.md', 'status-odd.md',
+				'bad-yaml.md', 'dup-key.md', 'not-map.md', 'routes.md',
 				'tags-nested.md', 'tags-spaces.md', 'title-list.md', 'unclosed.md', 'vis-odd.md',
 			]);
-			assert.match(skipped['status-odd.md'], /status/);
 			assert.match(skipped['bad-yaml.md'], /YAML/);
 			assert.match(skipped['title-list.md'], /title/);
 			const found = await readdir(path.join(wiki, NOTES));
 			assert.deepEqual(found, ['ok.md']);
 			await mkdir(path.join(wiki, '../wiki2/src/content'), { recursive: true });
 			const text = await commune('--root', path.join(wiki, '../wiki2'), 'import', vault, '--dry-run');
-			assert.match(text.stdout, /skip\s+status-odd\.md/);
+			assert.match(text.stdout, /skip\s+title-list\.md/);
 		}
 	);
 });

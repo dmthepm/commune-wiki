@@ -17,22 +17,26 @@ import {
 	buildGraph,
 	formatDiagnostic,
 	loadContentEntries,
+	loadImageIndex,
 	summarizeSite,
 	toBacklinksJson,
 	toMarkdownPath,
 	type ContentEntry,
+	type ImageIndex,
 	type Graph,
 	type NoteMetadata,
 	type SiteSummary,
 } from './lib/graph.ts';
+import { dropMapKeyWarning } from './lib/frontmatter.ts';
 import { findMarkdownTwin } from './lib/markdown-twin.ts';
 import { PUBLIC_PREFIX, SNAPSHOT_DIR, isSafeMediaFile } from './lib/x-embeds.ts';
 
 function buildBacklinksGraph(
 	entries: ContentEntry[],
-	logger: Pick<Console, 'info' | 'warn'>
+	logger: Pick<Console, 'info' | 'warn'>,
+	images?: ImageIndex
 ): Graph {
-	const graph = buildGraph(entries);
+	const graph = buildGraph(entries, images);
 
 	logger.info(`📝 Found ${Object.keys(graph.nodes).length} public content entries`);
 
@@ -279,6 +283,9 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 			// otherwise the build bakes in whatever the previous run left behind.
 			'astro:config:setup': async ({ config, logger }) => {
 				logger.info('🔗 Building public backlinks index...');
+				// Astro's own parse of `date: {{date}}` warns once per note, without a file.
+				// The file and line are named by `commune check`, so the anonymous copy goes.
+				dropMapKeyWarning();
 
 				// Both are URLs, and `.pathname` percent-encodes: a project
 				// checked out under a path with a space would read from a
@@ -290,7 +297,7 @@ export default function commune(_options: CommuneOptions = {}): AstroIntegration
 
 				try {
 					const entries = await loadContentEntries({ root });
-					const graph = buildBacklinksGraph(entries, logger);
+					const graph = buildBacklinksGraph(entries, logger, await loadImageIndex({ root }));
 					await writeBacklinksFile(publicBacklinks, toBacklinksJson(graph));
 					await writeSiteFile(publicSite, summarizeSite(entries));
 					logger.info(`✅ Backlinks index written to ${path.relative(root, publicBacklinks)}`);
