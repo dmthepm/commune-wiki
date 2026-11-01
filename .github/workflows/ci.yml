@@ -179,10 +179,6 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          function Step {
-            & $args[0] $args[1..($args.Length - 1)]
-            if ($LASTEXITCODE -ne 0) { throw "failed: $args" }
-          }
           $tgz = (Join-Path $env:RUNNER_TEMP 'pack/commune.tgz') -replace '\\', '/'
           $work = Join-Path $env:RUNNER_TEMP 'first-run'
           New-Item -ItemType Directory -Path $work | Out-Null
@@ -190,14 +186,20 @@ jobs:
           # The create command, from the tarball. The starter pins a version
           # that may not be published yet, so the install below is pointed at
           # the same tarball.
-          # Spelled like the README line, a package spec then the verb.
-          Step npx $tgz create my-wiki
+          # Typed the way a reader types it, so the shell's own npx wrapper runs.
+          npx $tgz create my-wiki
+          if ($LASTEXITCODE -ne 0) { throw 'failed: npx $tgz create my-wiki' }
           Set-Location my-wiki
-          Step npm pkg set "dependencies.@dmthepm/commune=file:$tgz"
-          Step npm install --no-audit --no-fund
-          Step npm run build
-          Step npx commune check
-          Step npm run verify
+          npm pkg set "dependencies.@dmthepm/commune=file:$tgz"
+          if ($LASTEXITCODE -ne 0) { throw 'failed: npm pkg set dependencies.@dmthepm/commune=file:$tgz' }
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'failed: npm install --no-audit --no-fund' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'failed: npm run build' }
+          npx commune check
+          if ($LASTEXITCODE -ne 0) { throw 'failed: npx commune check' }
+          npm run verify
+          if ($LASTEXITCODE -ne 0) { throw 'failed: npm run verify' }
 
       - name: a spaced note in a nested folder, and the dev server
         shell: powershell
