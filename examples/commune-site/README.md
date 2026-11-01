@@ -1,6 +1,6 @@
 # commune.md
 
-The site for [Commune](https://github.com/dmthepm/commune-wiki), built as a Commune wiki on the published `@dmthepm/commune` package (0.13.0) and Astro 7. Its three sample notes (Small notes, Useful links, Writing in public) are real notes: their wikilinks, backlinks and markdown twins come from the engine, and the home page renders two of them beside their markdown source.
+The site for [Commune](https://github.com/dmthepm/commune-wiki), built as a Commune wiki on the published `@dmthepm/commune` package and Astro 7. Its three sample notes (Small notes, Useful links, Writing in public) are real notes: their wikilinks, backlinks and markdown twins come from the engine, and the home page renders two of them beside their markdown source.
 
 The design is Publishing Workshop: aubergine ink, pale pink paper, vermilion. The display face is Instrument Serif and the text face is Instrument Sans, both under the SIL Open Font License 1.1 and self-hosted through `@fontsource` packages. The page makes no third-party requests.
 

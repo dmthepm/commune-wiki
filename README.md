@@ -373,7 +373,7 @@ npx commune gate
 | `rename <from> <to>` | Move a note and rewrite every link to it, in every form the graph reads. The URL stays unless `--move-url`. `--dry-run` prints the plan. |
 | `import <vault>` | Copy an existing vault into the notes. Only reads the vault, publishes nothing unless `--public`, and lists every repair and skip. See [Import an existing vault](#import-an-existing-vault). |
 | `embeds fetch` | Capture the X posts your notes link to, for the hover cards below. The only verb that contacts X. `--refresh` refetches all, `--stale-days <n>` sets how old a snapshot may get (default 30). |
-| `check` | Broken links, broken heading links, duplicate names, ambiguous targets, non-canonical titles. |
+| `check` | Broken links, broken heading links, duplicate names, ambiguous targets, non-canonical titles. Also warns with `updates-behind` when public pages changed on a later day than your newest update entry. It is a nudge, writes nothing and never fails a check, gate or build. |
 | `gate` | Run after a build, against the built site. |
 
 `--orphans` and `--unreferenced` are different questions and it is worth knowing which one you are asking. An orphan is *isolated* — nothing links to it and it links nowhere — which on a wiki where most notes link out returns almost nothing. `--unreferenced` is zero inbound with any outbound: the note you wrote, cited three others from, and never linked back to from anywhere. `updates` entries are left out of it, since a dated changelog entry is expected to have nothing pointing at it; `--collection updates` is how you say you meant them.

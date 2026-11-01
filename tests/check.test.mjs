@@ -92,7 +92,9 @@ test('check --json reports counts by rule and exits 0 despite findings', async (
 	assert.equal(stderr, '');
 	const payload = JSON.parse(stdout);
 	assert.equal(payload.schema, 1);
-	assert.deepEqual(payload.summary.byRule, {
+	// `updates-behind` reads git dates, so it depends on the checkout and is covered in updates-behind.test.mjs.
+	const { 'updates-behind': behind, ...byRuleRest } = payload.summary.byRule;
+	assert.deepEqual(byRuleRest, {
 		'broken-link': 1,
 		'ambiguous-target': 1,
 		'duplicate-name': 2,
@@ -102,17 +104,18 @@ test('check --json reports counts by rule and exits 0 despite findings', async (
 		'frontmatter-warning': 0,
 	});
 	assert.equal(payload.summary.errors, 4);
-	assert.equal(payload.summary.warnings, 1);
+	assert.equal(payload.summary.warnings - behind, 1);
 	assert.equal(payload.summary.entries, 12);
-	assert.equal(payload.findings.length, 5);
+	assert.equal(payload.findings.length - behind, 5);
 });
 
-test('check on the engine reports 30 warnings and 0 errors', async () => {
+test('check on the engine reports 30 broken-link warnings and 0 errors', async () => {
 	const { code, stdout } = await commune('check', '--json');
 	const { summary } = JSON.parse(stdout);
 
 	assert.equal(code, 0);
-	assert.equal(summary.warnings, 30);
+	// `updates-behind` depends on git dates, so it is left out of the count.
+	assert.equal(summary.warnings - summary.byRule['updates-behind'], 30);
 	assert.equal(summary.errors, 0);
 	assert.equal(summary.byRule['broken-link'], 30);
 	assert.equal(summary.entries, 12);

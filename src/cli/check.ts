@@ -33,6 +33,7 @@ const RULES: DiagnosticRule[] = [
 	'broken-anchor',
 	'route-collision',
 	'frontmatter-warning',
+	'updates-behind',
 ];
 
 /** A finding as it appears in the payload: no internal rendering fields. */
