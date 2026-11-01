@@ -177,7 +177,10 @@ test('the package ships the starter and none of its build output', async t => {
   }
   t.after(() => Promise.all(probes.map(probe => rm(probe, { force: true }))));
   const { stdout } = await exec('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: fileURLToPath(new URL('..', import.meta.url)), maxBuffer: 8 * 1024 * 1024 });
-  const files = JSON.parse(stdout.slice(stdout.search(/^\[/m)))[0].files.map(file => file.path);
+  // npm 11 prints an array of packs, npm 12 an object keyed by package name.
+  // The release job installs npm@latest, so both have to read.
+  const packed = JSON.parse(stdout.slice(stdout.search(/^[[{]/m)));
+  const files = (Array.isArray(packed) ? packed[0] : Object.values(packed)[0]).files.map(file => file.path);
   for (const wanted of ['examples/starter/package.json', 'examples/starter/src/pages/index.astro', 'examples/starter/scripts/verify-build.mjs', 'examples/starter/LICENSE', 'bin/create.mjs']) {
     assert.ok(files.includes(wanted), `${wanted} is packed`);
   }
