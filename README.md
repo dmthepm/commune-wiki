@@ -9,7 +9,7 @@ Commune turns a folder of markdown notes into a personal wiki. Linked notes open
 Start a wiki in one paste. You need Node 22.12 or newer and npm. Git is not needed. Node 22.19 or newer avoids an npm `EBADENGINE` warning from one of Astro's dependencies.
 
 ```bash
-npx @dmthepm/commune create my-wiki
+npx -y @dmthepm/commune create my-wiki
 cd my-wiki
 npm install
 npm run dev

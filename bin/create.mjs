@@ -27,7 +27,7 @@ async function npmView(spec, field) {
 // npm never packs a `.gitignore`, so an installed package has no copy of the
 // starter's own. This is the same text, and tests/starter.test.mjs holds the
 // two together. A clone copies the real file and never reads this.
-const GITIGNORE = 'node_modules/\ndist/\n.astro/\npublic/backlinks.json\npublic/site.json\n.DS_Store\n.env\n.env.*\n';
+export const GITIGNORE = 'node_modules/\ndist/\n.astro/\npublic/backlinks.json\npublic/site.json\n.DS_Store\n.env\n.env.*\n';
 
 /**
  * Copy the starter to `destination`. Prints what the script always printed and

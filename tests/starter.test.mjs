@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { mkdtemp, readFile, readdir, mkdir, writeFile, symlink, rm, lstat, rename } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, mkdir, writeFile, symlink, rm, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -169,11 +169,13 @@ test('commune create is listed in the usage text', async () => {
 
 test('the package ships the starter and none of its build output', async t => {
   const cwd = await sandbox(t);
-  await mkdir(path.join(source, 'node_modules/.junk'), { recursive: true });
-  await mkdir(path.join(source, 'dist'), { recursive: true });
-  await writeFile(path.join(source, 'dist/x.html'), 'junk');
-  await writeFile(path.join(source, 'node_modules/.junk/x.js'), 'junk');
-  t.after(() => Promise.all([rm(path.join(source, 'node_modules'), { recursive: true, force: true }), rm(path.join(source, 'dist'), { recursive: true, force: true })]));
+  // Marker files only, so a working examples/starter/node_modules or dist survives this test.
+  const probes = [path.join(source, 'dist/.pack-probe.html'), path.join(source, 'node_modules/.pack-probe.js')];
+  for (const probe of probes) {
+    await mkdir(path.dirname(probe), { recursive: true });
+    await writeFile(probe, 'junk');
+  }
+  t.after(() => Promise.all(probes.map(probe => rm(probe, { force: true }))));
   const { stdout } = await exec('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: fileURLToPath(new URL('..', import.meta.url)), maxBuffer: 8 * 1024 * 1024 });
   const files = JSON.parse(stdout.slice(stdout.search(/^\[/m)))[0].files.map(file => file.path);
   for (const wanted of ['examples/starter/package.json', 'examples/starter/src/pages/index.astro', 'examples/starter/scripts/verify-build.mjs', 'examples/starter/LICENSE', 'bin/create.mjs']) {
@@ -189,15 +191,11 @@ test('the README install has no && and no line that PowerShell 5.1 would refuse'
     const blocks = [...text.matchAll(/```(?:bash|sh|powershell|cmd)?\n([\s\S]*?)```/g)].map(match => match[1]);
     for (const line of blocks.join('\n').split('\n')) assert.doesNotMatch(line, /&&|\|\|/, `${name}: ${line}`);
   }
-  assert.match(readme, /npx @dmthepm\/commune create my-wiki/);
+  assert.match(readme, /npx -y @dmthepm\/commune create my-wiki/);
+  assert.doesNotMatch(readme + starter, /npx @dmthepm\/commune create/, 'a paste needs -y, or npx reads the next pasted line as its answer');
 });
 
-test('the ignore file an installed package writes matches the starter\'s own', async t => {
-  const cwd = await sandbox(t);
-  const hidden = path.join(source, '.gitignore');
-  const original = await readFile(hidden, 'utf8');
-  await rename(hidden, hidden + '.moved');
-  t.after(() => rename(hidden + '.moved', hidden));
-  await exec(process.execPath, [bin, 'create', 'wiki'], { cwd, env: npmEnv('fail') });
-  assert.equal(await readFile(path.join(cwd, 'wiki/.gitignore'), 'utf8'), original);
+test('the ignore file an installed package writes matches the starter\'s own', async () => {
+  const { GITIGNORE } = await import(new URL('../bin/create.mjs', import.meta.url));
+  assert.equal(GITIGNORE, await readFile(path.join(source, '.gitignore'), 'utf8'));
 });

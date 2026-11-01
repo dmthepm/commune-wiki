@@ -9,7 +9,7 @@ You need **Node.js 22.12.0 or newer**, **npm 9.6.5 or newer**, and an internet c
 From any folder, with no clone and no Git, create a new directory:
 
 ```sh
-npx @dmthepm/commune create my-wiki
+npx -y @dmthepm/commune create my-wiki
 cd my-wiki
 npm install
 npm run build

@@ -74,7 +74,7 @@ export const COMMAND_USAGE: Record<string, string> = {
 	create: `Usage: commune create <dir>
 
 Copy the starter wiki into a new directory. It needs no project, no shell and no
-git, so \`npx @dmthepm/commune create my-wiki\` works from any folder. Refuses a
+git, so \`npx -y @dmthepm/commune create my-wiki\` works from any folder. Refuses a
 directory that already exists, empty or not. Installs nothing. If the release
 the starter pins is not on npm yet, the copy uses the latest published version
 and says so.`,
