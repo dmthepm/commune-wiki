@@ -210,6 +210,14 @@ jobs:
           $folder = 'src/content/notes/Nested Folder'
           New-Item -ItemType Directory -Path $folder | Out-Null
           Set-Content -Path "$folder/Spaced Note.md" -Encoding UTF8 -Value "---`ntitle: Spaced Note`nvisibility: public`nstatus: seedling`nsummary: A note with a space in its name.`n---`n`nLinks back to [[Welcome]].`n"
+          # An import from a vault with a spaced name and a spaced nested folder.
+          $vault = Join-Path $env:RUNNER_TEMP 'My Vault/Nested Folder'
+          New-Item -ItemType Directory -Path $vault | Out-Null
+          Set-Content -Path "$vault/Imported Note.md" -Encoding UTF8 -Value "No frontmatter. Links to [[Welcome]].`n"
+          npx commune import (Join-Path $env:RUNNER_TEMP 'My Vault') --public
+          if ($LASTEXITCODE -ne 0) { throw 'failed: commune import' }
+          if (-not (Test-Path 'src/content/notes/Nested Folder/Imported Note.md')) { throw 'import wrote no note' }
+          if (-not (Select-String -Path 'src/content/notes/Nested Folder/Imported Note.md' -Pattern 'title: Imported Note' -Quiet)) { throw 'import gave no title' }
           npx commune check
           if ($LASTEXITCODE -ne 0) { throw 'check failed after adding the note' }
           $server = Start-Process -FilePath npm.cmd -ArgumentList 'run', 'dev', '--', '--port', '4321' -PassThru -NoNewWindow
