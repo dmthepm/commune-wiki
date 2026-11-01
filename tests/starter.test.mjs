@@ -175,7 +175,7 @@ test('the package ships the starter and none of its build output', async t => {
   await writeFile(path.join(source, 'node_modules/.junk/x.js'), 'junk');
   t.after(() => Promise.all([rm(path.join(source, 'node_modules'), { recursive: true, force: true }), rm(path.join(source, 'dist'), { recursive: true, force: true })]));
   const { stdout } = await exec('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: fileURLToPath(new URL('..', import.meta.url)), maxBuffer: 8 * 1024 * 1024 });
-  const files = JSON.parse(stdout)[0].files.map(file => file.path);
+  const files = JSON.parse(stdout.slice(stdout.search(/^\[/m)))[0].files.map(file => file.path);
   for (const wanted of ['examples/starter/package.json', 'examples/starter/src/pages/index.astro', 'examples/starter/scripts/verify-build.mjs', 'examples/starter/LICENSE', 'bin/create.mjs']) {
     assert.ok(files.includes(wanted), `${wanted} is packed`);
   }

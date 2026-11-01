@@ -190,7 +190,8 @@ jobs:
           # The create command, from the tarball. The starter pins a version
           # that may not be published yet, so the install below is pointed at
           # the same tarball.
-          Step npx --yes "--package=$tgz" -- commune create my-wiki
+          # Spelled like the README line, a package spec then the verb.
+          Step npx $tgz create my-wiki
           Set-Location my-wiki
           Step npm pkg set "dependencies.@dmthepm/commune=file:$tgz"
           Step npm install --no-audit --no-fund
