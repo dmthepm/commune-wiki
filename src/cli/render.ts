@@ -20,12 +20,19 @@
  * and the one thing a reviewer most needs to be told is gone.
  */
 
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { communeMarkdown } from '../markdown.ts';
 import {
 	buildLinkLookup,
 	buildUrlLookup,
 	extractLinks,
 	loadContentEntries,
+	loadImageIndex,
+	missingMarkdownImages,
+	isImageName,
+	noteDir,
+	resolveImage,
 	resolveLink,
 } from '../lib/graph.ts';
 import { SCHEMA, writeJson } from './output.ts';
@@ -60,7 +67,14 @@ export async function renderCommand(
 	const byUrl = buildUrlLookup(entries);
 	const byUrlPath = new Map(entries.map((entry) => [entry.urlPath, entry]));
 
-	const links = extractLinks(source.text, source.frontmatter).map((link) => {
+	const images = await loadImageIndex({ root });
+	// An image that is there is shown on the page, so it is not a name that points at nothing.
+	const fromDir = source.file ? noteDir(source.file) : '';
+	const missing = await missingMarkdownImages(root, source.text, source.file, images);
+	const links = [
+		...extractLinks(source.text, source.frontmatter)
+		.filter((link) => !(link.kind === 'name' && isImageName(link.target) && resolveImage(images, link.target, fromDir)))
+		.map((link) => {
 		const target = resolveLink(link, byName, byUrl);
 		const entry = target ? byUrlPath.get(target.urlPath) : undefined;
 		return {
@@ -70,10 +84,16 @@ export async function renderCommand(
 				? { urlPath: entry.urlPath, title: entry.title, collection: entry.collection }
 				: null,
 		};
-	});
+	}),
+		...missing.map((target) => ({ kind: 'image' as const, target, resolved: null })),
+	];
 
 	const renderer = await communeMarkdown({ site, root }).createRenderer({});
-	const { code } = await renderer.render(source.text, { frontmatter: source.frontmatter });
+	const { code } = await renderer.render(source.text, {
+		frontmatter: source.frontmatter,
+		// Where the note sits decides which of two same-named images it means.
+		...(source.file ? { fileURL: pathToFileURL(path.join(root, source.file)) } : {}),
+	});
 
 	if (json) {
 		writeJson({

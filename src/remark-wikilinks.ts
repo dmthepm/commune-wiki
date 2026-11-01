@@ -9,14 +9,39 @@
  *
  * A block ref (`[[Note Title^id]]`) links to the note and no further.
  *
+ *   [[Folder/Note]] → the note at that path, when no title is spelled that way
+ *   ![[photo.png]] → an image, found by file name under `public/attachments`
+ *   ![[photo.png|300]] → the same image, 300 pixels wide
+ *   ![alt](img/photo.png) → left to Astro when the file is beside the note,
+ *     else the image under `public/attachments`, else its alt text. Astro stops
+ *     the whole build on a relative image it cannot find, so none is left to it
+ *     that is not there. External and absolute URLs are never touched.
+ *
+ * Inside a table Obsidian writes `[[Name\|label]]`; the backslash is not part
+ * of the name.
+ *
  * This runs at build time during markdown compilation, before HTML generation.
  * Which content exists, and the URL each piece lives at, is decided by the
  * graph core in `src/lib/graph.ts` — not here.
  */
 
-import { visit } from 'unist-util-visit';
+import { visit, SKIP } from 'unist-util-visit';
 import type { Root } from 'mdast';
-import { getLinkLookup, linkKey, splitWikilinkTarget, type GraphOptions } from './lib/graph.ts';
+import path from 'node:path';
+import { statSync } from 'node:fs';
+import {
+	getImageIndex,
+	getLinkLookup,
+	imageUrl,
+	isImageName,
+	linkKey,
+	noteDir,
+	relativeImagePath,
+	resolveImage,
+	resolveMarkdownImage,
+	splitWikilinkTarget,
+	type GraphOptions,
+} from './lib/graph.ts';
 
 export type WikiLinksOptions = GraphOptions;
 
@@ -31,14 +56,18 @@ export type WikiLinksOptions = GraphOptions;
  * pass one gets the project they ran `astro build` in.
  */
 export default function remarkWikiLinks({ root }: WikiLinksOptions = {}) {
-	return async function transformer(tree: Root) {
+	return async function transformer(tree: Root, file?: { path?: string }) {
 		const lookup = await getLinkLookup({ root });
+		const images = await getImageIndex({ root });
+		// The folder the note sits in decides which of two same-named images is meant.
+		const relative = file?.path ? path.relative(path.resolve(root ?? process.cwd()), file.path) : '';
+		const fromDir = relative && !relative.startsWith('..') ? noteDir(relative) : '';
 
 		visit(tree, 'text', (node, index, parent) => {
 			if (!parent || index === undefined) return;
 
 			const text = node.value;
-			const wikiLinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+			const wikiLinkRegex = /\[\[([^\]|]+?)\\?(?:\|([^\]]+))?\]\]/g;
 
 			// Check if this text node contains WikiLinks
 			if (!wikiLinkRegex.test(text)) return;
@@ -54,13 +83,36 @@ export default function remarkWikiLinks({ root }: WikiLinksOptions = {}) {
 			const [fullMatch, linkText, displayText] = match;
 			const startIndex = match.index;
 
-			// Add text before the WikiLink
-			if (startIndex > lastIndex) {
-				newNodes.push({
-					type: 'text',
-					value: text.slice(lastIndex, startIndex),
-				});
+			// Add text before the WikiLink. A `!` right before it makes it an embed.
+			const embed = startIndex > 0 && text.charAt(startIndex - 1) === '!';
+			const before = text.slice(lastIndex, embed ? startIndex - 1 : startIndex);
+			if (before) newNodes.push({ type: 'text', value: before });
+
+			// An image: `![[photo.png|300]]` is the file, and the pipe holds a size or a caption.
+			const imageName = splitWikilinkTarget(linkText.trim()).target;
+			const image = isImageName(imageName) ? resolveImage(images, imageName, fromDir) : undefined;
+			if (image) {
+				const size = displayText?.trim().match(/^(\d+)(?:x(\d+))?$/);
+				const caption = size ? '' : displayText?.trim() ?? '';
+				if (embed) {
+					newNodes.push({
+						type: 'image',
+						url: imageUrl(image),
+						alt: caption || imageName.split('/').pop(),
+						...(size ? { data: { hProperties: { width: size[1], ...(size[2] ? { height: size[2] } : {}) } } } : {}),
+					});
+				} else {
+					newNodes.push({
+						type: 'link',
+						url: imageUrl(image),
+						children: [{ type: 'text', value: caption || linkText.trim() }],
+						data: { hProperties: { class: 'wikilink' } },
+					});
+				}
+				lastIndex = startIndex + fullMatch.length;
+				continue;
 			}
+			if (embed) newNodes.push({ type: 'text', value: '!' });
 
 			// Resolve WikiLink to URL path
 			const trimmedLinkText = linkText.trim();
@@ -131,6 +183,20 @@ export default function remarkWikiLinks({ root }: WikiLinksOptions = {}) {
 			if (newNodes.length > 0) {
 				parent.children.splice(index, 1, ...newNodes);
 			}
+		});
+
+		const here = file?.path ? path.dirname(file.path) : '';
+		visit(tree, 'image', (node, index, parent) => {
+			const wanted = relativeImagePath(node.url);
+			if (!wanted || !parent || index === undefined) return;
+			if (here && statSync(path.join(here, ...wanted.split('/')), { throwIfNoEntry: false })?.isFile()) return;
+			const found = resolveMarkdownImage(images, wanted, fromDir);
+			if (found) {
+				node.url = imageUrl(found);
+				return;
+			}
+			parent.children.splice(index, 1, ...(node.alt ? [{ type: 'text' as const, value: node.alt }] : []));
+			return [SKIP, index];
 		});
 	};
 }

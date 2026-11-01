@@ -18,16 +18,36 @@
  * value, so everything the author wrote around it, and the whole body, stays
  * byte for byte.
  *
+ * Images follow the same privacy rule as notes, because `public/` ships
+ * whatever is in it. An image is copied into `public/attachments`, keeping its
+ * vault path, only when a note that the import leaves public embeds it. One
+ * that only private or draft notes embed stays in the vault. Files over 10 MB
+ * are listed and left. Other attachments are counted and left. A relative
+ * `![alt](path)` image counts as an embed, percent-decoded, like `![[...]]`.
+ *
  * The order is plan, then write. Every note is read and checked in memory, a
  * target that already exists refuses the whole import, and `--dry-run` stops
  * after the plan.
  */
 
-import { lstat, mkdir, readFile, readdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { copyFile, lstat, mkdir, readFile, readdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isMap, isScalar, parseDocument, stringify } from 'yaml';
 import type { Pair } from 'yaml';
-import { CONTENT_DIRS, linkKey, stripCode, toRoutePath } from '../lib/graph.ts';
+import {
+	ATTACHMENTS_DIR,
+	CONTENT_DIRS,
+	buildImageIndex,
+	isImageName,
+	linkKey,
+	markdownImagePaths,
+	resolveImage,
+	resolveMarkdownImage,
+	splitWikilinkTarget,
+	stripCode,
+	toRoutePath,
+} from '../lib/graph.ts';
 import { SCHEMA, writeJson, writeLines } from './output.ts';
 import { EXIT_OK, failure } from './errors.ts';
 
@@ -58,6 +78,10 @@ interface Planned {
 	added: string[];
 	/** Why `--public` left this note private, when it did. */
 	held?: string;
+	/** The image files its body names with `![[...]]` or `[[...]]`, as written. */
+	embeds: string[];
+	/** The relative paths of its `![alt](path)` images, decoded. */
+	pictures: string[];
 }
 
 type Outcome = { skip: string } | { text: string; visibility: Visibility; title: string; added: string[]; repairs: string[]; held?: string };
@@ -84,7 +108,7 @@ const quote = (text: string) => JSON.stringify(text);
 function textValue(text: string): string {
 	const plain = yamlValue(text);
 	if (plain.includes('\n')) return quote(text);
-	const doc = parseDocument(`k: ${plain}`, { customTags: ['timestamp'], merge: true, schema: 'core' });
+	const doc = parseDocument(`k: ${plain}`, { customTags: ['timestamp'], merge: true, schema: 'core', logLevel: 'error' });
 	return !doc.errors.length && (doc.toJS() as { k?: unknown })?.k === text ? plain : quote(text);
 }
 
@@ -167,7 +191,7 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 	}
 
 	const { open, block, rest } = split;
-	const doc = parseDocument(block, { customTags: ['timestamp'], merge: true, schema: 'core' });
+	const doc = parseDocument(block, { customTags: ['timestamp'], merge: true, schema: 'core', logLevel: 'error' });
 	if (doc.errors[0]) {
 		const why = doc.errors[0].message.split('\n')[0].replace(/ at line \d+, column \d+:?$/, '').replace(/:$/, '');
 		return { skip: `the frontmatter is not valid YAML (${why}${doc.errors[0].linePos ? `, line ${doc.errors[0].linePos[0].line}` : ''})` };
@@ -204,10 +228,18 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 	const remove = (key: string) => {
 		const pair = pairs.get(key)!;
 		const keyStart = (pair.key as { range: [number, number, number] }).range[0];
-		const valueEnd = (pair.value as { range?: [number, number, number] } | null)?.range?.[2] ?? keyStart;
+		// The end of the value itself, not range[2], which runs on to the next key.
+		const valueEnd = (pair.value as { range?: [number, number, number] } | null)?.range?.[1] ?? keyStart;
 		const from = block.lastIndexOf('\n', keyStart - 1) + 1;
-		const next = block.indexOf('\n', Math.max(valueEnd, block.indexOf(':', keyStart)));
-		edits.push({ start: from, end: next === -1 ? block.length : next + 1, text: '' });
+		// A block list, map or literal already ends past its newline. Searching on
+		// from there would take the next key's line too. A flow value or a scalar
+		// ends mid-line, and the rest of that line (a comment) goes with it.
+		let end = valueEnd;
+		if (end <= keyStart || block.charAt(end - 1) !== '\n') {
+			const next = block.indexOf('\n', Math.max(valueEnd, block.indexOf(':', keyStart)));
+			end = next === -1 ? block.length : next + 1;
+		}
+		edits.push({ start: from, end, text: '' });
 	};
 	const unset = (key: string) => data[key] === undefined || data[key] === null;
 
@@ -264,15 +296,20 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 		if (status === null || status === undefined) {
 			remove('status');
 			repairs.push('status was empty, so it is treated as missing');
-		} else if (typeof status === 'string' && !(STATUS as readonly string[]).includes(status)) {
-			const key = status.trim().toLowerCase();
+		} else if (typeof status === 'string' && (STATUS as readonly string[]).includes(status)) {
+			// Already in the schema.
+		} else {
+			const key = typeof status === 'string' ? status.trim().toLowerCase() : '';
 			const fixed = key === 'seed' ? 'seedling' : (STATUS as readonly string[]).find((value) => value === key);
 			if (fixed) {
 				replace('status', fixed);
-				repairs.push(`status was ${quote(status)}, now ${fixed}`);
-			} else problems.push(`status is ${quote(status)}, and the choices are seedling, budding or evergreen`);
-		} else if (typeof status !== 'string') {
-			problems.push(`status is ${describe(status)}, and the choices are seedling, budding or evergreen`);
+				repairs.push(`status was ${quote(String(status))}, now ${fixed}`);
+			} else {
+				// A field the site barely uses is not worth a whole note. The value
+				// goes, and the repair says what it was.
+				remove('status');
+				repairs.push(`status was ${describe(status)}, which is not seedling, budding or evergreen, so it was removed`);
+			}
 		}
 	}
 
@@ -342,9 +379,25 @@ export function planNote(raw: string, name: string, makePublic: boolean): Outcom
 	return { text: `${bom}${open}${edited}${rest}`, visibility, title, added, repairs, ...(held ? { held } : {}) };
 }
 
+/** A file larger than this is listed and left in the vault. */
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+/** Every image the body names, embedded or linked, outside code. */
+function imageNames(body: string): string[] {
+	const names = new Set<string>();
+	for (const match of stripCode(body).matchAll(/\[\[([^\]|]+?)\\?(?:\|[^\]]*)?\]\]/g)) {
+		const { target } = splitWikilinkTarget(match[1].trim());
+		if (target && isImageName(target)) names.add(target);
+	}
+	return [...names];
+}
+
 interface Found {
 	notes: string[];
+	/** Every file that is not a note. */
 	attachments: number;
+	/** The ones that are images, vault-relative. */
+	images: string[];
 	/** Notes that are links to somewhere else, which are not followed. */
 	links: string[];
 }
@@ -362,7 +415,10 @@ async function walk(dir: string, relative: string, found: Found): Promise<void> 
 			if (entry.name !== 'node_modules') await walk(dir, rel, found);
 		} else if (entry.isFile()) {
 			if (entry.name.endsWith('.md')) found.notes.push(rel);
-			else found.attachments++;
+			else {
+				found.attachments++;
+				if (isImageName(entry.name)) found.images.push(rel);
+			}
 		}
 	}
 }
@@ -391,7 +447,7 @@ export async function importCommand(
 		throw failure('EREFUSED', `the wiki at ${root} is inside the vault at ${vault}. Import from a vault that does not contain the wiki.`);
 	}
 
-	const found: Found = { notes: [], attachments: 0, links: [] };
+	const found: Found = { notes: [], attachments: 0, images: [], links: [] };
 	await walk(vault, '', found);
 	if (!found.notes.length && !found.links.length) throw failure('ENOCONTENT', `found no .md files under ${vault}`);
 
@@ -415,15 +471,47 @@ export async function importCommand(
 			return;
 		}
 		for (const message of outcome.repairs) repairs.push({ file, field: message.split(' ')[0], message });
-		planned.push({ file, target: `${notesDir}/${file}`, text: outcome.text, visibility: outcome.visibility, title: outcome.title, added: outcome.added, held: outcome.held });
+		const split = splitBlock(outcome.text.replace(/^\uFEFF/, ''));
+		const body = typeof split === 'object' ? split.rest : outcome.text;
+		planned.push({ file, target: `${notesDir}/${file}`, text: outcome.text, visibility: outcome.visibility, title: outcome.title, added: outcome.added, held: outcome.held, embeds: imageNames(body), pictures: markdownImagePaths(body) });
 	});
 	const byFile = (a: { file: string }, b: { file: string }) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0);
 	planned.sort(byFile);
 	repairs.sort(byFile);
 	skipped.sort(byFile);
 
+	// Which images ship. A note that stays private or draft publishes nothing,
+	// and `public/` ships everything in it, so such a note's images stay behind.
+	const index = buildImageIndex(found.images);
+	const embeddedBy = new Map<string, boolean>();
+	for (const note of planned) {
+		const dir = path.posix.dirname(note.file) === '.' ? '' : path.posix.dirname(note.file);
+		for (const name of note.embeds) {
+			const image = resolveImage(index, name, dir);
+			if (image) embeddedBy.set(image, (embeddedBy.get(image) ?? false) || note.visibility === 'public');
+		}
+		for (const picture of note.pictures) {
+			const image = resolveMarkdownImage(index, picture, dir);
+			if (image) embeddedBy.set(image, (embeddedBy.get(image) ?? false) || note.visibility === 'public');
+		}
+	}
+	const imageCopies: { file: string; target: string; bytes: number }[] = [];
+	const tooLarge: { file: string; bytes: number }[] = [];
+	for (const file of index.files) {
+		if (embeddedBy.get(file) !== true) continue;
+		const bytes = (await stat(path.join(vault, ...file.split('/')))).size;
+		if (bytes > MAX_IMAGE_BYTES) tooLarge.push({ file, bytes });
+		else imageCopies.push({ file, target: `${ATTACHMENTS_DIR}/${file}`, bytes });
+	}
+	const heldBack = [...embeddedBy.values()].filter((isPublic) => !isPublic).length;
+	const unused = index.files.length - embeddedBy.size;
+
 	// Refuse before writing anything.
-	const taken = (await inBatches(planned, 64, async (note) => ((await exists(path.join(root, ...note.target.split('/')))) ? note.target : ''))).filter(Boolean);
+	const taken = (
+		await inBatches([...planned.map((note) => note.target), ...imageCopies.map((image) => image.target)], 64, async (target) =>
+			(await exists(path.join(root, ...target.split('/')))) ? target : ''
+		)
+	).filter(Boolean);
 	if (taken.length) {
 		const shown = taken.slice(0, 10).join(', ');
 		throw failure(
@@ -449,6 +537,13 @@ export async function importCommand(
 				await writeFile(target, note.text, { flag: 'wx' });
 				made.push(target);
 			});
+			// COPYFILE_EXCL fails rather than overwrite a file that appeared since the plan.
+			await inBatches(imageCopies, 16, async (image) => {
+				const target = path.join(root, ...image.target.split('/'));
+				await mkdir(path.dirname(target), { recursive: true });
+				await copyFile(path.join(vault, ...image.file.split('/')), target, constants.COPYFILE_EXCL);
+				made.push(target);
+			});
 		} catch (error) {
 			await Promise.all(made.map((file) => unlink(file).catch(() => {})));
 			throw error;
@@ -468,6 +563,8 @@ export async function importCommand(
 		attachments: found.attachments,
 		duplicateTitles: duplicateTitles.length,
 	};
+	const images = { copied: imageCopies.length, heldBack, unused, tooLarge, files: imageCopies };
+	const otherFiles = found.attachments - found.images.length;
 	const heldPrivate = planned.filter((note) => note.held).map((note) => ({ file: note.file, reason: note.held! }));
 	const folderNote = 'Visibility controls the site, not the folder. Private notes are still files in the wiki, so if the wiki is pushed to a public repo they are public.';
 	const hint = `${summary.public === 0 ? 'Nothing is public yet, so the site will look empty. ' : ''}To publish a note, set visibility: public in its frontmatter. To publish every imported note that has no visibility, import into a fresh wiki with --public.`;
@@ -480,6 +577,7 @@ export async function importCommand(
 			dryRun,
 			public: makePublic,
 			summary,
+			images,
 			imports: planned.map((note) => ({ file: note.file, target: note.target, visibility: note.visibility, added: note.added })),
 			repairs,
 			skipped,
@@ -491,15 +589,26 @@ export async function importCommand(
 	}
 
 	const lines: string[] = [];
-	if (dryRun) lines.push(...planned.map((note) => `copy\t${note.file}\t${note.target}\t${note.visibility}`));
+	if (dryRun) {
+		lines.push(...planned.map((note) => `copy\t${note.file}\t${note.target}\t${note.visibility}`));
+		lines.push(...imageCopies.map((image) => `copy image\t${image.file}\t${image.target}`));
+	}
 	lines.push(...repairs.map((repair) => `repair\t${repair.file}\t${repair.message}`));
 	lines.push(...skipped.map((skip) => `skip\t${skip.file}\t${skip.reason}`));
 	lines.push(...heldPrivate.map((held) => `kept private\t${held.file}\t${held.reason}`));
+	lines.push(...tooLarge.map((big) => `not copied\t${big.file}\t${(big.bytes / 1048576).toFixed(1)} MB, over the 10 MB limit`));
 	lines.push(
 		`${dryRun ? 'Dry run, nothing written. Would import' : 'Imported'} ${summary.imported} of ${summary.found} notes into ${notesDir}.`,
 		`${summary.public} public, ${summary.private} private${summary.draft ? `, ${summary.draft} draft` : ''}. ${summary.titled} got a title from the file name. ${repairs.length} ${repairs.length === 1 ? 'value was' : 'values were'} repaired in ${summary.repaired} ${summary.repaired === 1 ? 'note' : 'notes'}. ${summary.skipped} skipped.`
 	);
-	if (summary.attachments) lines.push(`${summary.attachments} other files (images and attachments) were not copied.`);
+	if (found.images.length) {
+		const parts = [`${dryRun ? 'Would copy' : 'Copied'} ${images.copied} of ${found.images.length} images into ${ATTACHMENTS_DIR}, the ones a public note embeds.`];
+		if (heldBack) parts.push(`${heldBack} ${heldBack === 1 ? 'is' : 'are'} embedded only by private or draft notes, so ${heldBack === 1 ? 'it was' : 'they were'} not copied.`);
+		if (tooLarge.length) parts.push(`${tooLarge.length} over 10 MB ${tooLarge.length === 1 ? 'was' : 'were'} not copied (listed above).`);
+		if (unused) parts.push(`${unused} ${unused === 1 ? 'is' : 'are'} not embedded by any note.`);
+		lines.push(parts.join(' '));
+	}
+	if (otherFiles) lines.push(`${otherFiles} other files (pdf, audio, video and the like) were not copied.`);
 	for (const group of duplicateTitles.slice(0, 10)) {
 		lines.push(`Shared title "${group.title}" in ${group.files.join(', ')}. A [[link]] to it is ambiguous.`);
 	}

@@ -20,7 +20,7 @@
 import { glob } from 'tinyglobby';
 import { slug as githubSlug } from 'github-slugger';
 import { parseFrontmatter, type FrontmatterWarning } from './frontmatter.ts';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
 	readContentHistory,
@@ -95,6 +95,8 @@ export interface ContentEntry {
 	modifiedInGit?: string;
 	/** Markdown body with frontmatter stripped. */
 	body: string;
+	/** Relative markdown image paths in the body that exist on disk beside the note. */
+	besideImages?: string[];
 	/** Parsed frontmatter. Kept because links can live in it. */
 	frontmatter: Record<string, unknown>;
 	/** What `yaml` warned about in the frontmatter. Absent when it had nothing to say. */
@@ -389,6 +391,12 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 
 			if (!isPublic(collection, data)) continue;
 
+			// A hand-written `title: {{title}}` is a map, and nothing downstream can
+			// use one. Like a bad `routes:`, it fails here with the file named.
+			if (data.title !== undefined && data.title !== null && typeof data.title !== 'string') {
+				throw new Error(`${file}: title must be text, e.g. title: My note`);
+			}
+
 			const { slug, urlPath } = toUrlPath(file, collection, data);
 			const summary = typeof data.summary === 'string' ? data.summary : undefined;
 			const dates = await resolveDates(root, file, data, history);
@@ -405,6 +413,7 @@ export async function loadContentEntries(options: GraphOptions = {}): Promise<Co
 				...(summary ? { summary } : {}),
 				...dates,
 				body: content,
+				besideImages: await existingBesideImages(root, file, content),
 				frontmatter: data,
 				...(warnings.length ? { frontmatterWarnings: warnings } : {}),
 				file,
@@ -453,8 +462,32 @@ export function linkKey(name: string): string {
 		.toLowerCase();
 }
 
+/**
+ * The names a note answers to by where it lives: its path under the notes
+ * folder, with and without the extension, lowercased. Obsidian writes
+ * `[[Plugins/Templates]]` to tell two notes called Templates apart. Only a path
+ * with a folder in it counts, because a bare file name is a title's business.
+ */
+export function pathKeys(entry: Pick<ContentEntry, 'file' | 'collection'>): string[] {
+	if (entry.collection !== 'notes') return [];
+	const relative = entry.file.replace(/\\/g, '/');
+	const prefix = `${CONTENT_DIRS.notes}/`;
+	if (!relative.startsWith(prefix)) return [];
+	const inside = relative.slice(prefix.length).toLowerCase();
+	if (!inside.includes('/')) return [];
+	return [inside, inside.replace(/\.mdx?$/, '')];
+}
+
 export function buildLinkLookup(entries: ContentEntry[]): Map<string, LinkTarget> {
 	const lookup = new Map<string, LinkTarget>();
+
+	// Paths go in first so a title or an alias that happens to hold a slash keeps
+	// the name it has always had.
+	for (const entry of entries) {
+		for (const key of pathKeys(entry)) {
+			lookup.set(key, { slug: entry.slug, collection: entry.collection, urlPath: entry.urlPath });
+		}
+	}
 
 	for (const entry of entries) {
 		const target: LinkTarget = {
@@ -551,6 +584,156 @@ export function resolveLink(
 		: byName.get(link.target.toLowerCase());
 }
 
+// =============================================================================
+// Images
+// =============================================================================
+
+/** Where imported images live: `public/` ships whatever is in it, at the same path. */
+export const ATTACHMENTS_DIR = 'public/attachments';
+
+/** The image types a note can embed. Other attachments are not served. */
+export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'svg'];
+
+const IMAGE_NAME = new RegExp(`\\.(${IMAGE_EXTENSIONS.join('|')})$`, 'i');
+
+/** Whether a link target names an image file, by its extension. */
+export function isImageName(name: string): boolean {
+	return IMAGE_NAME.test(name.trim());
+}
+
+/** Image files by lowercased path, found under the attachments folder. */
+export interface ImageIndex {
+	/** Paths relative to the attachments folder, forward slashes, original case. */
+	files: string[];
+	/** Lowercased base name to every path that has it. */
+	byName: Map<string, string[]>;
+}
+
+export function buildImageIndex(files: string[]): ImageIndex {
+	const sorted = files.map((file) => file.replace(/\\/g, '/')).sort();
+	const byName = new Map<string, string[]>();
+	for (const file of sorted) {
+		const name = file.split('/').pop()!.toLowerCase();
+		byName.set(name, [...(byName.get(name) ?? []), file]);
+	}
+	return { files: sorted, byName };
+}
+
+/**
+ * The file an image link means, the way Obsidian reads it: by file name, and by
+ * the end of the path when the link has folders in it. When the name repeats,
+ * the one in the folder closest to the note wins, then the shallower, then the
+ * first by path. `fromDir` is the note's folder inside the notes folder, or `''`.
+ */
+export function resolveImage(index: ImageIndex, name: string, fromDir = ''): string | undefined {
+	const wanted = name.trim().replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+	if (!wanted) return undefined;
+	const candidates = (index.byName.get(wanted.split('/').pop()!) ?? []).filter((file) => {
+		const lower = file.toLowerCase();
+		return lower === wanted || lower.endsWith(`/${wanted}`);
+	});
+	if (candidates.length < 2) return candidates[0];
+
+	const from = fromDir ? fromDir.toLowerCase().split('/') : [];
+	const shared = (file: string): number => {
+		const dirs = file.toLowerCase().split('/').slice(0, -1);
+		let n = 0;
+		while (n < dirs.length && n < from.length && dirs[n] === from[n]) n++;
+		return n;
+	};
+	return [...candidates].sort(
+		(a, b) => shared(b) - shared(a) || a.split('/').length - b.split('/').length || (a < b ? -1 : 1)
+	)[0];
+}
+
+/** The site address of an image under the attachments folder. */
+export function imageUrl(file: string): string {
+	return `/attachments/${file.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+/** The folder a note sits in, inside its collection's folder. */
+export function noteDir(file: string, collection: CollectionName = 'notes'): string {
+	const relative = file.replace(/\\/g, '/');
+	const prefix = `${CONTENT_DIRS[collection]}/`;
+	const inside = relative.startsWith(prefix) ? relative.slice(prefix.length) : relative;
+	return inside.includes('/') ? inside.slice(0, inside.lastIndexOf('/')) : '';
+}
+
+/**
+ * The relative images a body writes as `![alt](path)`, as paths: percent-decoded,
+ * without a query or fragment. Absolute paths and anything with a scheme are
+ * not in the list, because they are never rewritten or checked.
+ */
+export function markdownImagePaths(body: string): string[] {
+	const paths = new Set<string>();
+	for (const match of stripCode(body).matchAll(MARKDOWN_LINK)) {
+		if (!match[0].startsWith('!')) continue;
+		const destination = relativeImagePath(match[1].replace(/^<|>$/g, ''));
+		if (destination) paths.add(destination);
+	}
+	return [...paths];
+}
+
+/** One image destination as a relative, decoded path, or `undefined` when it is external or absolute. */
+export function relativeImagePath(destination: string): string | undefined {
+	const raw = destination.trim();
+	if (!raw || raw.startsWith('/') || raw.startsWith('#') || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return undefined;
+	const decoded = decodePath(raw.split(/[?#]/)[0]).replace(/\\/g, '/');
+	return decoded || undefined;
+}
+
+/**
+ * The file in the attachments folder that a relative markdown image means:
+ * the path from the note's folder if it is there, else the way a `![[name]]`
+ * is read, by the end of the path.
+ */
+export function resolveMarkdownImage(index: ImageIndex, destination: string, fromDir = ''): string | undefined {
+	const joined = path.posix.normalize(fromDir ? `${fromDir}/${destination}` : destination);
+	if (!joined.startsWith('../')) {
+		const exact = index.files.find((file) => file.toLowerCase() === joined.toLowerCase());
+		if (exact) return exact;
+	}
+	return resolveImage(index, destination.replace(/^(\.{1,2}\/)+/, ''), fromDir);
+}
+
+/** The ones of a note's relative markdown images that are files next to it. */
+async function existingBesideImages(root: string, file: string, body: string): Promise<string[]> {
+	const here = path.dirname(path.join(root, file));
+	const found: string[] = [];
+	for (const image of markdownImagePaths(body)) {
+		const info = await stat(path.join(here, ...image.split('/'))).catch(() => undefined);
+		if (info?.isFile()) found.push(image);
+	}
+	return found;
+}
+
+/** The relative markdown images of a body that are nowhere: not beside the note, not in the attachments. */
+export async function missingMarkdownImages(root: string, body: string, file: string | undefined, images: ImageIndex): Promise<string[]> {
+	const beside = file ? await existingBesideImages(root, file, body) : [];
+	const fromDir = file ? noteDir(file) : '';
+	return markdownImagePaths(body).filter((image) => !beside.includes(image) && !resolveMarkdownImage(images, image, fromDir));
+}
+
+/** Every image under `public/attachments` of one project. */
+export async function loadImageIndex(options: GraphOptions = {}): Promise<ImageIndex> {
+	const root = options.root ?? process.cwd();
+	const files = await glob('**/*', { cwd: path.join(root, ATTACHMENTS_DIR), expandDirectories: false });
+	return buildImageIndex(files.filter(isImageName));
+}
+
+const imageCache = new Map<string, Promise<ImageIndex>>();
+
+/** The image index for one project root, built once like the link lookup. */
+export function getImageIndex(options: GraphOptions = {}): Promise<ImageIndex> {
+	const root = path.resolve(options.root ?? process.cwd());
+	const cached = imageCache.get(root);
+	if (cached) return cached;
+	const pending = loadImageIndex({ root });
+	pending.catch(() => imageCache.delete(root));
+	imageCache.set(root, pending);
+	return pending;
+}
+
 /**
  * One in-flight or settled lookup per project root, keyed by its absolute path.
  *
@@ -593,6 +776,7 @@ export function getLinkLookup(options: GraphOptions = {}): Promise<Map<string, L
 
 export function resetGraphCache(): void {
 	lookupCache.clear();
+	imageCache.clear();
 }
 
 /**
@@ -714,7 +898,7 @@ function extractFrontmatterLinks(frontmatter: Record<string, unknown>): Extracte
 }
 
 /** A wikilink or embed, capturing the target and discarding any display text. */
-export const WIKILINK = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+export const WIKILINK = /\[\[([^\]|]+?)\\?(?:\|[^\]]+)?\]\]/g;
 
 /**
  * A markdown link or image, capturing the destination.
@@ -941,7 +1125,7 @@ export interface Diagnostic {
 	/** Canonical URL of the entry the finding is in. Carried so build output can name the route. */
 	urlPath?: string;
 	/** How the offending link was spelled, which decides `[[name]]` vs `(url)` rendering. */
-	kind?: LinkKind;
+	kind?: LinkKind | 'image';
 	/** urlPaths in contention, for `ambiguous-target` and `duplicate-name`. */
 	candidates?: string[];
 	/** The spelling a `noncanonical-title` finding should have used. */
@@ -1058,7 +1242,7 @@ export function calculateStars(notes: Map<string, NoteMetadata>): Set<string> {
  * print comes back in `diagnostics`, so the same construction serves the build
  * (which warns), `check` (which reports) and `related` (which does neither).
  */
-export function buildGraph(entries: ContentEntry[]): Graph {
+export function buildGraph(entries: ContentEntry[], images?: ImageIndex): Graph {
 	const byName = buildLinkLookup(entries);
 	const byUrl = buildUrlLookup(entries);
 
@@ -1069,6 +1253,7 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 	// the public artifact and holds resolved urlPaths only.
 	const extracted = new Map<string, ExtractedLink[]>();
 	const files = new Map<string, string>();
+	const entryByUrl = new Map(entries.map((entry) => [entry.urlPath, entry]));
 
 	for (const entry of entries) {
 		extracted.set(entry.urlPath, extractLinks(entry.body, entry.frontmatter));
@@ -1102,6 +1287,10 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 		const resolvedOutbound: string[] = [];
 
 		for (const link of extracted.get(fromUrl)!) {
+			// An image is a file the page shows, not a note: it is neither an edge
+			// nor a broken link. One that is not there falls through and is reported.
+			if (images && link.kind === 'name' && isImageName(link.target) && resolveImage(images, link.target, noteDir(files.get(fromUrl)!, note.collection))) continue;
+
 			const resolved = resolveLink(link, byName, byUrl)?.urlPath;
 
 			// A `name` link that means one entry by title and a different one by
@@ -1151,6 +1340,22 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 		}
 
 		note.outbound = resolvedOutbound;
+
+		// A relative `![alt](path)` that is neither beside the note nor in the
+		// attachments is dropped from the page, and is reported here.
+		const entry = entryByUrl.get(fromUrl)!;
+		for (const image of markdownImagePaths(entry.body)) {
+			if (entry.besideImages?.includes(image) || (images && resolveMarkdownImage(images, image, noteDir(entry.file, entry.collection)))) continue;
+			diagnostics.push({
+				rule: 'broken-link',
+				severity: 'warning',
+				file: entry.file,
+				urlPath: fromUrl,
+				kind: 'image',
+				target: image,
+				message: `${spellLink({ kind: 'image', target: image })} does not resolve`,
+			});
+		}
 	}
 
 	// Calculate which notes get stars
@@ -1176,7 +1381,8 @@ export function buildGraph(entries: ContentEntry[]): Graph {
 }
 
 /** How a link was written, in the spelling its kind uses. */
-function spellLink(link: Pick<ExtractedLink, 'kind' | 'target'>): string {
+function spellLink(link: { kind: LinkKind | 'image'; target: string }): string {
+	if (link.kind === 'image') return `![](${link.target})`;
 	return link.kind === 'url' ? `(${link.target})` : `[[${link.target}]]`;
 }
 
@@ -1462,6 +1668,7 @@ function distinct<T>(items: T[], key: (item: T) => string): T[] {
 export function findNoncanonicalTitles(entries: ContentEntry[]): Diagnostic[] {
 	const canonical = new Map<string, string>();
 	for (const entry of entries) {
+		for (const key of pathKeys(entry)) canonical.set(key, entry.title);
 		canonical.set(entry.title.toLowerCase(), entry.title);
 		for (const alias of entry.aliases) {
 			canonical.set(alias.toLowerCase(), entry.title);
@@ -1576,7 +1783,7 @@ export async function findBrokenAnchors(
 }
 
 /** A wikilink keeping its display text, which the canonical-title rule needs to see. */
-const LABELLED_WIKILINK = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+const LABELLED_WIKILINK = /\[\[([^\]|]+?)\\?(?:\|([^\]]+))?\]\]/g;
 
 /**
  * A warning for each thing `yaml` flagged in a note's frontmatter, such as an

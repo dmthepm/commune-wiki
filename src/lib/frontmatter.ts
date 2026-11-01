@@ -38,7 +38,7 @@
  * `+++` TOML. The split rules above are kept as they are.
  */
 
-import { parseDocument } from 'yaml';
+import { isCollection, parseDocument, visit } from 'yaml';
 
 /** A warning `yaml` raised while reading a block. It did not change any value. */
 export interface FrontmatterWarning {
@@ -94,6 +94,9 @@ function parseYaml(source: string): { data: Record<string, unknown>; warnings: F
 		customTags: ['timestamp'],
 		merge: true,
 		schema: 'core',
+		// `yaml` prints a node warning for each map used as a key, once per note,
+		// with no file in it. The same fact is reported below, with a line.
+		logLevel: 'error',
 	});
 	const [error] = document.errors;
 	if (error) throw error;
@@ -103,8 +106,42 @@ function parseYaml(source: string): { data: Record<string, unknown>; warnings: F
 		message: warning.message.split('\n')[0]!.replace(/ at line \d+, column \d+:?$/, ''),
 		...(warning.linePos?.[0] ? { line: warning.linePos[0].line } : {}),
 	}));
+	// Template frontmatter such as `date: {{date}}` is a map inside a map. The
+	// value reads back as the text of its key, as it always has, so nothing is
+	// changed here, only said.
+	visit(document, {
+		Pair(_, pair) {
+			if (isCollection(pair.key)) {
+				const line = (pair.key as { range?: [number, number, number] }).range?.[0];
+				warnings.push({
+					message: 'a map is used as a key, which a template placeholder such as {{date}} reads as. Its text is used instead',
+					...(line !== undefined ? { line: source.slice(0, line).split('\n').length } : {}),
+				});
+			}
+		},
+	});
 	if (document.contents === null) return { data: {}, warnings };
 	const value: unknown = document.toJS();
 	const data = value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 	return { data, warnings };
+}
+
+const MAP_KEY_WARNING = 'Keys with collection values will be stringified';
+let dropping = false;
+
+/**
+ * Stop `yaml` printing its map-key warning for a template placeholder such as
+ * `date: {{date}}`, which Astro's own frontmatter parse raises once per note,
+ * in a build log, with no file in it. Only that one message is dropped. The
+ * same fact is reported by `parseFrontmatter` as a warning with a file and a
+ * line, which `commune check` prints. Every other warning passes through.
+ */
+export function dropMapKeyWarning(): void {
+	if (dropping) return;
+	dropping = true;
+	const emit = process.emitWarning;
+	process.emitWarning = function (this: unknown, warning: string | Error, ...rest: never[]) {
+		if (typeof warning === 'string' && warning.startsWith(MAP_KEY_WARNING)) return;
+		return (emit as (...args: unknown[]) => void).call(process, warning, ...rest);
+	} as typeof process.emitWarning;
 }
