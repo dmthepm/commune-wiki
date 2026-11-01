@@ -9,9 +9,10 @@ Usage:
   commune [--root <dir>] render        <path|-> [--site <origin>] [--json]
   commune [--root <dir>] update        [--recent <duration|date>] [--write] [--json]
   commune [--root <dir>] rename        <from> <to> [--move-url] [--dry-run] [--json]
+  commune [--root <dir>] import        <vault> [--public] [--dry-run] [--json]
   commune [--root <dir>] check         [--json]
   commune [--root <dir>] embeds fetch  [--refresh] [--stale-days <n>] [--json]
-  commune [--root <dir>] gate          [--dist <dir>] [--json]
+  commune [--root <dir>] gate          [--dist <dir>] [--allow-labels] [--json]
   commune --version
 
 Global options:
@@ -53,12 +54,21 @@ rename options:
   --dry-run      Print the plan (the move, every line changed, the URL decision)
                  and write nothing.
 
+import options:
+  <vault>      A folder of markdown notes, such as an Obsidian vault. Only read.
+  --public     Set visibility: public on notes that have no visibility. Notes
+               that say private or draft are never changed. Without it nothing
+               is published.
+  --dry-run    Print the plan and write nothing.
+
 embeds fetch options:
   --refresh          Fetch every linked X post, not only missing or stale ones.
   --stale-days <n>   Refetch snapshots older than this. Default: 30.
 
 gate options:
   --dist <dir>   The built site to check, relative to --root. Default: dist.
+  --allow-labels Skip the exact-title assertion, so [[Name|label]] and [[name in
+                 another case]] pass. Every other assertion still runs.
 
 Exit codes:
   0  finished, findings or not (a dry run included)
@@ -112,11 +122,22 @@ By default the URL stays. --move-url lets it follow the name and writes 301
 redirects to public/_redirects. Refuses if <to> exists, if <from> is not a
 content entry, if <to> leaves the collection, or if the new name would collide
 with another entry's title or alias.`,
+	import: `Usage: commune [--root <dir>] import <vault> [--public] [--dry-run] [--json]
+
+Copy every .md file under <vault> into src/content/notes, keeping its folders.
+Dot folders such as .obsidian and .trash, and node_modules, are skipped. The
+vault is only read. A note with no title gets one from its file name. A note
+with no visibility stays private unless --public is given. Values the starter
+schema refuses are repaired when they have one obvious meaning, and the note is
+skipped when they do not. Every repair and every skip is listed. Images and
+other attachments are counted and not copied. Refuses, before writing anything,
+if a target file already exists.`,
 	check: 'Usage: commune [--root <dir>] check [--json]',
-	gate: `Usage: commune [--root <dir>] gate [--dist <dir>] [--json]
+	gate: `Usage: commune [--root <dir>] gate [--dist <dir>] [--allow-labels] [--json]
 
 Run after a build. Asserts that every standalone page is in the search index,
 that every resolving WikiLink uses its target's exact title, and that WikiLinks
-to standalone pages rendered as hrefs. Exits 1 if any of that is false — the
+to standalone pages rendered as hrefs. --allow-labels skips the exact-title
+assertion only. Exits 1 if any of that is false — the
 one verb whose exit code encodes a finding.`,
 };

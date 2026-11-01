@@ -21,6 +21,7 @@ import { toIsoDay } from '../lib/graph.ts';
 import { parseRecent, queryCommand, type QueryFilters } from './query.ts';
 import { checkCommand } from './check.ts';
 import { gateCommand } from './gate.ts';
+import { importCommand } from './import.ts';
 import { relatedCommand } from './related.ts';
 import { renameCommand } from './rename.ts';
 import { updateCommand } from './update.ts';
@@ -62,6 +63,12 @@ const RENAME_OPTIONS: ParseArgsOptionsConfig = {
 	'dry-run': { type: 'boolean', default: false },
 };
 
+const IMPORT_OPTIONS: ParseArgsOptionsConfig = {
+	...GLOBAL,
+	public: { type: 'boolean', default: false },
+	'dry-run': { type: 'boolean', default: false },
+};
+
 const EMBEDS_OPTIONS: ParseArgsOptionsConfig = {
 	...GLOBAL,
 	refresh: { type: 'boolean', default: false },
@@ -71,10 +78,11 @@ const EMBEDS_OPTIONS: ParseArgsOptionsConfig = {
 const GATE_OPTIONS: ParseArgsOptionsConfig = {
 	...GLOBAL,
 	dist: { type: 'string' },
+	'allow-labels': { type: 'boolean', default: false },
 };
 
 /** Every route, longest first, so `graph query` is matched before a bare `graph`. */
-const ROUTES = ['create', 'embeds fetch', 'graph query', 'graph related', 'check', 'gate', 'update', 'render', 'rename'];
+const ROUTES = ['create', 'embeds fetch', 'graph query', 'graph related', 'check', 'gate', 'update', 'render', 'rename', 'import'];
 
 interface Route {
 	name: string;
@@ -279,6 +287,26 @@ async function dispatch(args: string[]): Promise<number> {
 				values.json as boolean
 			);
 		}
+		case 'import': {
+			const { values, positionals } = parseStrict(rest, IMPORT_OPTIONS, true, usage);
+			if (values.help) {
+				process.stdout.write(`${usage}\n`);
+				return EXIT_OK;
+			}
+			if (positionals.length !== 1) {
+				throw usageError(
+					`import takes one vault folder, got ${positionals.length}${positionals.length ? `: ${positionals.join(' ')}` : ''}. A path containing spaces has to be quoted.`,
+					usage
+				);
+			}
+			return importCommand(
+				await resolveRoot(values.root as string | undefined),
+				positionals[0],
+				values.public as boolean,
+				values['dry-run'] as boolean,
+				values.json as boolean
+			);
+		}
 		case 'create': {
 			const { values, positionals } = parseStrict(rest, { help: GLOBAL.help }, true, usage);
 			if (values.help) {
@@ -322,7 +350,8 @@ async function dispatch(args: string[]): Promise<number> {
 			return gateCommand(
 				await resolveRoot(values.root as string | undefined),
 				(values.dist as string | undefined) ?? 'dist',
-				values.json as boolean
+				values.json as boolean,
+				values['allow-labels'] as boolean
 			);
 		}
 		default:

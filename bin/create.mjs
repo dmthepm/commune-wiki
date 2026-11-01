@@ -87,6 +87,9 @@ export async function createWiki(destinationArg) {
       const latest = await npmView('@dmthepm/commune', 'dist-tags.latest');
       if (latest) {
         manifest.dependencies['@dmthepm/commune'] = latest;
+        // The registry's latest is older than this release, so it may not know
+        // `--allow-labels`. The plain gate runs on every release.
+        if (manifest.scripts?.build) manifest.scripts.build = manifest.scripts.build.replace(' --allow-labels', '');
         await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
         console.log(`@dmthepm/commune ${pin} is not on npm yet, using ${latest}\n`);
       }

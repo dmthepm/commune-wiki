@@ -34,7 +34,34 @@ npm run dev
 
 Open the local URL Astro prints. The [starter instructions](examples/starter/README.md) walk through editing a sample note, opening connected notes in panes, and checking backlinks and markdown twins. The copy command installs nothing. `npm install` runs in your new wiki, and the engine repository itself needs no install.
 
-If you stop or have to guess, [tell me where](https://github.com/dmthepm/commune-wiki/issues/85). Include the step, your versions and what happened. No private vault needed. An existing Astro 7 project can skip the starter and use the [integration below](#install). The [agent skills](#author-with-the-skills) install separately into a wiki you already have and do not create a site.
+If you stop or have to guess, [tell me where](https://github.com/dmthepm/commune-wiki/issues/85). Include the step, your versions and what happened. No private vault needed. An existing Astro 7 project can skip the starter and use the [integration below](#install). If you already keep notes in a folder, such as an Obsidian vault, [import it](#import-an-existing-vault). The [agent skills](#author-with-the-skills) install separately into a wiki you already have and do not create a site.
+
+## Import an existing vault
+
+Start a wiki first, then bring your notes in with one command. Your vault is only read. Nothing in it is changed, moved or deleted.
+
+```bash
+cd my-wiki
+npx commune import "../My Vault" --dry-run
+npx commune import "../My Vault"
+```
+
+`--dry-run` prints what would happen and writes nothing. The import copies every `.md` file into `src/content/notes` and keeps your folders. It skips folders that start with a dot, such as `.obsidian` and `.trash`, and `node_modules`.
+
+- **Nothing is published unless you ask.** A note with no `visibility` stays private, so a fresh import gives you an empty-looking site on purpose. Add `visibility: public` to the notes you want online. Or import with `--public`, which sets `visibility: public` on notes that have none. A note that already says `private` or `draft` is never changed. Use `--public` on a wiki that does not have these notes yet, since the import never overwrites.
+- **Titles.** A note with no `title` gets one from its file name. The rest of your frontmatter and the whole body are copied exactly as they were.
+- **Values the starter refuses.** The import fixes a value when it has one obvious meaning, for example `tags: a, b` becomes a list, `status: Evergreen` becomes `evergreen`, and `title: 2024` becomes the text `"2024"`. Otherwise it skips the note, for example a `status` it cannot map, a title that is a list, or YAML that does not parse. It prints every fix and every skip. It never changes anything silently.
+- **It never overwrites.** If any target file already exists, it stops before writing anything and lists the files.
+- **Images and attachments are not copied.** They are counted in the summary. A link such as `![[photo.png]]` shows as plain text on the site, and `commune check` lists it as a broken link. Copy the files and link them with a normal markdown image if you need them.
+- **Two notes with the same name** in different folders are both copied. They get the same title, so `[[Name]]` is ambiguous and `commune check` reports `duplicate-name`. Rename one with `commune rename`.
+- **Links the build accepts.** Real vaults are full of `[[Name|label]]` and `[[name in other case]]`. Both render fine, so the starter's build runs `commune gate --allow-labels`, which skips the exact-title assertion and keeps every other one. `commune check` still reports each of these links, so you can tidy them when you like. A wiki made before this release needs `--allow-labels` added to the gate in its build script, so `"build": "astro build && commune gate --allow-labels"`. Plain `commune gate` is as strict as it always was.
+- **Visibility controls the site, not the folder.** Private notes are still files in the wiki, so if the wiki is pushed to a public repo they are public. The import prints this line whenever it brings in private or draft notes.
+- **`--public` never publishes what the author held back.** A note that says `publish: false`, `draft: true` or `private: true`, in any case, stays private. So does a note that holds an Obsidian comment, `%%like this%%`, outside code, because a reader of the vault never sees it and the page and its `.md` twin would show it. Bodies are never edited, so these notes stay private until you remove the comment and set `visibility: public`. The output lists each one with its reason.
+- **Links that name a path** such as `[[Folder/Note]]` do not resolve yet. Link by title. A public note that links a private note shows that note's name as plain text.
+
+On a made-up vault of 3000 notes with spaces in names, nested folders and bad values, the import took under a second and `npm run build` took about ten seconds.
+
+`--json` prints the plan and result as one document.
 
 ## Vision and mission
 
@@ -344,6 +371,7 @@ npx commune gate
 | `render <path\|->` | The markdown as HTML, through the site's own pipeline: WikiLinks resolved, external links marked. Takes stdin, so you can see a draft before it is a page. |
 | `update` | Scaffold a dated update entry from what changed. Prints it; `--write` files it. |
 | `rename <from> <to>` | Move a note and rewrite every link to it, in every form the graph reads. The URL stays unless `--move-url`. `--dry-run` prints the plan. |
+| `import <vault>` | Copy an existing vault into the notes. Only reads the vault, publishes nothing unless `--public`, and lists every repair and skip. See [Import an existing vault](#import-an-existing-vault). |
 | `embeds fetch` | Capture the X posts your notes link to, for the hover cards below. The only verb that contacts X. `--refresh` refetches all, `--stale-days <n>` sets how old a snapshot may get (default 30). |
 | `check` | Broken links, broken heading links, duplicate names, ambiguous targets, non-canonical titles. |
 | `gate` | Run after a build, against the built site. |

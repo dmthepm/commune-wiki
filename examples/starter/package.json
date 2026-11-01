@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && commune gate",
+    "build": "astro build && commune gate --allow-labels",
     "preview": "astro preview",
     "check": "commune check",
     "verify": "node scripts/verify-build.mjs"

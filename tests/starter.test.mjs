@@ -88,6 +88,17 @@ test('copier writes the registry latest when the pinned version is not published
   assert.equal(manifest.dependencies.astro, JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8')).dependencies.astro);
 });
 
+test('copier drops --allow-labels from the build when it falls back to an older release', async t => {
+  const cwd = await sandbox(t);
+  await exec(process.execPath, [copier, 'wiki'], { cwd, env: npmEnv('missing') });
+  const manifest = JSON.parse(await readFile(path.join(cwd, 'wiki/package.json'), 'utf8'));
+  assert.equal(manifest.scripts.build, 'astro build && commune gate');
+  const pinned = await sandbox(t);
+  await exec(process.execPath, [copier, 'wiki'], { cwd: pinned, env: npmEnv('exists') });
+  const kept = JSON.parse(await readFile(path.join(pinned, 'wiki/package.json'), 'utf8'));
+  assert.equal(kept.scripts.build, 'astro build && commune gate --allow-labels');
+});
+
 test('copier keeps the pin and says nothing when the registry cannot be asked', async t => {
   const cwd = await sandbox(t);
   const { stdout, stderr } = await exec(process.execPath, [copier, 'wiki'], { cwd, env: npmEnv('fail') });
@@ -132,10 +143,17 @@ test('published starter installs, builds, and passes semantic link/privacy check
   const cwd = await sandbox(t);
   await exec(process.execPath, [copier, 'wiki'], { cwd });
   const options = { cwd: path.join(cwd, 'wiki'), timeout: 180_000, maxBuffer: 8 * 1024 * 1024 };
-  for (const args of [['install'], ['run', 'build'], ['run', 'verify']]) {
-    try { await exec('npm', args, options); }
+  const run = async args => {
+    try { return await exec('npm', args, options); }
     catch (error) { assert.fail(`npm ${args.join(' ')} failed:\n${error.stdout}\n${error.stderr}`); }
-  }
+  };
+  await run(['install']);
+  // The starter builds with `commune gate --allow-labels`. A published release
+  // from before that flag cannot run it, and the release PR pins the first
+  // version that can, so there is nothing to prove until then.
+  const { stdout: usage } = await exec('npx', ['commune', 'gate', '--help'], options);
+  if (!usage.includes('--allow-labels')) return t.skip(`@dmthepm/commune@${root.version} does not know --allow-labels yet`);
+  for (const args of [['run', 'build'], ['run', 'verify']]) await run(args);
 });
 
 test('commune create is the same copier, reachable without a clone or a shell', async t => {
