@@ -19,7 +19,7 @@ Each line is a separate command, so the paste works the same in bash, zsh, Power
 
 ## Start a wiki
 
-The starter is a separate project on the published package. Step by step, with a build and a check of the sample content before the dev server. This version starts from a clone, which is also how you work on the engine. `npx @dmthepm/commune create ../my-wiki` does the same copy without one.
+The starter is a separate project on the published package. Step by step, with a build and a check of the sample content before the dev server. This version starts from a clone, which is also how you work on the engine. `npx -y @dmthepm/commune create ../my-wiki` does the same copy without one.
 
 ```bash
 git clone https://github.com/dmthepm/commune-wiki.git
