@@ -45,6 +45,12 @@
     "lib",
     "src/components",
     "src/styles",
+    "examples/starter",
+    "!examples/starter/node_modules",
+    "!examples/starter/dist",
+    "!examples/starter/.astro",
+    "!examples/starter/public/backlinks.json",
+    "!examples/starter/public/site.json",
     "LICENSE",
     "README.md"
   ],

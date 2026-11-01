@@ -3,6 +3,7 @@
 export const USAGE = `commune — query the content graph without an Astro process
 
 Usage:
+  commune create       <dir>
   commune [--root <dir>] graph query   [filters] [--json]
   commune [--root <dir>] graph related <path|text|-> [--json]
   commune [--root <dir>] render        <path|-> [--site <origin>] [--json]
@@ -70,6 +71,13 @@ Exit codes:
   the way every other verb does, in the payload with exit 0.`;
 
 export const COMMAND_USAGE: Record<string, string> = {
+	create: `Usage: commune create <dir>
+
+Copy the starter wiki into a new directory. It needs no project, no shell and no
+git, so \`npx -y @dmthepm/commune create my-wiki\` works from any folder. Refuses a
+directory that already exists, empty or not. Installs nothing. If the release
+the starter pins is not on npm yet, the copy uses the latest published version
+and says so.`,
 	'embeds fetch': `Usage: commune [--root <dir>] embeds fetch [--refresh] [--stale-days <n>] [--json]
 
 Capture the X posts the site links to into .commune/embeds/x/, text and images,

@@ -6,17 +6,20 @@ Commune turns a folder of markdown notes into a personal wiki. Linked notes open
 
 ![Following links on devon.md. Hovering a link shows a preview, and clicking opens the note in a pane beside the last one.](docs/media/panes.gif)
 
-Start a wiki in one paste. You need Node 22.12 or newer, npm and Git. Node 22.19 or newer avoids an npm `EBADENGINE` warning from one of Astro's dependencies.
+Start a wiki in one paste. You need Node 22.12 or newer and npm. Git is not needed. Node 22.19 or newer avoids an npm `EBADENGINE` warning from one of Astro's dependencies.
 
 ```bash
-git clone --depth 1 https://github.com/dmthepm/commune-wiki.git && node commune-wiki/scripts/create-wiki.mjs my-wiki && cd my-wiki && npm install && npm run dev
+npx -y @dmthepm/commune create my-wiki
+cd my-wiki
+npm install
+npm run dev
 ```
 
-Open the address Astro prints. If the release that the clone pins is not on npm yet, the copy uses the latest published version and says so. The clone is only the source of the copy, and you can delete it afterward. To run the paste again, delete `commune-wiki` and `my-wiki` first, since both commands refuse to overwrite a folder. Run by a coding agent on macOS or Linux, Astro 7 starts the dev server in the background and prints its address as JSON. `npx astro dev stop` stops it. If you stop or have to guess, [tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
+Each line is a separate command, so the paste works the same in bash, zsh, PowerShell and cmd. Open the address Astro prints. If the release that the copy pins is not on npm yet, the copy uses the latest published version and says so. To run the paste again, delete `my-wiki` first, since the copy command refuses to overwrite a folder. Run by a coding agent on macOS or Linux, Astro 7 starts the dev server in the background and prints its address as JSON. `npx astro dev stop` stops it. If you stop or have to guess, [tell me where it broke](https://github.com/dmthepm/commune-wiki/issues/85). A failed attempt is useful.
 
 ## Start a wiki
 
-The starter is a separate project on the published package. Step by step, with a build and a check of the sample content before the dev server.
+The starter is a separate project on the published package. Step by step, with a build and a check of the sample content before the dev server. This version starts from a clone, which is also how you work on the engine. `npx -y @dmthepm/commune create ../my-wiki` does the same copy without one.
 
 ```bash
 git clone https://github.com/dmthepm/commune-wiki.git

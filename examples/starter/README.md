@@ -6,18 +6,18 @@ A small, editable wiki on the published **@dmthepm/commune** package and **Astro
 
 You need **Node.js 22.12.0 or newer**, **npm 9.6.5 or newer**, and an internet connection for the first install. Node 22.19 or newer is recommended. On 22.12 to 22.18 the install warns `EBADENGINE` for `undici`, a dependency of Astro's font support, which the starter does not use. Check with `node --version` and `npm --version`.
 
-From a Commune repository checkout, create a new directory:
+From any folder, with no clone and no Git, create a new directory:
 
 ```sh
-node scripts/create-wiki.mjs ../my-wiki
-cd ../my-wiki
+npx -y @dmthepm/commune create my-wiki
+cd my-wiki
 npm install
 npm run build
 npm run verify
 npm run dev
 ```
 
-You can invoke the copier by its absolute path from any working directory. Its destination is relative to your current directory. It refuses an existing destination, including an empty folder or symlink, and never installs dependencies for you. You can also copy this entire `examples/starter` directory yourself. It has no dependency on the surrounding repository.
+From a Commune repository checkout, `node scripts/create-wiki.mjs ../my-wiki` does the same copy, and you can invoke it by its absolute path from any working directory. Its destination is relative to your current directory. It refuses an existing destination, including an empty folder or symlink, and never installs dependencies for you. You can also copy this entire `examples/starter` directory yourself. It has no dependency on the surrounding repository.
 
 If you already have this starter as a standalone directory, begin with `npm install` inside it. Open the local URL printed by Astro, normally `http://localhost:4321`.
 
