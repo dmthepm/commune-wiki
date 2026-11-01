@@ -1102,7 +1102,8 @@ export type DiagnosticRule =
 	| 'noncanonical-title'
 	| 'broken-anchor'
 	| 'route-collision'
-	| 'frontmatter-warning';
+	| 'frontmatter-warning'
+	| 'updates-behind';
 
 /**
  * One finding, as data.
@@ -1805,6 +1806,37 @@ export function findFrontmatterWarnings(entries: ContentEntry[]): Diagnostic[] {
 }
 
 /**
+ * One warning when the updates feed has fallen behind the pages.
+ *
+ * The feed is written by a person on purpose, so this only nudges. It fires
+ * when a wiki has at least one update entry and public entries outside
+ * `updates` changed on a later day than the newest one. A wiki with no updates
+ * never opted in to a feed, and entries with no date source are skipped. It
+ * writes nothing and is a warning, so no exit code moves.
+ */
+export function findUpdatesBehind(entries: ContentEntry[]): Diagnostic[] {
+	const dated = (entry: ContentEntry): entry is ContentEntry & { updated: string } =>
+		entry.updatedSource !== 'none' && entry.updated !== undefined;
+
+	const updates = entries.filter((entry) => entry.collection === 'updates');
+	if (updates.length === 0) return [];
+	const last = updates.filter(dated).map((entry) => entry.updated).sort().at(-1);
+	if (last === undefined) return [];
+
+	const behind = entries.filter((entry) => entry.collection !== 'updates' && dated(entry) && entry.updated > last);
+	if (behind.length === 0) return [];
+
+	return [
+		{
+			rule: 'updates-behind',
+			severity: 'warning',
+			file: CONTENT_DIRS.updates,
+			message: `${behind.length} public ${behind.length === 1 ? 'page' : 'pages'} changed since the last update entry on ${last}. Run commune update --recent ${last} to draft one.`,
+		},
+	];
+}
+
+/**
  * Every finding `check` reports.
  *
  * The graph's own diagnostics come first and in entry order, so the list reads
@@ -1819,5 +1851,6 @@ export function checkEntries(entries: ContentEntry[], graph: Graph): Diagnostic[
 		...findNoncanonicalTitles(entries),
 		...findRouteCollisions(entries),
 		...findFrontmatterWarnings(entries),
+		...findUpdatesBehind(entries),
 	];
 }
