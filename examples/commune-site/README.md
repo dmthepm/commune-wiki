@@ -21,10 +21,12 @@ This directory is standalone. It depends on the npm release, not on the reposito
 
 ## Deploy
 
-It deploys through Cloudflare Workers Builds, connected to this repository from the Cloudflare dashboard:
+It deploys through Cloudflare Workers Builds, connected to this repository from the Cloudflare dashboard. A push to `main` that touches this directory builds and deploys it. Other pushes and pull requests do not:
 
 - Root directory: `examples/commune-site`
-- Build command: `npm run build`
+- Build command: `npm install && npm run build`
 - Deploy command: `npx wrangler deploy`
+- Watch path: `examples/commune-site/*`
+- Preview builds: off
 
 `wrangler.jsonc` serves `./dist` as static assets with no Worker script, answers unmatched paths with `404.html`, and routes `commune.md` and `www.commune.md` as custom domains. `wrangler` is pinned to an exact version. No account id or token is kept in this repository; the connection is made in the dashboard.
