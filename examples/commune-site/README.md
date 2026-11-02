@@ -29,4 +29,6 @@ It deploys through Cloudflare Workers Builds, connected to this repository from 
 - Watch path: `examples/commune-site/*`
 - Preview builds: off
 
+The `@dmthepm/commune` pin here moves by hand, in a pull request merged after the release is on npm. Release Please leaves it alone, because a release commit that touched this directory would start a build before the new version was published.
+
 `wrangler.jsonc` serves `./dist` as static assets with no Worker script, answers unmatched paths with `404.html`, and routes `commune.md` and `www.commune.md` as custom domains. `wrangler` is pinned to an exact version. No account id or token is kept in this repository; the connection is made in the dashboard.
