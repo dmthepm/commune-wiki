@@ -28,13 +28,11 @@ If the paste misbehaves.
 - To run the paste again, delete `my-wiki` first, since the copy command refuses to overwrite a folder.
 - Run by a coding agent on macOS or Linux, Astro 7 starts the dev server in the background and prints its address as JSON. `npx astro dev stop` stops it.
 
-The starter is a separate project on the published package. Step by step, with a build and a check of the sample content before the dev server. This version starts from a clone, which is also how you work on the engine. `npx -y @dmthepm/commune create ../my-wiki` does the same copy without one.
+The starter is a separate project on the published package. Step by step, with a build and a check of the sample content before the dev server. These are the steps the copy command prints.
 
 ```bash
-git clone https://github.com/dmthepm/commune-wiki.git
-cd commune-wiki
-node scripts/create-wiki.mjs ../my-wiki
-cd ../my-wiki
+npx -y @dmthepm/commune create my-wiki
+cd my-wiki
 npm install
 npm run build
 npm run verify
@@ -47,7 +45,7 @@ If you stop or have to guess, [tell me where](https://github.com/dmthepm/commune
 
 ## Import an existing vault
 
-Start a wiki first, then bring your notes in with one command. Your vault is only read. Nothing in it is changed, moved or deleted.
+Already keep notes in Obsidian or another folder of markdown? Start a wiki first, then bring your notes in with one command. Your vault is only read. Nothing in it is changed, moved or deleted. Imported notes stay off the site until you mark them `visibility: public`.
 
 ```bash
 cd my-wiki
@@ -475,6 +473,8 @@ pnpm test       # node --test
 `pnpm test:consumer` installs `tests/fixtures/consumer` against the working tree and builds it. This checks the package boundary locally. It does not substitute for an independent first install.
 
 Run `pnpm test:starter` from the repository root to check the copier, destination safeguards and published dependency declarations. The registry install test is skipped by default. `COMMUNE_STARTER_INSTALL=1 pnpm test:starter` also copies the starter into a temporary directory, installs from npm, builds and verifies its output. Neither mode proves a timed first install on another machine.
+
+To make a wiki from a clone of this repository instead of the published package, run `node scripts/create-wiki.mjs ../my-wiki` from the repository root, then `cd ../my-wiki` and the install, build, verify and dev steps in [Start a wiki](#start-a-wiki).
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the rest. Issues and questions go to [the tracker](https://github.com/dmthepm/commune-wiki/issues).
 
